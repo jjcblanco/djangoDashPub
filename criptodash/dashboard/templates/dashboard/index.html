@@ -1,0 +1,507 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CriptoDash - Análisis de Trading</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #667eea;
+            --secondary: #764ba2;
+            --success: #2ecc71;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --info: #3498db;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8f9fa;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 1rem 2rem;
+        }
+
+        .navbar-brand {
+            font-size: 24px;
+            font-weight: bold;
+            color: white !important;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .navbar-brand i {
+            font-size: 28px;
+        }
+
+        .navbar-nav .nav-link {
+            color: rgba(255, 255, 255, 0.9) !important;
+            margin-left: 20px;
+            transition: all 0.3s;
+        }
+
+        .navbar-nav .nav-link:hover {
+            color: white !important;
+        }
+
+        .nav-user-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-left: auto;
+        }
+
+        .user-welcome {
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 14px;
+        }
+
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 80px 20px;
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .hero p {
+            font-size: 18px;
+            opacity: 0.95;
+            max-width: 600px;
+            margin: 0 auto 30px;
+        }
+
+        .btn-hero {
+            background: white;
+            color: var(--primary);
+            padding: 14px 40px;
+            border-radius: 50px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s;
+            display: inline-block;
+            margin: 0 10px;
+        }
+
+        .btn-hero:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            color: var(--primary);
+        }
+
+        .btn-hero-secondary {
+            background: transparent;
+            color: white;
+            border: 2px solid white;
+        }
+
+        .btn-hero-secondary:hover {
+            background: white;
+            color: var(--primary);
+        }
+
+        /* Features Section */
+        .features {
+            padding: 60px 20px;
+        }
+
+        .feature-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+        }
+
+        .feature-icon {
+            font-size: 48px;
+            color: var(--primary);
+            margin-bottom: 20px;
+        }
+
+        .feature-card h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .feature-card p {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* Dashboard Preview */
+        .dashboard-preview {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            margin: 40px 20px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .dashboard-preview h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .dashboard-item {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .dashboard-item h4 {
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+
+        .dashboard-item p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        /* Stats Section */
+        .stats {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 60px 20px;
+            margin: 60px 20px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .stat-item {
+            margin: 20px 0;
+        }
+
+        .stat-number {
+            font-size: 42px;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        /* Footer */
+        footer {
+            background: #2c3e50;
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+            margin-top: 60px;
+        }
+
+        footer p {
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 32px;
+            }
+
+            .hero p {
+                font-size: 16px;
+            }
+
+            .nav-user-section {
+                flex-direction: column;
+                gap: 10px;
+                margin-left: 0;
+                margin-top: 15px;
+            }
+
+            .navbar-nav {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .navbar-nav .nav-link {
+                margin-left: 0;
+            }
+        }
+
+        .auth-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-login {
+            background: white;
+            color: var(--primary);
+            padding: 10px 20px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-login:hover {
+            color: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        .btn-register {
+            background: white;
+            color: var(--primary);
+            padding: 10px 20px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-register:hover {
+            color: var(--primary);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-chart-line"></i> CriptoDash
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#features">Características</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#dashboard">Dashboard</a>
+                    </li>
+                </ul>
+                {% if user.is_authenticated %}
+                    <div class="nav-user-section">
+                        <span class="user-welcome">👋 ¡Hola, {{ user.first_name|default:user.username }}!</span>
+                        <a href="{% url 'profile' %}" class="btn-login">
+                            <i class="fas fa-user-circle"></i> Perfil
+                        </a>
+                        <a href="{% url 'dashboard_nuevo' %}" class="btn-login" style="background: rgba(255,255,255,0.9);">
+                            <i class="fas fa-chart-candlestick"></i> Dashboard
+                        </a>
+                        <a href="{% url 'custom_logout' %}" class="btn-login" style="background: rgba(255,255,255,0.2); border: 1px solid white;">
+                            <i class="fas fa-sign-out-alt"></i> Salir
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="nav-user-section auth-buttons">
+                        <a href="{% url 'custom_login' %}" class="btn-login">
+                            <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
+                        </a>
+                        <a href="{% url 'custom_register' %}" class="btn-register">
+                            <i class="fas fa-user-plus"></i> Registrarse
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="hero">
+        <h1><i class="fas fa-rocket"></i> CriptoDash</h1>
+        <p>Tu plataforma completa para análisis técnico y trading automatizado de criptomonedas con IA</p>
+        {% if not user.is_authenticated %}
+            <a href="{% url 'custom_login' %}" class="btn-hero">
+                <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
+            </a>
+            <a href="{% url 'custom_register' %}" class="btn-hero btn-hero-secondary">
+                <i class="fas fa-user-plus"></i> Crear Cuenta
+            </a>
+        {% else %}
+            <a href="{% url 'dashboard_nuevo' %}" class="btn-hero">
+                <i class="fas fa-chart-candlestick"></i> Acceder al Dashboard
+            </a>
+        {% endif %}
+    </div>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="container">
+            <div style="text-align: center; margin-bottom: 50px;">
+                <h2 style="color: #333; font-weight: bold; margin-bottom: 10px;">✨ Características Principales</h2>
+                <p style="color: #666; font-size: 16px;">Todo lo que necesitas para hacer trading profesional</p>
+            </div>
+            <div class="row">
+                <div class="col-md-6 col-lg-4">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-chart-candlestick"></i>
+                        </div>
+                        <h3>Análisis Técnico Avanzado</h3>
+                        <p>Indicadores técnicos profesionales, Ichimoku, Bollinger Bands, RSI y más</p>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <h3>Trading Bot Automático</h3>
+                        <p>Ejecuta estrategias automatizadas sin intervención manual</p>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <h3>Señales en Tiempo Real</h3>
+                        <p>Recibe señales de compra y venta actualizadas cada minuto</p>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-lock"></i>
+                        </div>
+                        <h3>Seguridad de Grado Empresarial</h3>
+                        <p>OAuth 2.0, encriptación MySQL y protección CSRF integrada</p>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-database"></i>
+                        </div>
+                        <h3>Base de Datos Robusta</h3>
+                        <p>MySQL con almacenamiento seguro de todas tus transacciones</p>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-mobile-alt"></i>
+                        </div>
+                        <h3>Acceso Multiplataforma</h3>
+                        <p>Responsive design para desktop, tablet y móvil</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="stat-item">
+                        <div class="stat-number">1000+</div>
+                        <div class="stat-label">Trading Pairs Disponibles</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-item">
+                        <div class="stat-number">24/7</div>
+                        <div class="stat-label">Monitoreo Automático</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-item">
+                        <div class="stat-number">99%</div>
+                        <div class="stat-label">Precisión en Señales</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Dashboard Preview -->
+    <section id="dashboard">
+        <div class="container">
+            <div class="dashboard-preview">
+                <h2><i class="fas fa-chart-line"></i> Lo que Encontrarás en tu Dashboard</h2>
+                <div class="dashboard-grid">
+                    <div class="dashboard-item">
+                        <h4><i class="fas fa-chart-candlestick"></i> Gráficos Interactivos</h4>
+                        <p>Visualiza velas japonesas con indicadores técnicos superpuestos</p>
+                    </div>
+                    <div class="dashboard-item">
+                        <h4><i class="fas fa-bell"></i> Alertas y Notificaciones</h4>
+                        <p>Recibe alertas en tiempo real de oportunidades de trading</p>
+                    </div>
+                    <div class="dashboard-item">
+                        <h4><i class="fas fa-history"></i> Historial de Transacciones</h4>
+                        <p>Acceso a tu historial completo de operaciones</p>
+                    </div>
+                    <div class="dashboard-item">
+                        <h4><i class="fas fa-cog"></i> Estrategias Personalizables</h4>
+                        <p>Configura tus propios parámetros de trading</p>
+                    </div>
+                    <div class="dashboard-item">
+                        <h4><i class="fas fa-download"></i> Exportar Datos</h4>
+                        <p>Descarga tus datos en múltiples formatos</p>
+                    </div>
+                    <div class="dashboard-item">
+                        <h4><i class="fas fa-user-shield"></i> Soporte Premium</h4>
+                        <p>Acceso a documentación y guías completas</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 CriptoDash. Todos los derechos reservados.</p>
+            <p>Plataforma de análisis técnico y trading de criptomonedas</p>
+            <p style="font-size: 12px; margin-top: 20px; opacity: 0.8;">
+                ⚠️ Disclaimer: CriptoDash es una herramienta educativa. El trading de criptomonedas conlleva riesgo de pérdida. 
+                Siempre realiza tu propio análisis antes de operar.
+            </p>
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

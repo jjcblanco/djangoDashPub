@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Perfil - CriptoDash</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px 0;
+        }
+
+        .profile-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            max-width: 600px;
+            margin: 20px auto;
+        }
+
+        .profile-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 30px;
+            text-align: center;
+            color: white;
+        }
+
+        .profile-avatar {
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            margin: 0 auto 20px;
+            border: 3px solid white;
+        }
+
+        .profile-name {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .profile-email {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .profile-content {
+            padding: 40px 30px;
+        }
+
+        .info-section {
+            margin-bottom: 30px;
+        }
+
+        .info-section-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 14px;
+        }
+
+        .info-item:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: #666;
+            font-weight: 600;
+        }
+
+        .info-value {
+            color: #333;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+            flex-wrap: wrap;
+        }
+
+        .btn-primary-custom {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+            flex: 1;
+            text-align: center;
+        }
+
+        .btn-primary-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+            color: white;
+            text-decoration: none;
+        }
+
+        .btn-secondary-custom {
+            background: white;
+            color: #667eea;
+            padding: 12px 25px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+            flex: 1;
+            text-align: center;
+        }
+
+        .btn-secondary-custom:hover {
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+        }
+
+        .btn-logout {
+            background: #dc3545;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+            width: 100%;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        .btn-logout:hover {
+            background: #c82333;
+            text-decoration: none;
+            color: white;
+        }
+
+        .badge-status {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge-admin {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        @media (max-width: 600px) {
+            .profile-content {
+                padding: 20px 15px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .button-group > * {
+                width: 100%;
+                flex: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="profile-container">
+        <!-- Header -->
+        <div class="profile-header">
+            <div class="profile-avatar">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="profile-name">{{ user.first_name|default:user.username }}</div>
+            <div class="profile-email">{{ user.email }}</div>
+        </div>
+
+        <!-- Content -->
+        <div class="profile-content">
+            <!-- Información Personal -->
+            <div class="info-section">
+                <div class="info-section-title">
+                    <i class="fas fa-user-circle"></i> Información Personal
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Nombre:</span>
+                    <span class="info-value">{{ user.first_name|default:"No especificado" }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Apellido:</span>
+                    <span class="info-value">{{ user.last_name|default:"No especificado" }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Email:</span>
+                    <span class="info-value">{{ user.email }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Usuario:</span>
+                    <span class="info-value">{{ user.username }}</span>
+                </div>
+            </div>
+
+            <!-- Estado de la Cuenta -->
+            <div class="info-section">
+                <div class="info-section-title">
+                    <i class="fas fa-shield-alt"></i> Estado de la Cuenta
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Estado:</span>
+                    <span class="info-value">
+                        <span class="badge-status badge-active">
+                            <i class="fas fa-check-circle"></i> Activo
+                        </span>
+                    </span>
+                </div>
+                {% if user.is_staff %}
+                <div class="info-item">
+                    <span class="info-label">Rol:</span>
+                    <span class="info-value">
+                        <span class="badge-status badge-admin">
+                            <i class="fas fa-crown"></i> Administrador
+                        </span>
+                    </span>
+                </div>
+                {% endif %}
+                <div class="info-item">
+                    <span class="info-label">Fecha de Registro:</span>
+                    <span class="info-value">{{ user.date_joined|date:"d/m/Y H:i" }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Último Acceso:</span>
+                    <span class="info-value">{{ user.last_login|date:"d/m/Y H:i"|default:"Nunca" }}</span>
+                </div>
+            </div>
+
+            <!-- Acciones -->
+            <div class="button-group">
+                <a href="/" class="btn-primary-custom">
+                    <i class="fas fa-home"></i> Ir al Dashboard
+                </a>
+                <a href="/accounts/password/change/" class="btn-secondary-custom">
+                    <i class="fas fa-key"></i> Cambiar Contraseña
+                </a>
+            </div>
+
+            <a href="{% url 'custom_logout' %}" class="btn-logout">
+                <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+            </a>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
