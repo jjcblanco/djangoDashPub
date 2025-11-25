@@ -1,0 +1,50 @@
+/* Panel de controles dividido en dos columnas */
+.controls-container {
+    display: flex;
+    flex-direction: column;
+    width: 220px !important;
+    gap: 12px;
+}
+
+.control-column {
+    background: #2c3e50 !important;
+    padding: 12px !important;
+    border-radius: 8px;
+    border: none;
+    color: white;
+}
+
+.control-column h4 {
+    margin: 0 0 10px 0 !important;
+    font-size: 13px !important;
+    text-align: center;
+    color: #ecf0f1 !important;
+    font-weight: 600;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #34495e;
+}
+
+/* Layout principal modificado */
+.dashboard-container {
+    display: flex;
+    gap: 15px;
+    min-height: 600px;
+    padding: 15px;
+}
+
+.controls-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 220px;
+    flex-shrink: 0;
+}
+
+.chart-main {
+    flex: 1;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #bdc3c7;
+    padding: 8px;
+    min-height: 550px;
+}

@@ -1,0 +1,188 @@
+{% extends 'dashboard/base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Selector de Fechas -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0">📅 Seleccionar Período de Análisis</h5>
+        </div>
+        <div class="card-body">
+            <form method="get" class="mb-3" style="display:flex;gap:10px;align-items:center;">
+                <label for="pair">Par:</label>
+                <select id="pair" name="pair" class="form-control" style="width:160px;">
+                    <option value="ETH/USDT" {% if pair == 'ETH/USDT' %}selected{% endif %}>ETH/USDT</option>
+                    <option value="BTC/USDT" {% if pair == 'BTC/USDT' %}selected{% endif %}>BTC/USDT</option>
+                    <option value="ADA/USDT" {% if pair == 'ADA/USDT' %}selected{% endif %}>ADA/USDT</option>
+                    <option value="SOL/USDT" {% if pair == 'SOL/USDT' %}selected{% endif %}>SOL/USDT</option>
+                    <!-- Agrega más pares según necesites -->
+                </select>
+
+                <label for="fecha_inicio">Desde:</label>
+                <input id="fecha_inicio" name="fecha_inicio" type="date" value="{{ fecha_inicio }}" class="form-control" />
+
+                <label for="fecha_fin">Hasta:</label>
+                <input id="fecha_fin" name="fecha_fin" type="date" value="{{ fecha_fin }}" class="form-control" />
+
+                <button type="submit" class="btn btn-primary">Actualizar</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="alert alert-info">
+    <strong>Fuente de datos:</strong> {{ fuente_datos }}
+    <br><small>
+        🔄 Tiempo Real: Datos actualizados de Binance | 
+        💾 Histórico: Señales guardadas en base de datos
+    </small>
+</div>
+    <!-- Mensajes de Error -->
+    {% if error %}
+    <div class="alert alert-danger">
+        <h4>❌ Error en el Análisis</h4>
+        <p class="mb-0">{{ error }}</p>
+    </div>
+    {% else %}
+    
+    <!-- Estadísticas -->
+    <div class="row mb-4">
+        <div class="col-xl-2 col-md-4 mb-3">
+            <div class="card bg-primary text-white text-center">
+                <div class="card-body py-3">
+                    <h6 class="card-title">Total Señales</h6>
+                    <h3>{{ stats.total_señales }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 mb-3">
+            <div class="card bg-success text-white text-center">
+                <div class="card-body py-3">
+                    <h6 class="card-title">Compras</h6>
+                    <h3>{{ stats.compras }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 mb-3">
+            <div class="card bg-danger text-white text-center">
+                <div class="card-body py-3">
+                    <h6 class="card-title">Ventas</h6>
+                    <h3>{{ stats.ventas }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 mb-3">
+            <div class="card bg-info text-white text-center">
+                <div class="card-body py-3">
+                    <h6 class="card-title">Fuerza Prom.</h6>
+                    <h3>{{ stats.fuerza_promedio|floatformat:1 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 mb-3">
+            <div class="card bg-warning text-white text-center">
+                <div class="card-body py-3">
+                    <h6 class="card-title">Precio Máx</h6>
+                    <h5>${{ stats.precio_max|floatformat:2 }}</h5>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 mb-3">
+            <div class="card bg-secondary text-white text-center">
+                <div class="card-body py-3">
+                    <h6 class="card-title">Precio Mín</h6>
+                    <h5>${{ stats.precio_min|floatformat:2 }}</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico Principal -->
+    <div class="card">
+        <div class="card-header bg-dark text-white">
+            <h5 class="card-title mb-0">📈 Gráfico de Trading {{ pair }}</h5>
+            <small class="text-light">
+                🔼 Compras (Verde) | 🔽 Ventas (Rojo) | Tamaño = Fuerza de Señal
+            </small>
+        </div>
+        <div class="card-body">
+            {{ grafico|safe }}
+        </div>
+    </div>
+
+    <!-- Tabla de Señales -->
+    {% if señales %}
+    <div class="card mt-4">
+        <div class="card-header bg-dark text-white">
+            <h5 class="card-title mb-0">📋 Detalle de Señales Generadas</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Fecha/Hora</th>
+                            <th>Señal</th>
+                            <th>Fuerza</th>
+                            <th>Precio</th>
+                            <th>RSI</th>
+                            <th>Tendencia</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for señal in señales %}
+                        <tr>
+                            <td>
+                                {% if señal.timestamp|date:"Y-m-d" != "1970-01-01" %}
+                                    {{ señal.timestamp|date:"M d, H:i" }}
+                                {% else %}
+                                    {{ señal.timestamp }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge {% if señal.signal_type == 'buy' %}bg-success{% else %}bg-danger{% endif %}">
+                                    {{ señal.signal_type|upper }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar 
+                                        {% if señal.signal_strength >= 3 %}bg-success
+                                        {% elif señal.signal_strength >= 2 %}bg-warning
+                                        {% else %}bg-info{% endif %}" 
+                                        style="width: {{ señal.signal_strength|stringformat:'d' }}0%">
+                                        {{ señal.signal_strength }}
+                                    </div>
+                                </div>
+                            </td>
+                            <td>${{ señal.price|floatformat:2 }}</td>
+                            <td>
+                                {% if señal.indicators.rsi %}
+                                    {{ señal.indicators.rsi|floatformat:1 }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if señal.indicators.in_uptrend %}
+                                <span class="text-success">↑ Alcista</span>
+                                {% else %}
+                                <span class="text-danger">↓ Bajista</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info mt-4">
+        <h5>ℹ️ No hay señales en el período seleccionado</h5>
+        <p class="mb-0">Prueba con un rango de fechas diferente o verifica la configuración del bot de trading.</p>
+    </div>
+    {% endif %}
+
+    {% endif %}
+</div>
+{% endblock %}
