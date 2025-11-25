@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
 from django_plotly_dash import DjangoDash
 import pandas as pd
 import numpy as np
@@ -364,7 +365,9 @@ def update_chart(indicadores_activos, tema, n_clicks):
 
 # Vista Django tradicional
 def index(request):
-    return render(request, 'dashboard/index.html')
+    if not request.user.is_authenticated:
+        return render(request, 'dashboard/index.html')
+    return render(request, 'dashboard/index.html', {'user': request.user})
 def technical_analysis(request):
     context = {
         'page_title': 'Análisis Técnico Avanzado',
