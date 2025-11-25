@@ -1,0 +1,136 @@
+/* Estilos generales */
+.navbar-brand {
+    font-weight: bold;
+}
+
+/* Sidebar Styles */
+.sidebar {
+    position: fixed;
+    left: 0;
+    top: 56px;
+    width: 250px;
+    height: calc(100vh - 56px);
+    background-color: #2c3e50;
+    padding: 0;
+    transition: transform 0.3s ease;
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.sidebar.collapsed {
+    transform: translateX(-100%);
+}
+
+.sidebar .nav-link {
+    color: #ecf0f1;
+    padding: 12px 15px;
+    margin: 2px 0;
+    border-left: 3px solid transparent;
+    white-space: nowrap;
+}
+
+.sidebar .nav-link:hover {
+    background-color: #34495e;
+    border-left: 3px solid #3498db;
+}
+
+.sidebar .nav-link.active {
+    background-color: #3498db;
+    color: white;
+    border-left: 3px solid #2980b9;
+}
+
+.sidebar .nav-link i {
+    width: 20px;
+    text-align: center;
+    margin-right: 10px;
+}
+
+.sidebar-header {
+    padding: 20px 15px;
+    background-color: #34495e;
+    color: white;
+    border-bottom: 1px solid #46637f;
+    white-space: nowrap;
+}
+
+.sidebar-divider {
+    border-color: #46637f;
+    margin: 20px 0;
+}
+
+.sidebar-section-title {
+    font-size: 0.75rem;
+    color: #95a5a6 !important;
+    text-transform: uppercase;
+    margin-bottom: 15px;
+}
+
+/* Main Content Styles */
+.main-content {
+    background-color: #ecf0f1;
+    min-height: calc(100vh - 56px);
+    padding: 20px;
+    transition: margin-left 0.3s ease;
+    margin-left: 250px;
+}
+
+.main-content.expanded {
+    margin-left: 0;
+}
+
+/* Toggle Button Styles */
+.toggle-sidebar-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+.toggle-sidebar-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.navbar-toggler-sidebar {
+    display: none;
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+        width: 250px;
+    }
+    
+    .sidebar.show-mobile {
+        transform: translateX(0);
+    }
+    
+    .main-content {
+        margin-left: 0 !important;
+    }
+    
+    .navbar-toggler-sidebar {
+        display: block;
+    }
+}
+
+/* Breadcrumb Styles */
+.breadcrumb {
+    background-color: transparent;
+    padding: 0;
+    margin-bottom: 1rem;
+}
+
+.breadcrumb-item a {
+    text-decoration: none;
+    color: #6c757d;
+}
+
+.breadcrumb-item.active {
+    color: #495057;
+}
