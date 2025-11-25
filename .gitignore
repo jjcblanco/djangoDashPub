@@ -1,3 +1,7 @@
 /venv
+<<<<<<< HEAD
 *config.json
 *config.py
+=======
+/dashboard/config.py
+>>>>>>> bacdeffe4001947d7d3c6b36e53ef92296c5af6b
