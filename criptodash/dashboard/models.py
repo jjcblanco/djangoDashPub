@@ -1,5 +1,4 @@
 from django.db import models
-from django.contrib.postgres.fields import ArrayField  # Si usas PostgreSQL
 
 class Exchange(models.Model):
     name = models.CharField(max_length=50)
@@ -87,4 +86,26 @@ class BacktestResult(models.Model):
     
     def __str__(self):
         return f"{self.strategy_name} - {self.total_return:.2f}%"
+
+class Pair(models.Model):
+    SYMBOL_CHOICES = (
+        # opcional: mantener o no
+    )
+    symbol = models.CharField(max_length=50, unique=True)  # 'ETH/USDT'
+    base_asset = models.CharField(max_length=20, blank=True, null=True)
+    quote_asset = models.CharField(max_length=20, blank=True, null=True)
+    pair_type = models.CharField(max_length=20, default='spot')  # 'spot', 'futures', 'perp', ...
+    exchange = models.CharField(max_length=50, blank=True, null=True)
+    tick_size = models.DecimalField(max_digits=20, decimal_places=10, null=True, blank=True)
+    min_notional = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['symbol']),
+            models.Index(fields=['pair_type', 'symbol']),
+        ]
+
+    def __str__(self):
+        return self.symbol
 
