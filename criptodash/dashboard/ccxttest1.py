@@ -27,6 +27,7 @@ import numpy as np
 from datetime import datetime
 import time
 from .plot import plotear
+from dashboard.models import Pair
 
 binance = ccxt.binance()
 exchange = binance
@@ -182,7 +183,7 @@ def historical_fetch_ohlcv(pair,date_from,timeframe):
         new_ohlcv = binance.fetch_ohlcv(pair, timeframe, since=from_ts, limit=1000)
         ohlcv.extend(new_ohlcv)
         if len(new_ohlcv)!=1000:
-    	    break
+            break
     return(ohlcv)
 
 
@@ -218,6 +219,30 @@ def run_bot(pair,date_from,timeframe):
     #table_insert(ichi)
     #check_buy_sell_signals(supertrend_data)
     return(sig)
+
+def ensure_pair(symbol, pair_type='spot', exchange=None):
+    pair, created = Pair.objects.get_or_create(
+        symbol=symbol,
+        defaults={
+            'base_asset': symbol.split('/')[0],
+            'quote_asset': symbol.split('/')[1] if '/' in symbol else None,
+            'pair_type': pair_type,
+            'exchange': exchange,
+        }
+    )
+    return pair
+
+# En el flujo que inserta señales:
+pair = ensure_pair(symbol)
+signal = TradingSignal.objects.create(
+    pair=pair,
+    signal_type='buy',
+    timestamp=timestamp_utc,
+    price=price,
+    signal_strength=strength,
+    indicators=indicators,
+    source='bot'
+)
 
 #schedule.every(10).seconds.do(run_bot)
 
