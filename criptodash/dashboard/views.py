@@ -415,6 +415,56 @@ def import_data(request):
     return render(request, "dashboard/bot_run.html", {"table_html": mark_safe(table_html) if table_html else None})
 
 def dashboard_mejorado(request):
+    pair_symbol = request.GET.get('pair', 'ETH/USDT')
+    try:
+        pair = Pair.objects.get(symbol=pair_symbol)
+        señales = TradingSignal.objects.filter(pair=pair).order_by('-timestamp')
+    except Pair.DoesNotExist:
+        señales = TradingSignal.objects.none()
+    # pasar lista de pairs al template para el selector
+    pairs = Pair.objects.all().order_by('symbol')
+    return render(request, 'dashboard/dashboard_mejorado.html', {'señales': señales, 'pairs': pairs, 'pair_selected': pair_symbol})
+
+@require_http_methods(["GET", "POST"])
+def run_bot_view(request):
+    table_html = None
+    if request.method == "POST":
+        try:
+            # adjust function name if ccxttest1 uses a different name
+            result = ccxttest1.run_bot('ETH/USDT', '2025-11-16 18:15:00','1m')
+            if hasattr(result, "to_html"):
+                table_html = result.to_html(classes="table table-sm table-striped", index=False, border=0)
+            else:
+                import pandas as pd
+                df = pd.DataFrame(result)
+                table_html = df.to_html(classes="table table-sm table-striped", index=False, border=0)
+            messages.success(request, "Bot ejecutado correctamente")
+        except Exception as e:
+            messages.error(request, f"Error al ejecutar bot: {e}")
+    return render(request, "dashboard/bot_run.html", {"table_html": mark_safe(table_html) if table_html else None})
+
+@require_http_methods(["GET", "POST"])
+def import_data(request):
+    table_html = None
+    if request.method == "POST":
+        try:
+            result = ccxttest1.run_bot('ETH/USDT', '2025-11-16 18:15:00','1m')
+            print(result)
+            if hasattr(result, "to_html"):
+                
+                table_html = result.to_html(classes="table table-sm table-striped", index=False, border=0)
+            else:
+                print("entro aca")
+                import pandas as pd
+                df = pd.DataFrame(result)
+                table_html = df.to_html(classes="table table-sm table-striped", index=False, border=0)
+
+            messages.success(request, "Datos importados correctamente")
+        except Exception as e:
+            messages.error(request, f"Error al importar datos: {e}")
+    return render(request, "dashboard/bot_run.html", {"table_html": mark_safe(table_html) if table_html else None})
+
+def dashboard_mejorado(request):
     """Dashboard con estrategia híbrida: BD + API en tiempo real.
     Ahora: el bot se ejecuta siempre al cargar la página (y al cambiar fechas via GET).
     """
