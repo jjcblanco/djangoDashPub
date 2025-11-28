@@ -14,4 +14,5 @@ urlpatterns = [
     path('ejecutar-analisis/', views.ejecutar_analisis_trading, name='ejecutar_analisis'),
     path('nuevo/', views.dashboard_mejorado, name='dashboard_nuevo'),
     path('api/run-bot/', views.run_bot_api, name='run_bot_api'),
+    path('backtest/', views.backtest_view, name='backtest'),
 ]
