@@ -74,16 +74,21 @@ class BacktestResult(models.Model):
     end_date = models.DateTimeField()
     strategy_name = models.CharField(max_length=50)
     parameters = models.JSONField()  # Parámetros usados
-    
+
     # Resultados
     total_return = models.FloatField()
-    sharpe_ratio = models.FloatField(null=True)
-    max_drawdown = models.FloatField()
-    win_rate = models.FloatField()
+    sharpe_ratio = models.FloatField(null=True, blank=True)
+    max_drawdown = models.FloatField(null=True, blank=True)
+    win_rate = models.FloatField(null=True, blank=True)
+    profit_factor = models.FloatField(null=True, blank=True)
     total_trades = models.IntegerField()
-    
+    avg_trade = models.FloatField(null=True, blank=True)
+    best_trade = models.FloatField(null=True, blank=True)
+    worst_trade = models.FloatField(null=True, blank=True)
+    total_fees = models.FloatField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     def __str__(self):
         return f"{self.strategy_name} - {self.total_return:.2f}%"
 

@@ -1024,3 +1024,60 @@ def run_bot_api(request):
         return JsonResponse(data, safe=safe_flag)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+def run_backtest(request):
+    """Vista para ejecutar backtests"""
+    if request.method == 'POST':
+        try:
+            pair_symbol = request.POST.get('pair', 'ETH/USDT')
+            start_date_str = request.POST.get('start_date')
+            end_date_str = request.POST.get('end_date')
+            initial_balance = float(request.POST.get('initial_balance', 10000))
+
+            # Convertir fechas
+            start_date = timezone.make_aware(datetime.strptime(start_date_str, '%Y-%m-%d'))
+            end_date = timezone.make_aware(datetime.strptime(end_date_str, '%Y-%m-%d'))
+
+            # Crear estrategia y backtester
+            strategy = SupertrendStrategy()
+            backtester = Backtester(initial_balance=initial_balance)
+
+            # Ejecutar backtest
+            results = backtester.run_backtest(strategy, pair_symbol, start_date, end_date)
+
+            # Crear gráfico de equity curve
+            equity_df = pd.DataFrame(results['equity_curve'])
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=equity_df['timestamp'],
+                y=equity_df['equity'],
+                mode='lines',
+                name='Equity Curve',
+                line=dict(color='blue', width=2)
+            ))
+            fig.update_layout(
+                title=f'Backtest Results - {pair_symbol}',
+                xaxis_title='Date',
+                yaxis_title='Portfolio Value ($)',
+                template='plotly_white'
+            )
+            chart_html = plot(fig, output_type='div')
+
+            context = {
+                'results': results,
+                'chart': chart_html,
+                'pair': pair_symbol,
+                'start_date': start_date_str,
+                'end_date': end_date_str,
+                'initial_balance': initial_balance
+            }
+
+            messages.success(request, f"Backtest completado exitosamente. Retorno total: {results['total_return']:.2f}%")
+            return render(request, 'dashboard/backtest_results.html', context)
+
+        except Exception as e:
+            messages.error(request, f"Error ejecutando backtest: {str(e)}")
+            return render(request, 'dashboard/run_backtest.html')
+
+    return render(request, 'dashboard/run_backtest.html')
