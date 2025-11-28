@@ -9,11 +9,12 @@ from django.views.decorators.http import require_http_methods
 from django.contrib import messages
 from django.utils.safestring import mark_safe
 from . import ccxttest1  # module with the bot function
+from .backtester import SupertrendStrategy, Backtester  # Import backtesting classes
 
 from plotly.offline import plot
 
-from django.utils import timezone  
-from datetime import datetime, timedelta 
+from django.utils import timezone
+from datetime import datetime, timedelta
 
 # para usar postgres con pandas
 
@@ -417,212 +418,16 @@ def import_data(request):
 def dashboard_mejorado(request):
     pair_symbol = request.GET.get('pair', 'ETH/USDT')
     try:
-        pair = Pair.objects.get(symbol=pair_symbol)
-        señales = TradingSignal.objects.filter(pair=pair).order_by('-timestamp')
-    except Pair.DoesNotExist:
-        señales = TradingSignal.objects.none()
+        from .models import TradingPair, TradeSignal
+        pair = TradingPair.objects.get(symbol=pair_symbol)
+        señales = TradeSignal.objects.filter(pair=pair).order_by('-timestamp')
+    except TradingPair.DoesNotExist:
+        señales = TradeSignal.objects.none()
     # pasar lista de pairs al template para el selector
-    pairs = Pair.objects.all().order_by('symbol')
+    pairs = TradingPair.objects.all().order_by('symbol')
     return render(request, 'dashboard/dashboard_mejorado.html', {'señales': señales, 'pairs': pairs, 'pair_selected': pair_symbol})
 
-@require_http_methods(["GET", "POST"])
-def run_bot_view(request):
-    table_html = None
-    if request.method == "POST":
-        try:
-            # adjust function name if ccxttest1 uses a different name
-            result = ccxttest1.run_bot('ETH/USDT', '2025-11-16 18:15:00','1m')
-            if hasattr(result, "to_html"):
-                table_html = result.to_html(classes="table table-sm table-striped", index=False, border=0)
-            else:
-                import pandas as pd
-                df = pd.DataFrame(result)
-                table_html = df.to_html(classes="table table-sm table-striped", index=False, border=0)
-            messages.success(request, "Bot ejecutado correctamente")
-        except Exception as e:
-            messages.error(request, f"Error al ejecutar bot: {e}")
-    return render(request, "dashboard/bot_run.html", {"table_html": mark_safe(table_html) if table_html else None})
 
-@require_http_methods(["GET", "POST"])
-def import_data(request):
-    table_html = None
-    if request.method == "POST":
-        try:
-            result = ccxttest1.run_bot('ETH/USDT', '2025-11-16 18:15:00','1m')
-            print(result)
-            if hasattr(result, "to_html"):
-                
-                table_html = result.to_html(classes="table table-sm table-striped", index=False, border=0)
-            else:
-                print("entro aca")
-                import pandas as pd
-                df = pd.DataFrame(result)
-                table_html = df.to_html(classes="table table-sm table-striped", index=False, border=0)
-
-            messages.success(request, "Datos importados correctamente")
-        except Exception as e:
-            messages.error(request, f"Error al importar datos: {e}")
-    return render(request, "dashboard/bot_run.html", {"table_html": mark_safe(table_html) if table_html else None})
-
-def dashboard_mejorado(request):
-    """Dashboard con estrategia híbrida: BD + API en tiempo real.
-    Ahora: el bot se ejecuta siempre al cargar la página (y al cambiar fechas via GET).
-    """
-    
-    # Manejar selección de fechas
-    fecha_inicio = request.GET.get('fecha_inicio')
-    fecha_fin = request.GET.get('fecha_fin')
-    # Nuevo: selección de par (ej: ETH/USDT)
-    pair = request.GET.get('pair', 'ETH/USDT')
-    
-    # Valores por defecto
-    if not fecha_inicio:
-        fecha_inicio = (timezone.now() - timedelta(days=7)).strftime('%Y-%m-%d')
-    if not fecha_fin:
-        fecha_fin = timezone.now().strftime('%Y-%m-%d')
-    
-    # Convertir a datetime aware
-    try:
-        fecha_inicio_dt = datetime.strptime(fecha_inicio, '%Y-%m-%d')
-        fecha_fin_dt = datetime.strptime(fecha_fin, '%Y-%m-%d')
-        fecha_inicio_dt = timezone.make_aware(fecha_inicio_dt)
-        fecha_fin_dt = timezone.make_aware(fecha_fin_dt)
-    except Exception:
-        fecha_inicio_dt = timezone.now() - timedelta(days=7)
-        fecha_fin_dt = timezone.now()
-    
-    # Asegurar que la fecha fin incluya todo el día
-    fecha_fin_dt = fecha_fin_dt.replace(hour=23, minute=59, second=59)
-    
-    print(f"📅 Período solicitado: {fecha_inicio_dt} a {fecha_fin_dt}")
-    
-    datos_reales = None
-    señales_reales = []
-    
-    # Intentar ejecutar el bot siempre (al cargar la página / al cambiar fechas)
-    try:
-        print("🔄 Ejecutando bot para el período solicitado (llamada a ccxttest1.run_bot)...")
-        # Usar el par seleccionado
-        datos_reales = ccxttest1.run_bot(pair=pair, date_from=fecha_inicio, timeframe='1m')
-        print("🔎 Resultado run_bot:", type(datos_reales), getattr(datos_reales, 'shape', None))
-    except Exception as e:
-        print(f"⚠️ Error ejecutando bot: {e}")
-        datos_reales = None
-    
-    try:
-        # Si el bot devolvió un DataFrame válido, normalizar y filtrar por rango
-        if datos_reales is not None and len(datos_reales) > 0:
-            if not pd.api.types.is_datetime64_any_dtype(datos_reales['timestamp']):
-                datos_reales['timestamp'] = pd.to_datetime(datos_reales['timestamp'])
-            if datos_reales['timestamp'].dt.tz is None:
-                datos_reales['timestamp'] = datos_reales['timestamp'].dt.tz_localize('UTC')
-            
-            mask = (datos_reales['timestamp'] >= pd.Timestamp(fecha_inicio_dt)) & \
-                   (datos_reales['timestamp'] <= pd.Timestamp(fecha_fin_dt))
-            datos_filtrados = datos_reales[mask].copy()
-            
-            # Extraer señales del DataFrame filtrado
-            for _, row in datos_filtrados.iterrows():
-                if row.get('signal_buy_sell') in ['buy', 'sell']:
-                    señales_reales.append({
-                        'timestamp': row['timestamp'],
-                        'signal_type': row['signal_buy_sell'],
-                        'signal_strength': int(row.get('signal_strenght', row.get('signal_strength', 1)) or 1),
-                        'price': row.get('close', row.get('price')),
-                        'indicators': {
-                            'rsi': row.get('rsi'),
-                            'in_uptrend': row.get('in_uptrend'),
-                            'macd': row.get('macd'),
-                            'source': 'tiempo_real'
-                        }
-                    })
-            print(f"✅ Señales extraídas del bot: {len(señales_reales)}")
-        else:
-            datos_filtrados = pd.DataFrame()
-    except Exception as e:
-        print(f"⚠️ Error procesando datos del bot: {e}")
-        datos_filtrados = pd.DataFrame()
-    
-    # Complementar con señales desde BD
-    señales_bd = []
-    try:
-        from trading_bot.models import TradingSignal
-        señales_bd = TradingSignal.objects.filter(
-            timestamp__gte=fecha_inicio_dt,
-            timestamp__lte=fecha_fin_dt
-        ).order_by('timestamp')
-        print(f"📋 Señales en BD: {len(señales_bd)}")
-    except Exception as e:
-        print(f"⚠️ No se pudieron obtener señales de BD: {e}")
-    
-    # Combinar señales evitando duplicados
-    todas_señales = []
-    señales_vistas = set()
-    
-    for señal in señales_reales:
-        timestamp_str = señal['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
-        key = f"{timestamp_str}_{señal['signal_type']}"
-        if key not in señales_vistas:
-            señal['source'] = '🔄 TIEMPO REAL'
-            todas_señales.append(señal)
-            señales_vistas.add(key)
-    
-    for señal_obj in señales_bd:
-        timestamp_str = señal_obj.timestamp.strftime('%Y-%m-%d %H:%M:%S')
-        key = f"{timestamp_str}_{señal_obj.signal_type}"
-        if key not in señales_vistas:
-            todas_señales.append({
-                'timestamp': señal_obj.timestamp,
-                'signal_type': señal_obj.signal_type,
-                'signal_strength': señal_obj.signal_strength,
-                'price': señal_obj.price,
-                'indicators': señal_obj.indicators,
-                'source': '💾 HISTÓRICO'
-            })
-            señales_vistas.add(key)
-    
-    # Actualizar BD con señales en tiempo real (si hay)
-    if señales_reales:
-        try:
-            from trading_bot.signals_utils import actualizar_bd_con_señales
-            actualizar_bd_con_señales(señales_reales)
-            print("💾 BD actualizada con señales recientes")
-        except Exception as e:
-            print(f"⚠️ No se pudo actualizar BD: {e}")
-    
-    # Preparar datos para gráfico: preferir datos reales si existen
-    if datos_reales is not None and len(datos_reales) > 0:
-        datos_para_grafico = datos_reales
-    else:
-        datos_para_grafico = generar_datos_grafico_desde_señales(todas_señales, fecha_inicio_dt, fecha_fin_dt)
-    
-    # Filtrar datos para el período seleccionado
-    if datos_para_grafico is not None and len(datos_para_grafico) > 0:
-        if 'timestamp' in datos_para_grafico.columns and datos_para_grafico['timestamp'].dt.tz is None:
-            datos_para_grafico['timestamp'] = datos_para_grafico['timestamp'].dt.tz_localize('UTC')
-        mask = (datos_para_grafico['timestamp'] >= pd.Timestamp(fecha_inicio_dt)) & \
-               (datos_para_grafico['timestamp'] <= pd.Timestamp(fecha_fin_dt))
-        datos_filtrados = datos_para_grafico[mask].copy()
-    else:
-        datos_filtrados = pd.DataFrame()
-    
-    # Crear gráfico y estadísticas (pasar el par seleccionado)
-    fig = crear_grafico_con_señales(datos_filtrados, todas_señales, pair)
-    grafico_html = plot(fig, output_type='div')
-    stats = calcular_estadisticas(datos_filtrados, todas_señales)
-    
-    context = {
-        'grafico': grafico_html,
-        'señales': todas_señales,
-        'stats': stats,
-        'fecha_inicio': fecha_inicio,
-        'fecha_fin': fecha_fin,
-        'pair': pair,  # agregar pair al contexto
-        'total_datos': len(datos_filtrados) if datos_filtrados is not None else 0,
-        'fuente_datos': '🔄 Tiempo Real + 💾 Histórico' if señales_reales else '💾 Solo Histórico'
-    }
-    
-    return render(request, 'dashboard/dashboard_mejorado.html', context)
 def generar_datos_grafico_desde_señales(señales, fecha_inicio, fecha_fin):
     """Genera datos básicos para el gráfico cuando no hay datos de API"""
     if not señales:
@@ -856,18 +661,7 @@ def calcular_estadisticas(df, señales):
         'precio_min': df['low'].min(),
         'volumen_promedio': df['volume'].mean() if 'volume' in df.columns else 0,
     }
-    """Calcula estadísticas del período"""
-    señales_list = list(señales)
-    
-    return {
-        'total_señales': len(señales_list),
-        'compras': len([s for s in señales_list if s.signal_type == 'buy']),
-        'ventas': len([s for s in señales_list if s.signal_type == 'sell']),
-        'fuerza_promedio': sum(s.signal_strength for s in señales_list) / len(señales_list) if señales_list else 0,
-        'precio_max': df['high'].max() if len(df) > 0 else 0,
-        'precio_min': df['low'].min() if len(df) > 0 else 0,
-        'volumen_promedio': df['volume'].mean() if len(df) > 0 else 0,
-    }
+
 
 # Cliente: cuando se pulsa "update-button" hace fetch al endpoint y guarda respuesta en api-data-store
 app.clientside_callback(
@@ -1026,7 +820,7 @@ def run_bot_api(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 @login_required
-def run_backtest(request):
+def backtest_view(request):
     """Vista para ejecutar backtests"""
     if request.method == 'POST':
         try:

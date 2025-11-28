@@ -1,7 +1,7 @@
 import pandas as pd
 from django.utils import timezone
 from .models import OHLCVData, TradingPair, Exchange
-from .binance_client import historical_fetch_ohlcv  # Tu función actual
+from .ccxttest1 import historical_fetch_ohlcv  # Tu función actual
 
 class DataManager:
     @staticmethod
