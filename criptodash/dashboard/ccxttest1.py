@@ -41,12 +41,12 @@ binance.secret=config.BINANCE_SECRET
 print(binance.check_required_credentials())
 balance =binance.fetch_balance()
 #print(type(balance))
- 
+
 #for x,y in balance['free'].items():
 #    if y!=0:
 #        print(x,y)
 #print(json.dumps(balance['used']))
- 
+
 #print(binance.balance())
 #print(json.dumps(binance.watch_balance()))
 
@@ -69,7 +69,7 @@ def crear_orden():
 def cancelar_orden():
     cancelResponse = exchange.cancel_order(newOrder1['id'])
     print(cancelResponse)
-    
+
 def dump(*args):
    print(' '.join([str(arg) for arg in args]))
 
@@ -96,7 +96,7 @@ def check_buy_sell_signals(df):
             in_position = True
         else:
             print("already in position, nothing to do")
-    
+
     if df['in_uptrend'][previous_row_index] and not df['in_uptrend'][last_row_index]:
         if in_position:
             print("changed to downtrend, sell")
@@ -121,7 +121,7 @@ def signals(df):
         if df['in_uptrend'][previous] and not df['in_uptrend'][current]:
             df['signal_buy_sell'][current]='sell'
             df['signal_strenght'][current]=current_strength+1
-    
+
     # Señales RSI
     df = generate_rsi_signals(df)
 
@@ -133,7 +133,7 @@ def signals(df):
             df['tendencia_ichi'][current] = 'uptrend'
         if df['senkou_a'][current] > df['senkou_b'][current] and df['senkou_a'][previous] < df['senkou_b'][previous]:
             df['tendencia_ichi'][current] = 'downtrend'
-    
+
     # ichicmoku cruce se tenkan-sen kijun-sen
     print("analisis de cruces de tenkan y kinjun")
     for current in range(1, len(df.index)):
@@ -158,7 +158,7 @@ def table(df):
     # Create the table
     column_names = [column.lower() for column in column_names]
     create_table_query = f"CREATE TABLE df_data ({', '.join([f'{column} VARCHAR(255)' for column in column_names])})"
-    
+
     cursor.execute(create_table_query)
 
     # Close the cursor and the connection
@@ -172,7 +172,7 @@ def table_insert(df):
    df.to_sql('df_data', engine, if_exists='replace', index=False)
    cursor.close()
    cnx.close()
-     
+
 def historical_fetch_ohlcv(pair,date_from,timeframe):
     from_ts = binance.parse8601(date_from)
     ohlcv_list = []
@@ -188,19 +188,19 @@ def historical_fetch_ohlcv(pair,date_from,timeframe):
 
 
 def run_bot(pair,date_from,timeframe):
-    print(f"Fetching new bars for {datetime.now().isoformat()}") 
+    print(f"Fetching new bars for {datetime.now().isoformat()}")
     #bars = binance.fetch_ohlcv('ETH/USDT', timeframe='1m', limit=100)
     #bars = historical_fetch_ohlcv('ETH/USDT', '2025-10-26 18:15:00','1m')
-    bars = historical_fetch_ohlcv(pair, date_from,timeframe)     
+    bars = historical_fetch_ohlcv(pair, date_from,timeframe)
     print(f"Received {len(bars)} bars")
-    df = pd.DataFrame(bars[:-1], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']) # toma los valores de mercado de el par 
+    df = pd.DataFrame(bars[:-1], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']) # toma los valores de mercado de el par
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms') # convierte los valores de tiempo del df a valores de tipo datetime
- 
+
     supertrend_data = supertrend(df)
     print("generando macd")
     macd_data = macd(supertrend_data)
     print("generando bollinger")
-    
+
     boll= enhanced_bollinger_bands(macd_data, window=20, num_std=2, strategy='all')
     print("generando ichimoku")
     ichi= ichimoku_cloud(boll)
@@ -231,21 +231,3 @@ def ensure_pair(symbol, pair_type='spot', exchange=None):
         }
     )
     return pair
-
-# En el flujo que inserta señales:
-pair = ensure_pair(symbol)
-signal = TradingSignal.objects.create(
-    pair=pair,
-    signal_type='buy',
-    timestamp=timestamp_utc,
-    price=price,
-    signal_strength=strength,
-    indicators=indicators,
-    source='bot'
-)
-
-#schedule.every(10).seconds.do(run_bot)
-
-#while True:
-    #schedule.run_pending()
-    #time.sleep(1)
