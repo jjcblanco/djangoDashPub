@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Run Backtest{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Run Trading Strategy Backtest</h3>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="pair">Trading Pair:</label>
+                                    <select name="pair" id="pair" class="form-control" required>
+                                        <option value="ETH/USDT">ETH/USDT</option>
+                                        <option value="BTC/USDT">BTC/USDT</option>
+                                        <option value="BNB/USDT">BNB/USDT</option>
+                                        <option value="ADA/USDT">ADA/USDT</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="initial_balance">Initial Balance ($):</label>
+                                    <input type="number" name="initial_balance" id="initial_balance"
+                                           class="form-control" value="10000" min="100" step="100" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="start_date">Start Date:</label>
+                                    <input type="date" name="start_date" id="start_date"
+                                           class="form-control" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="end_date">End Date:</label>
+                                    <input type="date" name="end_date" id="end_date"
+                                           class="form-control" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary btn-lg btn-block">
+                                <i class="fas fa-play"></i> Run Backtest
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="card-title">Strategy Information</h5>
+                </div>
+                <div class="card-body">
+                    <h6>Supertrend Strategy</h6>
+                    <p>This strategy uses multiple technical indicators:</p>
+                    <ul>
+                        <li><strong>Supertrend</strong> - Trend following indicator</li>
+                        <li><strong>MACD</strong> - Momentum oscillator</li>
+                        <li><strong>Bollinger Bands</strong> - Volatility bands</li>
+                        <li><strong>Ichimoku Cloud</strong> - Trend and support/resistance</li>
+                    </ul>
+                    <p><em>Note: Commission fees of 0.1% are applied to all trades.</em></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
