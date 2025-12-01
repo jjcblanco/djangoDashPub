@@ -175,7 +175,7 @@
         <p class="mb-0">{{ error }}</p>
     </div>
     {% else %}
-    
+
     <!-- Estadísticas -->
     <div class="row mb-4">
         <div class="col-xl-2 col-md-4 mb-3">
@@ -277,10 +277,10 @@
                             </td>
                             <td>
                                 <div class="progress" style="height: 20px;">
-                                    <div class="progress-bar 
+                                    <div class="progress-bar
                                         {% if señal.signal_strength >= 3 %}bg-success
                                         {% elif señal.signal_strength >= 2 %}bg-warning
-                                        {% else %}bg-info{% endif %}" 
+                                        {% else %}bg-info{% endif %}"
                                         style="width: {{ señal.signal_strength|stringformat:'d' }}0%">
                                         {{ señal.signal_strength }}
                                     </div>

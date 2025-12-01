@@ -32,12 +32,12 @@ from dashboard.models import Pair
 binance = ccxt.binance()
 exchange = binance
 binance.load_markets()
-#print("ahora imprimo los simbolos")
-#print(binance.symbols)
-#print("ahora imprimo los exchanges soportados")
-#print_exchanges()
+print("Markets loaded:", len(binance.markets))
+# For historical data, we don't need API keys
+# binance.apiKey=config.BINANCE_APIKEY
 binance.apiKey=config.BINANCE_APIKEY
 binance.secret=config.BINANCE_SECRET
+# binance.secret=config.BINANCE_SECRET
 print(binance.check_required_credentials())
 balance =binance.fetch_balance()
 #print(type(balance))
@@ -218,7 +218,59 @@ def run_bot(pair,date_from,timeframe):
     print("insertando en la base")
     #table_insert(ichi)
     #check_buy_sell_signals(supertrend_data)
+
+    # Save signals to database
+    save_signals_to_db(sig, pair)
+
     return(sig)
+
+def save_signals_to_db(df, pair_symbol):
+    """Save trading signals to database"""
+    from dashboard.models import TradeSignal, TradingPair, Exchange
+    from django.utils import timezone
+
+    try:
+        # Get or create exchange
+        exchange, _ = Exchange.objects.get_or_create(name='Binance')
+
+        # Get or create trading pair
+        pair, _ = TradingPair.objects.get_or_create(
+            symbol=pair_symbol,
+            exchange=exchange,
+            defaults={
+                'base_asset': pair_symbol.split('/')[0],
+                'quote_asset': pair_symbol.split('/')[1]
+            }
+        )
+
+        signals_created = 0
+        for idx, row in df.iterrows():
+            if row['signal_buy_sell'] in ['buy', 'sell']:
+                # Prepare indicators data
+                indicators = {}
+                if 'rsi' in row and not pd.isna(row['rsi']):
+                    indicators['rsi'] = float(row['rsi'])
+                if 'in_uptrend' in row:
+                    indicators['in_uptrend'] = bool(row['in_uptrend'])
+
+                # Create signal
+                signal, created = TradeSignal.objects.get_or_create(
+                    pair=pair,
+                    timestamp=row['timestamp'],
+                    signal_type=row['signal_buy_sell'],
+                    defaults={
+                        'price': float(row['close']),
+                        'signal_strength': int(row['signal_strenght']) if 'signal_strenght' in row else 1,
+                        'indicators': indicators
+                    }
+                )
+                if created:
+                    signals_created += 1
+
+        print(f"Saved {signals_created} new signals to database for {pair_symbol}")
+
+    except Exception as e:
+        print(f"Error saving signals to database: {e}")
 
 def ensure_pair(symbol, pair_type='spot', exchange=None):
     pair, created = Pair.objects.get_or_create(
