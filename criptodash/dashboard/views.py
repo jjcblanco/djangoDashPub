@@ -16,10 +16,6 @@ from plotly.offline import plot
 from django.utils import timezone
 from datetime import datetime, timedelta
 
-# para usar postgres con pandas
-
-
-from django.contrib.postgres.fields import ArrayField
 from django.http import JsonResponse
 
 app = DjangoDash('TechnicalAnalysisDashboard')
@@ -270,20 +266,34 @@ app.layout = html.Div([
 
 '''  59x52x4.4'''
 
-# Callback (igual que antes)
+# Eliminada la callback duplicada 'update_chart' (se conserva la versión unificada
+# más abajo que usa 'api-data-store' y hace fallback a cargar_datos()).
+# (La definición anterior @app.callback(... def update_chart(...): ...) fue borrada aquí)
+
+# Callback: ahora usa datos del store si existen (sino caerá en cargar_datos())
 @app.callback(
     Output('technical-chart', 'figure'),
-    [Input('indicadores-checklist', 'value'),
+    [Input('api-data-store', 'data'),
+     Input('indicadores-checklist', 'value'),
      Input('theme-selector', 'value'),
      Input('update-button', 'n_clicks')]
 )
-def update_chart(indicadores_activos, tema, n_clicks):
-    candles = cargar_datos()
-    buy_signals = candles[candles['signal_buy_sell'] == "buy"]
-    sell_signals = candles[candles['signal_buy_sell'] == "sell"]
-    
+def update_chart(api_data, indicadores_activos, tema, n_clicks):
+    # Usar datos desde API si vienen
+    try:
+        if api_data:
+            candles = pd.DataFrame(api_data)
+            if 'timestamp' in candles.columns:
+                candles['timestamp'] = pd.to_datetime(candles['timestamp'])
+        else:
+            candles = cargar_datos()
+    except Exception:
+        candles = cargar_datos()
+
+    buy_signals = candles[candles.get('signal_buy_sell', '') == "buy"] if 'signal_buy_sell' in candles.columns else candles[candles.get('signal_buy_sell', '') == "buy"]
+    sell_signals = candles[candles.get('signal_buy_sell', '') == "sell"] if 'signal_buy_sell' in candles.columns else candles[candles.get('signal_buy_sell', '') == "sell"]
+
     fig = go.Figure()
-    
     if 'candlestick' in indicadores_activos:
         fig.add_trace(go.Candlestick(
             x=candles['timestamp'], open=candles['open'], high=candles['high'],
@@ -381,8 +391,11 @@ def run_bot_view(request):
     table_html = None
     if request.method == "POST":
         try:
+            # Use a date in the past (30 days ago)
+            from datetime import datetime, timedelta
+            date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
             # adjust function name if ccxttest1 uses a different name
-            result = ccxttest1.run_bot('ETH/USDT', '2025-11-16 18:15:00','1m')
+            result = ccxttest1.run_bot('ETH/USDT', date_from,'1m')
             if hasattr(result, "to_html"):
                 table_html = result.to_html(classes="table table-sm table-striped", index=False, border=0)
             else:
@@ -415,17 +428,66 @@ def import_data(request):
             messages.error(request, f"Error al importar datos: {e}")
     return render(request, "dashboard/bot_run.html", {"table_html": mark_safe(table_html) if table_html else None})
 
+@login_required
 def dashboard_mejorado(request):
     pair_symbol = request.GET.get('pair', 'ETH/USDT')
+    fecha_inicio = request.GET.get('fecha_inicio')
+    fecha_fin = request.GET.get('fecha_fin')
+
     try:
         from .models import TradingPair, TradeSignal
         pair = TradingPair.objects.get(symbol=pair_symbol)
+
+        # Filtrar señales por par
         señales = TradeSignal.objects.filter(pair=pair).order_by('-timestamp')
+
+        # Aplicar filtro de fechas si se proporcionan
+        if fecha_inicio:
+            from django.utils import timezone
+            from datetime import datetime
+            try:
+                fecha_inicio_dt = timezone.make_aware(datetime.strptime(fecha_inicio, '%Y-%m-%d'))
+                señales = señales.filter(timestamp__gte=fecha_inicio_dt)
+            except ValueError:
+                pass  # Si la fecha no es válida, ignorar el filtro
+
+        if fecha_fin:
+            from django.utils import timezone
+            from datetime import datetime, timedelta
+            try:
+                # Agregar un día al fecha_fin para incluir todo el día
+                fecha_fin_dt = timezone.make_aware(datetime.strptime(fecha_fin, '%Y-%m-%d')) + timedelta(days=1)
+                señales = señales.filter(timestamp__lt=fecha_fin_dt)
+            except ValueError:
+                pass  # Si la fecha no es válida, ignorar el filtro
+
     except TradingPair.DoesNotExist:
         señales = TradeSignal.objects.none()
-    # pasar lista de pairs al template para el selector
+
+    # Calcular estadísticas
+    from .data_service import calcular_estadisticas_desde_señales
+    
+    stats = calcular_estadisticas_desde_señales(señales)
+
+    # Generar gráfico
+    from .data_service import generar_grafico_desde_señales
+    grafico = generar_grafico_desde_señales(señales, pair_symbol)
+
+    # Pasar lista de pairs al template para el selector
     pairs = TradingPair.objects.all().order_by('symbol')
-    return render(request, 'dashboard/dashboard_mejorado.html', {'señales': señales, 'pairs': pairs, 'pair_selected': pair_symbol})
+
+    context = {
+        'señales': señales,
+        'pairs': pairs,
+        'pair_selected': pair_symbol,
+        'fecha_inicio': fecha_inicio,
+        'fecha_fin': fecha_fin,
+        'stats': stats,
+        'grafico': grafico,
+        'fuente_datos': 'Base de datos local'
+    }
+
+    return render(request, 'dashboard/dashboard_mejorado.html', context)
 
 
 def generar_datos_grafico_desde_señales(señales, fecha_inicio, fecha_fin):
