@@ -1,14 +1,35 @@
-# scripts/backfill_pairs.py
-import django, os, sys
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'criptodash.settings')
-django.setup()
-from dashboard.models import Pair
-from trading_bot.models import TradingSignal
+"""
+Backfill script to populate TradeSignal.pair_ref for existing signals.
+Run with:
+    python manage.py shell < dashboard/scripts/backfill_pairs.py
+or run from a Django shell and call backfill() manually.
+"""
 
-# Supón que TradingSignal tenía un campo 'symbol' viejo (string)
-symbols = TradingSignal.objects.values_list('symbol', flat=True).distinct()
-for s in symbols:
-    if not s:
-        continue
-    p, _ = Pair.objects.get_or_create(symbol=s, defaults={'base_asset': s.split('/')[0]})
-    TradingSignal.objects.filter(symbol=s, pair__isnull=True).update(pair=p)
+from django.utils import timezone
+
+
+def backfill():
+    from dashboard.models import TradeSignal
+    from dashboard.ccxttest1 import ensure_pair
+    from django.db import transaction
+
+    qs = TradeSignal.objects.filter(pair_ref__isnull=True)
+    total = qs.count()
+    print(f"Starting backfill for {total} TradeSignal rows")
+    i = 0
+    for signal in qs.iterator():
+        try:
+            canonical = ensure_pair(signal.pair.symbol, pair_type='spot', exchange=signal.pair.exchange.name)
+            signal.pair_ref = canonical
+            signal.save(update_fields=['pair_ref'])
+            i += 1
+            if i % 100 == 0:
+                print(f"Backfilled {i}/{total}")
+        except Exception as e:
+            print(f"Error backfilling signal id={signal.id}: {e}")
+
+    print(f"Backfill complete. Updated {i} rows.")
+
+
+if __name__ == '__main__':
+    backfill()
