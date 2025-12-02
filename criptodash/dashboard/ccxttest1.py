@@ -256,8 +256,12 @@ def save_signals_to_db(df, pair_symbol):
                 indicators = {}
                 if 'rsi' in row and not pd.isna(row['rsi']):
                     indicators['rsi'] = float(row['rsi'])
-                if 'in_uptrend' in row:
+                if 'in_uptrend' in row and not pd.isna(row['in_uptrend']):
                     indicators['in_uptrend'] = bool(row['in_uptrend'])
+                if 'macd' in row and not pd.isna(row['macd']):
+                    indicators['macd'] = float(row['macd'])
+                if 'macd_signal' in row and not pd.isna(row['macd_signal']):
+                    indicators['macd_signal'] = float(row['macd_signal'])
 
                 # Normalize signal type to match model choices
                 signal_type = row['signal_buy_sell'].upper()
@@ -268,7 +272,8 @@ def save_signals_to_db(df, pair_symbol):
                 defaults = {
                     'price': float(row['close']),
                     'strength': strength,
-                    'indicators': indicators,
+                    # Use None instead of empty dict to avoid MySQL constraint error
+                    'indicators': indicators if indicators else None,
                     'indicator': ','.join(list(indicators.keys())) if indicators else None,
                 }
                 if canonical_pair:
@@ -287,6 +292,8 @@ def save_signals_to_db(df, pair_symbol):
 
     except Exception as e:
         print(f"Error saving signals to database: {e}")
+        import traceback
+        traceback.print_exc()
 
 def ensure_pair(symbol, pair_type='spot', exchange=None):
     pair, created = Pair.objects.get_or_create(
