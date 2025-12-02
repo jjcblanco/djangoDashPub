@@ -278,11 +278,11 @@
                             <td>
                                 <div class="progress" style="height: 20px;">
                                     <div class="progress-bar
-                                        {% if señal.signal_strength >= 3 %}bg-success
-                                        {% elif señal.signal_strength >= 2 %}bg-warning
+                                        {% if señal.strength >= 3 %}bg-success
+                                        {% elif señal.strength >= 2 %}bg-warning
                                         {% else %}bg-info{% endif %}"
-                                        style="width: {{ señal.signal_strength|stringformat:'d' }}0%">
-                                        {{ señal.signal_strength }}
+                                        style="width: {{ señal.strength|stringformat:'d' }}0%">
+                                        {{ señal.strength }}
                                     </div>
                                 </div>
                             </td>
