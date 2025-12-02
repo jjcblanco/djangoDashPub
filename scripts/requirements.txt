@@ -1,0 +1,6 @@
+# requirements.txt
+networkx>=2.8
+matplotlib>=3.5
+plotly>=5.10
+astor>=0.8
+pygraphviz>=1.9  # Opcional para mejores gráficos
