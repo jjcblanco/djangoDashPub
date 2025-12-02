@@ -55,15 +55,20 @@ class TradeSignal(models.Model):
     ]
     
     pair = models.ForeignKey(TradingPair, on_delete=models.CASCADE)
+    # New nullable FK to the canonical Pair model (allows gradual migration/backfill)
+    pair_ref = models.ForeignKey('Pair', null=True, blank=True, on_delete=models.SET_NULL, related_name='trade_signals')
     timestamp = models.DateTimeField()
     signal_type = models.CharField(max_length=4, choices=SIGNAL_TYPES)
     price = models.DecimalField(max_digits=20, decimal_places=8)
-    indicator = models.CharField(max_length=50)  # Ichimoku, RSI, etc.
+    indicator = models.CharField(max_length=50, blank=True, null=True)  # Ichimoku, RSI, etc.
     strength = models.FloatField(default=1.0)  # 0-1 scale
+    # Optional JSON field to store computed indicators or metadata
+    indicators = models.JSONField(null=True, blank=True)
     
     class Meta:
         indexes = [
             models.Index(fields=['pair', 'timestamp', 'signal_type']),
+            models.Index(fields=['pair_ref', 'timestamp', 'signal_type']),
         ]
 
 class BacktestResult(models.Model):

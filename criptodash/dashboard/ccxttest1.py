@@ -233,19 +233,25 @@ def save_signals_to_db(df, pair_symbol):
         # Get or create exchange
         exchange, _ = Exchange.objects.get_or_create(name='Binance')
 
-        # Get or create trading pair
+        # Get or create trading pair (legacy model)
         pair, _ = TradingPair.objects.get_or_create(
             symbol=pair_symbol,
             exchange=exchange,
             defaults={
                 'base_asset': pair_symbol.split('/')[0],
-                'quote_asset': pair_symbol.split('/')[1]
+                'quote_asset': pair_symbol.split('/')[1] if '/' in pair_symbol else ''
             }
         )
 
+        # Ensure canonical Pair model exists and use it to link new signals
+        try:
+            canonical_pair = ensure_pair(pair_symbol, pair_type='spot', exchange=exchange.name)
+        except Exception:
+            canonical_pair = None
+
         signals_created = 0
         for idx, row in df.iterrows():
-            if row['signal_buy_sell'] in ['buy', 'sell']:
+            if row.get('signal_buy_sell') in ['buy', 'sell']:
                 # Prepare indicators data
                 indicators = {}
                 if 'rsi' in row and not pd.isna(row['rsi']):
@@ -253,16 +259,26 @@ def save_signals_to_db(df, pair_symbol):
                 if 'in_uptrend' in row:
                     indicators['in_uptrend'] = bool(row['in_uptrend'])
 
-                # Create signal
+                # Normalize signal type to match model choices
+                signal_type = row['signal_buy_sell'].upper()
+                # Determine strength (fall back to 1.0)
+                strength = float(row['signal_strenght']) if 'signal_strenght' in row and not pd.isna(row['signal_strenght']) else 1.0
+
+                # Create or get signal (linking both legacy pair and canonical pair)
+                defaults = {
+                    'price': float(row['close']),
+                    'strength': strength,
+                    'indicators': indicators,
+                    'indicator': ','.join(list(indicators.keys())) if indicators else None,
+                }
+                if canonical_pair:
+                    defaults['pair_ref'] = canonical_pair
+
                 signal, created = TradeSignal.objects.get_or_create(
                     pair=pair,
                     timestamp=row['timestamp'],
-                    signal_type=row['signal_buy_sell'],
-                    defaults={
-                        'price': float(row['close']),
-                        'signal_strength': int(row['signal_strenght']) if 'signal_strenght' in row else 1,
-                        'indicators': indicators
-                    }
+                    signal_type=signal_type,
+                    defaults=defaults
                 )
                 if created:
                     signals_created += 1
