@@ -161,7 +161,7 @@ def calcular_estadisticas_desde_señales(señales):
     ventas = len([s for s in señales_list if s.signal_type == 'sell'])
 
     # Fuerza promedio
-    fuerza_promedio = sum(s.signal_strength for s in señales_list) / total_señales if total_señales > 0 else 0
+    fuerza_promedio = sum(s.strength for s in señales_list) / total_señales if total_señales > 0 else 0
 
     # Precio promedio
     precio_promedio = sum(s.price for s in señales_list) / total_señales if total_señales > 0 else 0
@@ -188,7 +188,7 @@ def generar_grafico_desde_señales(señales, pair_symbol='ETH/USDT'):
         # devolver figura vacía
         fig = go.Figure()
         fig.update_layout(title=f"No hay señales para {pair_symbol}")
-        return fig
+        return fig.to_html(full_html=False, include_plotlyjs='cdn')
 
     # si 'señales' es queryset -> convertir a DataFrame
     try:
@@ -203,7 +203,7 @@ def generar_grafico_desde_señales(señales, pair_symbol='ETH/USDT'):
     if df.empty:
         fig = go.Figure()
         fig.update_layout(title=f"No hay señales para {pair_symbol}")
-        return fig
+        return fig.to_html(full_html=False, include_plotlyjs='cdn')
 
     # asegurarse de columnas timestamp/open/high/low/close/volume si existen
     if 'timestamp' in df.columns:
@@ -228,4 +228,6 @@ def generar_grafico_desde_señales(señales, pair_symbol='ETH/USDT'):
                                      marker=dict(color='red', symbol='triangle-down', size=10), name='Sell'))
 
     fig.update_layout(title=f"Señales - {pair_symbol}", xaxis_title='timestamp', yaxis_title='price')
-    return fig
+    
+    # Convertir a HTML para renderizar en el template
+    return fig.to_html(full_html=False, include_plotlyjs='cdn')
