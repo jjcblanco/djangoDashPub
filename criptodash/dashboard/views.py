@@ -21,7 +21,7 @@ from django.http import JsonResponse
 app = DjangoDash('TechnicalAnalysisDashboard')
 
 def ejecutar_analisis_trading(request):
-    """Ejecuta el análisis completo y muestra resultados en el dashboard"""
+    print("Ejecuta el análisis completo y muestra resultados en el dashboard")
     try:
         # Ejecutar el bot de trading
         resultados = run_bot()
@@ -430,6 +430,7 @@ def import_data(request):
 
 @login_required
 def dashboard_mejorado(request):
+    print("ejecutando sdashboard_mejorado")
     pair_symbol = request.GET.get('pair', 'ETH/USDT')
     fecha_inicio = request.GET.get('fecha_inicio')
     fecha_fin = request.GET.get('fecha_fin')
@@ -462,6 +463,7 @@ def dashboard_mejorado(request):
                 pass  # Si la fecha no es válida, ignorar el filtro
 
     except TradingPair.DoesNotExist:
+        print("El par no existe en la base de datos")
         señales = TradeSignal.objects.none()
 
     # Calcular estadísticas
