@@ -1,6 +1,7 @@
-{% load static %}
+﻿{% load static %}
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -97,6 +98,7 @@
         }
     </style>
 </head>
+
 <body>
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark">
@@ -110,257 +112,277 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav">
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'dashboard_index' %}">Inicio</a>
+                        <a class="nav-link" href="{% url 'dashboard_index' %}"><i class="fas fa-home"></i> Inicio</a>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'dashboard_nuevo' %}"><i class="fas fa-chart-area"></i>
+                            Dashboard</a>
+                    </li>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'technical_analysis' %}">Análisis Técnico</a>
+                        <a class="nav-link" href="{% url 'technical_analysis' %}"><i class="fas fa-chart-line"></i>
+                            Análisis Técnico</a>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'backtest' %}"><i class="fas fa-flask"></i> Backtesting</a>
+                    </li>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'run_bot' %}">Bot Trading</a>
+                        <a class="nav-link" href="{% url 'run_bot' %}"><i class="fas fa-robot"></i> Bot Trading</a>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'import_data' %}"><i class="fas fa-download"></i> Importar
+                            Datos</a>
+                    </li>
                     </li>
                 </ul>
                 {% if user.is_authenticated %}
-                    <div class="nav-user-section" style="display: flex; align-items: center; gap: 15px; margin-left: auto;">
-                        <span class="user-welcome" style="color: rgba(255, 255, 255, 0.95); font-size: 14px;">👋 ¡Hola, {{ user.first_name|default:user.username }}!</span>
-                        <a href="{% url 'profile' %}" class="btn btn-light btn-sm">
-                            <i class="fas fa-user-circle"></i> Perfil
-                        </a>
-                        <a href="{% url 'custom_logout' %}" class="btn btn-outline-light btn-sm">
-                            <i class="fas fa-sign-out-alt"></i> Salir
-                        </a>
-                    </div>
+                <div class="nav-user-section" style="display: flex; align-items: center; gap: 15px; margin-left: auto;">
+                    <span class="user-welcome" style="color: rgba(255, 255, 255, 0.95); font-size: 14px;">👋 ¡Hola, {{
+                        user.first_name|default:user.username }}!</span>
+                    <a href="{% url 'profile' %}" class="btn btn-light btn-sm">
+                        <i class="fas fa-user-circle"></i> Perfil
+                    </a>
+                    <a href="{% url 'custom_logout' %}" class="btn btn-outline-light btn-sm">
+                        <i class="fas fa-sign-out-alt"></i> Salir
+                    </a>
+                </div>
                 {% endif %}
             </div>
         </div>
     </nav>
-<div class="container-fluid">
-    <!-- Selector de Fechas -->
-    <div class="card mb-4">
-        <div class="card-header bg-primary text-white">
-            <h5 class="card-title mb-0">📅 Seleccionar Período de Análisis</h5>
-        </div>
-        <div class="card-body">
-            <form method="get" class="mb-3" style="display:flex;gap:10px;align-items:center;">
-                <label for="pair">Par:</label>
-                <select id="pair" name="pair" class="form-control" style="width:160px;">
-                    <option value="ETH/USDT" {% if pair_selected == 'ETH/USDT' %}selected{% endif %}>ETH/USDT</option>
-                    <option value="BTC/USDT" {% if pair_selected == 'BTC/USDT' %}selected{% endif %}>BTC/USDT</option>
-                    <option value="ADA/USDT" {% if pair_selected == 'ADA/USDT' %}selected{% endif %}>ADA/USDT</option>
-                    <option value="SOL/USDT" {% if pair_selected == 'SOL/USDT' %}selected{% endif %}>SOL/USDT</option>
-                    <!-- Agrega más pares según necesites -->
-                </select>
+    <div class="container-fluid">
+        <!-- Selector de Fechas -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">📅 Seleccionar Período de Análisis</h5>
+            </div>
+            <div class="card-body">
+                <form method="get" class="mb-3" style="display:flex;gap:10px;align-items:center;">
+                    <label for="pair">Par:</label>
+                    <select id="pair" name="pair" class="form-control" style="width:160px;">
+                        <option value="ETH/USDT" {% if pair_selected == 'ETH/USDT' %}selected{% endif %}>ETH/USDT</option>
+                        <option value="BTC/USDT" {% if pair_selected == 'BTC/USDT' %}selected{% endif %}>BTC/USDT</option>
+                        <option value="ADA/USDT" {% if pair_selected == 'ADA/USDT' %}selected{% endif %}>ADA/USDT</option>
+                        <option value="SOL/USDT" {% if pair_selected == 'SOL/USDT' %}selected{% endif %}>SOL/USDT</option>
+                        <!-- Agrega más pares según necesites -->
+                    </select>
 
-                <label for="fecha_inicio">Desde:</label>
-                <input id="fecha_inicio" name="fecha_inicio" type="date" value="{{ fecha_inicio }}" class="form-control" />
+                    <label for="fecha_inicio">Desde:</label>
+                    <input id="fecha_inicio" name="fecha_inicio" type="date" value="{{ fecha_inicio }}"
+                        class="form-control" />
 
-                <label for="fecha_fin">Hasta:</label>
-                <input id="fecha_fin" name="fecha_fin" type="date" value="{{ fecha_fin }}" class="form-control" />
+                    <label for="fecha_fin">Hasta:</label>
+                    <input id="fecha_fin" name="fecha_fin" type="date" value="{{ fecha_fin }}" class="form-control" />
 
-                <button type="submit" class="btn btn-primary">Actualizar</button>
-            </form>
-        </div>
-    </div>
 
-    <div class="alert alert-info">
-    <strong>Fuente de datos:</strong> {{ fuente_datos|default:"Base de datos local" }}
-    <br><small>
-        🔄 Tiempo Real: Datos actualizados de Binance |
-        💾 Histórico: Señales guardadas en base de datos
-    </small>
-</div>
-    <!-- Mensajes de Error -->
-    {% if error %}
-    <div class="alert alert-danger">
-        <h4>❌ Error en el Análisis</h4>
-        <p class="mb-0">{{ error }}</p>
-    </div>
-    {% else %}
-
-    <!-- Estadísticas -->
-    <div class="row mb-4">
-        <div class="col-xl-2 col-md-4 mb-3">
-            <div class="card bg-primary text-white text-center">
-                <div class="card-body py-3">
-                    <h6 class="card-title">Total Señales</h6>
-                    <h3>{{ stats.total_señales|default:0 }}</h3>
-                </div>
+                    <button type="submit" class="btn btn-primary">Actualizar</button>
+                    <button type="submit" name="refresh" value="1" class="btn btn-success">
+                        <i class="fas fa-sync-alt"></i> Generar Nuevas Señales
+                    </button>
+                </form>
             </div>
         </div>
-        <div class="col-xl-2 col-md-4 mb-3">
-            <div class="card bg-success text-white text-center">
-                <div class="card-body py-3">
-                    <h6 class="card-title">Compras</h6>
-                    <h3>{{ stats.compras|default:0 }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-2 col-md-4 mb-3">
-            <div class="card bg-danger text-white text-center">
-                <div class="card-body py-3">
-                    <h6 class="card-title">Ventas</h6>
-                    <h3>{{ stats.ventas|default:0 }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-2 col-md-4 mb-3">
-            <div class="card bg-info text-white text-center">
-                <div class="card-body py-3">
-                    <h6 class="card-title">Fuerza Prom.</h6>
-                    <h3>{{ stats.fuerza_promedio|default:0|floatformat:1 }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-2 col-md-4 mb-3">
-            <div class="card bg-warning text-white text-center">
-                <div class="card-body py-3">
-                    <h6 class="card-title">Precio Máx</h6>
-                    <h5>${{ stats.precio_max|default:0|floatformat:2 }}</h5>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-2 col-md-4 mb-3">
-            <div class="card bg-secondary text-white text-center">
-                <div class="card-body py-3">
-                    <h6 class="card-title">Precio Mín</h6>
-                    <h5>${{ stats.precio_min|default:0|floatformat:2 }}</h5>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- Gráfico Principal -->
-    <div class="card">
-        <div class="card-header bg-dark text-white">
-            <h5 class="card-title mb-0">📈 Gráfico de Trading {{ pair_selected|default:"ETH/USDT" }}</h5>
-            <small class="text-light">
-                🔼 Compras (Verde) | 🔽 Ventas (Rojo) | Tamaño = Fuerza de Señal
+        <div class="alert alert-info">
+            <strong>Fuente de datos:</strong> {{ fuente_datos|default:"Base de datos local" }}
+            <br><small>
+                🔄 Tiempo Real: Datos actualizados de Binance |
+                💾 Histórico: Señales guardadas en base de datos
             </small>
         </div>
-        <div class="card-body">
-            {{ grafico|safe }}
+        <!-- Mensajes de Error -->
+        {% if error %}
+        <div class="alert alert-danger">
+            <h4>❌ Error en el Análisis</h4>
+            <p class="mb-0">{{ error }}</p>
         </div>
-    </div>
+        {% else %}
 
-    <!-- Tabla de Señales -->
-    {% if señales %}
-    <div class="card mt-4">
-        <div class="card-header bg-dark text-white">
-            <h5 class="card-title mb-0">📋 Detalle de Señales Generadas</h5>
+        <!-- Estadísticas -->
+        <div class="row mb-4">
+            <div class="col-xl-2 col-md-4 mb-3">
+                <div class="card bg-primary text-white text-center">
+                    <div class="card-body py-3">
+                        <h6 class="card-title">Total Señales</h6>
+                        <h3>{{ stats.total_señales|default:0 }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-2 col-md-4 mb-3">
+                <div class="card bg-success text-white text-center">
+                    <div class="card-body py-3">
+                        <h6 class="card-title">Compras</h6>
+                        <h3>{{ stats.compras|default:0 }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-2 col-md-4 mb-3">
+                <div class="card bg-danger text-white text-center">
+                    <div class="card-body py-3">
+                        <h6 class="card-title">Ventas</h6>
+                        <h3>{{ stats.ventas|default:0 }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-2 col-md-4 mb-3">
+                <div class="card bg-info text-white text-center">
+                    <div class="card-body py-3">
+                        <h6 class="card-title">Fuerza Prom.</h6>
+                        <h3>{{ stats.fuerza_promedio|default:0|floatformat:1 }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-2 col-md-4 mb-3">
+                <div class="card bg-warning text-white text-center">
+                    <div class="card-body py-3">
+                        <h6 class="card-title">Precio Máx</h6>
+                        <h5>${{ stats.precio_max|default:0|floatformat:2 }}</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-2 col-md-4 mb-3">
+                <div class="card bg-secondary text-white text-center">
+                    <div class="card-body py-3">
+                        <h6 class="card-title">Precio Mín</h6>
+                        <h5>${{ stats.precio_min|default:0|floatformat:2 }}</h5>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover table-sm">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>Fecha/Hora</th>
-                            <th>Señal</th>
-                            <th>Fuerza</th>
-                            <th>Precio</th>
-                            <th>RSI</th>
-                            <th>Tendencia</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for señal in señales %}
-                        <tr>
-                            <td>
-                                {% if señal.timestamp|date:"Y-m-d" != "1970-01-01" %}
+
+        <!-- Gráfico Principal -->
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="card-title mb-0">📈 Gráfico de Trading {{ pair_selected|default:"ETH/USDT" }}</h5>
+                <small class="text-light">
+                    🔼 Compras (Verde) | 🔽 Ventas (Rojo) | Tamaño = Fuerza de Señal
+                </small>
+            </div>
+            <div class="card-body">
+                {{ grafico|safe }}
+            </div>
+        </div>
+
+        <!-- Tabla de Señales -->
+        {% if señales %}
+        <div class="card mt-4">
+            <div class="card-header bg-dark text-white">
+                <h5 class="card-title mb-0">📋 Detalle de Señales Generadas</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Fecha/Hora</th>
+                                <th>Señal</th>
+                                <th>Fuerza</th>
+                                <th>Precio</th>
+                                <th>RSI</th>
+                                <th>Tendencia</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for señal in señales %}
+                            <tr>
+                                <td>
+                                    {% if señal.timestamp|date:"Y-m-d" != "1970-01-01" %}
                                     {{ señal.timestamp|date:"M d, H:i" }}
-                                {% else %}
+                                    {% else %}
                                     {{ señal.timestamp }}
-                                {% endif %}
-                            </td>
-                            <td>
-                                <span class="badge {% if señal.signal_type == 'buy' %}bg-success{% else %}bg-danger{% endif %}">
-                                    {{ señal.signal_type|upper }}
-                                </span>
-                            </td>
-                            <td>
-                                <div class="progress" style="height: 20px;">
-                                    <div class="progress-bar
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span
+                                        class="badge {% if señal.signal_type == 'buy' %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ señal.signal_type|upper }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar
                                         {% if señal.strength >= 3 %}bg-success
                                         {% elif señal.strength >= 2 %}bg-warning
                                         {% else %}bg-info{% endif %}"
-                                        style="width: {{ señal.strength|stringformat:'d' }}0%">
-                                        {{ señal.strength }}
+                                            style="width: {{ señal.strength|floatformat:0 }}0%">
+                                            {{ señal.strength }}
+                                        </div>
                                     </div>
-                                </div>
-                            </td>
-                            <td>${{ señal.price|floatformat:2 }}</td>
-                            <td>
-                                {% if señal.indicators.rsi %}
+                                </td>
+                                <td>${{ señal.price|floatformat:2 }}</td>
+                                <td>
+                                    {% if señal.indicators.rsi %}
                                     {{ señal.indicators.rsi|floatformat:1 }}
-                                {% else %}
+                                    {% else %}
                                     -
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if señal.indicators.in_uptrend %}
-                                <span class="text-success">↑ Alcista</span>
-                                {% else %}
-                                <span class="text-danger">↓ Bajista</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if señal.indicators.in_uptrend %}
+                                    <span class="text-success">↑ Alcista</span>
+                                    {% else %}
+                                    <span class="text-danger">↓ Bajista</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
+        {% else %}
+        <div class="alert alert-info mt-4">
+            <h5>ℹ️ No hay señales en el período seleccionado</h5>
+            <p class="mb-0">Prueba con un rango de fechas diferente o verifica la configuración del bot de trading.</p>
+        </div>
+        {% endif %}
+
+        {% endif %}
     </div>
-    {% else %}
-    <div class="alert alert-info mt-4">
-        <h5>ℹ️ No hay señales en el período seleccionado</h5>
-        <p class="mb-0">Prueba con un rango de fechas diferente o verifica la configuración del bot de trading.</p>
-    </div>
-    {% endif %}
 
-    {% endif %}
-</div>
+    <!-- Bootstrap JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 
-<!-- Bootstrap JS -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
-
-<!-- Custom JavaScript -->
-<script>
-    // Auto-submit form when pair selection changes
-    document.getElementById('pair').addEventListener('change', function() {
-        this.form.submit();
-    });
-
-    // Add loading state to form submission
-    document.querySelector('form').addEventListener('submit', function() {
-        const button = this.querySelector('button[type="submit"]');
-        const originalText = button.textContent;
-        button.textContent = '🔄 Actualizando...';
-        button.disabled = true;
-
-        // Re-enable after 2 seconds (in case of slow response)
-        setTimeout(() => {
-            button.textContent = originalText;
-            button.disabled = false;
-        }, 2000);
-    });
-
-    // Add smooth scrolling for anchor links
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function (e) {
-            e.preventDefault();
-            const target = document.querySelector(this.getAttribute('href'));
-            if (target) {
-                target.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                });
-            }
+    <!-- Custom JavaScript -->
+    <script>
+        // Auto-submit form when pair selection changes
+        document.getElementById('pair').addEventListener('change', function () {
+            this.form.submit();
         });
-    });
 
-    // Add tooltip functionality for better UX
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-</script>
+        // Add loading state to form submission
+        document.querySelector('form').addEventListener('submit', function () {
+            const button = this.querySelector('button[type="submit"]');
+            const originalText = button.textContent;
+            button.textContent = '🔄 Actualizando...';
+            button.disabled = true;
+
+            // Re-enable after 2 seconds (in case of slow response)
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.disabled = false;
+            }, 2000);
+        });
+
+        // Add smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Add tooltip functionality for better UX
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    </script>
 </body>
+
 </html>

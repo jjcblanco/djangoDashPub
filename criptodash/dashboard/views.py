@@ -491,12 +491,16 @@ def dashboard_mejorado(request):
                 error_message = f"Formato de fecha fin inválido: {fecha_fin}"
                 print(error_message)
         
-        # 5. Si no hay señales, ejecutar bot
+        # 5. Si no hay señales O si se solicita refresh, ejecutar bot
         señales_count = señales.count()
-        print(f"Señales encontradas después del filtrado: {señales_count}")
+        force_refresh = request.GET.get('refresh') == '1'
+        print(f"Señales encontradas después del filtrado: {señales_count}, Force refresh: {force_refresh}")
         
-        if señales_count == 0:
-            print("No hay señales, ejecutando bot...")
+        if señales_count == 0 or force_refresh:
+            if force_refresh:
+                print("Refresh solicitado, ejecutando bot...")
+            else:
+                print("No hay señales, ejecutando bot...")
             try:
                 # Formatear fecha para ccxt (ISO 8601)
                 if fecha_inicio:
@@ -964,57 +968,140 @@ def run_bot_api(request):
 
 @login_required
 def backtest_view(request):
-    """Vista para ejecutar backtests"""
+    """Vista para ejecutar backtests usando señales existentes"""
+    from .backtester import Backtester, SignalBasedStrategy, SupertrendStrategy
+    from .models import TradingPair, TradeSignal, BacktestResult, OHLCVData
+    
+    
+    # Obtener pares disponibles
+    pairs = TradingPair.objects.all().order_by('symbol')
+    
+    # Obtener resultados históricos de backtests
+    historical_results = BacktestResult.objects.all().order_by('-created_at')[:10]
+    
     if request.method == 'POST':
         try:
             pair_symbol = request.POST.get('pair', 'ETH/USDT')
             start_date_str = request.POST.get('start_date')
             end_date_str = request.POST.get('end_date')
             initial_balance = float(request.POST.get('initial_balance', 10000))
+            commission = float(request.POST.get('commission', 0.001))
+            strategy_type = request.POST.get('strategy', 'signal-based')  # 'signal-based' o 'supertrend'
 
             # Convertir fechas
             start_date = timezone.make_aware(datetime.strptime(start_date_str, '%Y-%m-%d'))
             end_date = timezone.make_aware(datetime.strptime(end_date_str, '%Y-%m-%d'))
 
-            # Crear estrategia y backtester
-            strategy = SupertrendStrategy()
-            backtester = Backtester(initial_balance=initial_balance)
+            # Crear backtester
+            backtester = Backtester(initial_balance=initial_balance, commission=commission)
 
-            # Ejecutar backtest
-            results = backtester.run_backtest(strategy, pair_symbol, start_date, end_date)
+            # Ejecutar backtest según estrategia
+            if strategy_type == 'signal-based':
+                # Usar señales existentes de la BD
+                results = backtester.run_backtest_from_signals(
+                    pair_symbol=pair_symbol,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+            else:
+                # Usar estrategia Supertrend
+                strategy = SupertrendStrategy()
+                results = backtester.run_backtest(
+                    strategy=strategy,
+                    pair_symbol=pair_symbol,
+                    start_date=start_date,
+                    end_date=end_date
+                )
 
-            # Crear gráfico de equity curve
-            equity_df = pd.DataFrame(results['equity_curve'])
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=equity_df['timestamp'],
-                y=equity_df['equity'],
-                mode='lines',
-                name='Equity Curve',
-                line=dict(color='blue', width=2)
-            ))
-            fig.update_layout(
-                title=f'Backtest Results - {pair_symbol}',
-                xaxis_title='Date',
-                yaxis_title='Portfolio Value ($)',
-                template='plotly_white'
-            )
-            chart_html = plot(fig, output_type='div')
+            # Verificar si hubo error
+            if 'error' in results:
+                messages.error(request, f"Error en backtest: {results['error']}")
+                return render(request, 'dashboard/backtest.html', {
+                    'pairs': pairs,
+                    'historical_results': historical_results
+                })
+
+            # Generar gráficos
+            equity_chart = backtester.generate_equity_chart(results)
+            
+            # Obtener datos OHLCV para el gráfico de trades
+            try:
+                pair = TradingPair.objects.get(symbol=pair_symbol)
+                ohlcv_data = OHLCVData.objects.filter(
+                    pair=pair,
+                    timestamp__gte=start_date,
+                    timestamp__lte=end_date
+                ).order_by('timestamp')
+                
+                if ohlcv_data.exists():
+                    df_price = pd.DataFrame(list(ohlcv_data.values(
+                        'timestamp', 'open', 'high', 'low', 'close', 'volume'
+                    )))
+                    df_price['timestamp'] = pd.to_datetime(df_price['timestamp'])
+                    for col in ['open', 'high', 'low', 'close']:
+                        df_price[col] = df_price[col].astype(float)
+                else:
+                    df_price = None
+            except:
+                df_price = None
+            
+            trades_chart = backtester.generate_trades_chart(results, df_price)
+
+            # Preparar datos de trades para la tabla
+            trades_list = results.get('trades', [])
+            
+            # Formatear trades para mostrar
+            formatted_trades = []
+            buy_trades = [t for t in trades_list if t['action'] == 'BUY']
+            sell_trades = [t for t in trades_list if t['action'] == 'SELL']
+            
+            for i in range(min(len(buy_trades), len(sell_trades))):
+                buy = buy_trades[i]
+                sell = sell_trades[i]
+                
+                pnl = sell.get('pnl', 0)
+                pnl_pct = sell.get('pnl_pct', 0)
+                
+                formatted_trades.append({
+                    'entry_time': buy['timestamp'],
+                    'exit_time': sell['timestamp'],
+                    'entry_price': buy['price'],
+                    'exit_price': sell['price'],
+                    'size': buy['size'],
+                    'pnl': pnl,
+                    'pnl_pct': pnl_pct,
+                    'result': 'Win' if pnl > 0 else 'Loss'
+                })
 
             context = {
                 'results': results,
-                'chart': chart_html,
+                'equity_chart': equity_chart,
+                'trades_chart': trades_chart,
+                'trades': formatted_trades,
                 'pair': pair_symbol,
                 'start_date': start_date_str,
                 'end_date': end_date_str,
-                'initial_balance': initial_balance
+                'initial_balance': initial_balance,
+                'commission': commission,
+                'strategy': strategy_type,
+                'pairs': pairs,
+                'historical_results': historical_results
             }
 
             messages.success(request, f"Backtest completado exitosamente. Retorno total: {results['total_return']:.2f}%")
             return render(request, 'dashboard/backtest_results.html', context)
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             messages.error(request, f"Error ejecutando backtest: {str(e)}")
-            return render(request, 'dashboard/run_backtest.html')
+            return render(request, 'dashboard/backtest.html', {
+                'pairs': pairs,
+                'historical_results': historical_results
+            })
 
-    return render(request, 'dashboard/run_backtest.html')
+    return render(request, 'dashboard/backtest.html', {
+        'pairs': pairs,
+        'historical_results': historical_results
+    })
+
