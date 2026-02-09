@@ -178,6 +178,10 @@ ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True
 ACCOUNT_SESSION_REMEMBER = True
 
 # Google OAuth
+# IMPORTANTE: Estas credenciales deberían estar en variables de entorno en producción
+GOOGLE_CLIENT_ID = '***GOOGLE_CLIENT_ID_REDACTED***'
+GOOGLE_CLIENT_SECRET = '***GOOGLE_SECRET_REDACTED***'
+
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
         'SCOPE': [
@@ -188,8 +192,8 @@ SOCIALACCOUNT_PROVIDERS = {
             'access_type': 'online',
         },
         'APP': {
-            'client_id': 'YOUR_GOOGLE_CLIENT_ID',
-            'secret': 'YOUR_GOOGLE_CLIENT_SECRET',
+            'client_id': GOOGLE_CLIENT_ID,
+            'secret': GOOGLE_CLIENT_SECRET,
             'key': ''
         }
     }
