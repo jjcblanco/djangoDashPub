@@ -29,7 +29,12 @@ import time
 from .plot import plotear
 from dashboard.models import Pair
 
-binance = ccxt.binance()
+binance = ccxt.binance({
+    'options': {
+        'recvWindow': 60000,  # Aumentar ventana de recepción a 60 segundos
+        'adjustForTimeDifference': True,  # Ajustar automáticamente por diferencia de tiempo
+    }
+})
 exchange = binance
 binance.load_markets()
 print("Markets loaded:", len(binance.markets))

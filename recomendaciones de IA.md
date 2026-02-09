@@ -231,3 +231,43 @@ añadir admin registration de Pair,
 crear templates mínimos (selector de pair),
 añadir script scripts/backfill_pairs.py,
 añadir migration skeletons (nota: generar migrations aquí no ejecutará python manage.py makemigrations localmente; te crearé las modificaciones de código y el script de backfill — luego tú ejecutas makemigrations y migrate).
+
+🔄 Próximos Pasos
+1. Reiniciar el Servidor Django
+Si el servidor está corriendo, deténlo (Ctrl+C) y vuelve a iniciarlo:
+
+bash
+cd c:\Users\Javier\Desktop\programacion\djangoDashPub\criptodash
+python manage.py runserver
+2. Verificar la Configuración en Django Admin
+Antes de probar el login con Google, necesitas configurar la aplicación social en Django Admin:
+
+Ve a: http://localhost:8000/admin/
+Inicia sesión con tu cuenta de administrador
+Ve a "Sites" → "Social applications"
+Click en "Add Social Application"
+Completa:
+Provider: Google
+Name: Google OAuth
+Client id: 56539510221-qhhb2t6fst8q19p8hossi325574cnpc7.apps.googleusercontent.com
+Secret key: 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
+Sites: Selecciona el site disponible (probablemente "example.com")
+Click en "Save"
+3. Verificar URIs de Redirección en Google Cloud Console
+Asegúrate de que en Google Cloud Console (https://console.cloud.google.com/apis/credentials) tengas configuradas estas URIs de redirección:
+
+http://localhost:8000/accounts/google/login/callback/
+http://127.0.0.1:8000/accounts/google/login/callback/
+4. Probar el Login
+Ve a tu aplicación: http://localhost:8000/
+Click en "Login with Google"
+Deberías ser redirigido a la pantalla de consentimiento de Google
+⚠️ Nota de Seguridad
+IMPORTANTE: Ahora tus credenciales de Google están en el código fuente. Esto está bien para desarrollo local, pero NO es seguro para producción.
+
+Para producción, deberías:
+
+Mover las credenciales a variables de entorno
+Usar un archivo .env (que no se suba a Git)
+O usar el sistema de secretos de tu plataforma de hosting
+¿El login con Google funciona ahora después de reiniciar el servidor y configurar en Django Admin?
