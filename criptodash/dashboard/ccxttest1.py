@@ -6,8 +6,10 @@ import ccxt
 import json
 import math
 
+# Environment variables
+from decouple import config
+
 # mis libs
-from . import config
 from . import estilos
 from .indicadores import *
 
@@ -39,10 +41,10 @@ exchange = binance
 binance.load_markets()
 print("Markets loaded:", len(binance.markets))
 # For historical data, we don't need API keys
-# binance.apiKey=config.BINANCE_APIKEY
-binance.apiKey=config.BINANCE_APIKEY
-binance.secret=config.BINANCE_SECRET
-# binance.secret=config.BINANCE_SECRET
+# binance.apiKey=config('BINANCE_APIKEY')
+binance.apiKey=config('BINANCE_APIKEY')
+binance.secret=config('BINANCE_SECRET')
+# binance.secret=config('BINANCE_SECRET')
 print(binance.check_required_credentials())
 balance =binance.fetch_balance()
 #print(type(balance))
@@ -152,7 +154,12 @@ def signals(df):
 def table(df):
 
     # Connect to the MySQL server
-    cnx = mysql.connector.connect(user='root', password='retsam77', host='10.120.1.124', database='tbot')
+    cnx = mysql.connector.connect(
+        user=config('DB_USER'),
+        password=config('DB_PASSWORD'),
+        host='10.120.1.124',
+        database='tbot'
+    )
 
     # Create a MySQL table
     cursor = cnx.cursor()
@@ -171,9 +178,14 @@ def table(df):
     cnx.close()
 def table_insert(df):
    # Connect to the MySQL server
-   cnx = mysql.connector.connect(user='root', password='retsam77', host='192.168.0.181', database='tbot')
+   cnx = mysql.connector.connect(
+       user=config('DB_USER'),
+       password=config('DB_PASSWORD'),
+       host='192.168.0.181',
+       database='tbot'
+   )
    cursor = cnx.cursor()
-   engine = create_engine('mysql+mysqlconnector://root:retsam77@192.168.0.181/tbot')
+   engine = create_engine(f"mysql+mysqlconnector://{config('DB_USER')}:{config('DB_PASSWORD')}@192.168.0.181/tbot")
    df.to_sql('df_data', engine, if_exists='replace', index=False)
    cursor.close()
    cnx.close()
