@@ -1,11 +1,46 @@
-<<<<<<< HEAD
-/venv
-<<<<<<< HEAD
-*config.json
-*config.py
-=======
-/dashboard/config.py
->>>>>>> bacdeffe4001947d7d3c6b36e53ef92296c5af6b
-=======
-/venv
->>>>>>> parent of bacdeff (config)
+# Python
+*.py[cod]
+*$py.class
+*.so
+__pycache__/
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+
+# Environment variables (CRITICAL - Contains secrets)
+.env
+.env.local
+.env.*.local
+
+# API Configuration (CRITICAL - Contains API keys)
+config.py
+config.json
+**/dashboard/config.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
