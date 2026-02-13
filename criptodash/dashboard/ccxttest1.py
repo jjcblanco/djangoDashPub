@@ -38,16 +38,30 @@ binance = ccxt.binance({
     }
 })
 exchange = binance
-binance.load_markets()
-print("Markets loaded:", len(binance.markets))
+# binance.load_markets()
+# print("Markets loaded:", len(binance.markets))
+
 # For historical data, we don't need API keys
 # binance.apiKey=config('BINANCE_APIKEY')
-binance.apiKey=config('BINANCE_APIKEY')
-binance.secret=config('BINANCE_SECRET')
+binance.apiKey=config('BINANCE_APIKEY', default=None)
+binance.secret=config('BINANCE_SECRET', default=None)
 # binance.secret=config('BINANCE_SECRET')
-print(binance.check_required_credentials())
-balance =binance.fetch_balance()
-#print(type(balance))
+
+def check_balance():
+    if binance.apiKey and binance.secret:
+        print(binance.check_required_credentials())
+        try:
+            balance = binance.fetch_balance()
+            return balance
+        except Exception as e:
+            print(f"Error fetching balance: {e}")
+            return {}
+    else:
+        print("Binance keys not configured. Skipping balance check.")
+        return {}
+
+# balance = check_balance()
+
 
 #for x,y in balance['free'].items():
 #    if y!=0:
@@ -269,21 +283,37 @@ def save_signals_to_db(df, pair_symbol):
         signals_created = 0
         for idx, row in df.iterrows():
             if row.get('signal_buy_sell') in ['buy', 'sell']:
+                # Helper to sanitize floats
+                def safe_float(val):
+                    if pd.isna(val) or np.isinf(val):
+                        return None
+                    return float(val)
+
                 # Prepare indicators data
                 indicators = {}
-                if 'rsi' in row and not pd.isna(row['rsi']):
-                    indicators['rsi'] = float(row['rsi'])
+                rsi_val = safe_float(row.get('rsi'))
+                if rsi_val is not None:
+                    indicators['rsi'] = rsi_val
+                
                 if 'in_uptrend' in row and not pd.isna(row['in_uptrend']):
+                     # bool is safe
                     indicators['in_uptrend'] = bool(row['in_uptrend'])
-                if 'macd' in row and not pd.isna(row['macd']):
-                    indicators['macd'] = float(row['macd'])
-                if 'macd_signal' in row and not pd.isna(row['macd_signal']):
-                    indicators['macd_signal'] = float(row['macd_signal'])
+                
+                macd_val = safe_float(row.get('macd'))
+                if macd_val is not None:
+                    indicators['macd'] = macd_val
+                
+                macd_signal_val = safe_float(row.get('macd_signal'))
+                if macd_signal_val is not None:
+                    indicators['macd_signal'] = macd_signal_val
 
                 # Normalize signal type to match model choices
                 signal_type = row['signal_buy_sell'].upper()
-                # Determine strength (fall back to 1.0)
-                strength = float(row['signal_strenght']) if 'signal_strenght' in row and not pd.isna(row['signal_strenght']) else 1.0
+                
+                # Determine strength
+                raw_strength = row.get('signal_strenght')
+                strength_val = safe_float(raw_strength)
+                strength = strength_val if strength_val is not None else 1.0
 
                 # Create or get signal (linking both legacy pair and canonical pair)
                 defaults = {
