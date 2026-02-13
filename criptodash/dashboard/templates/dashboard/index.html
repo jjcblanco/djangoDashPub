@@ -347,7 +347,7 @@
                 {% endif %}
                 {% if user.is_authenticated %}
                 <div class="nav-user-section">
-                    <span class="user-welcome">👋 ¡Hola, {{ user.first_name|default:user.username }}!</span>
+                    <span class="user-welcome">👋 ¡Hola, {% if user.first_name %}{{ user.first_name }}{% else %}{{ user.username }}{% endif %}!</span>
                     <a href="{% url 'profile' %}" class="btn-login">
                         <i class="fas fa-user-circle"></i> Perfil
                     </a>

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -188,13 +189,14 @@
                 flex-direction: column;
             }
 
-            .button-group > * {
+            .button-group>* {
                 width: 100%;
                 flex: none;
             }
         }
     </style>
 </head>
+
 <body>
     <div class="profile-container">
         <!-- Header -->
@@ -202,7 +204,8 @@
             <div class="profile-avatar">
                 <i class="fas fa-user"></i>
             </div>
-            <div class="profile-name">{{ user.first_name|default:user.username }}</div>
+            <div class="profile-name">{% if user.first_name %}{{ user.first_name }}{% else %}{{ user.username }}{% endif
+                %}</div>
             <div class="profile-email">{{ user.email }}</div>
         </div>
 
@@ -282,4 +285,5 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>
