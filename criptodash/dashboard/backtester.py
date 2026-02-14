@@ -249,6 +249,7 @@ class Backtester:
                     'price': current_price,
                     'entry_price': entry_price_actual,
                     'size': position,
+                    'strength': row.get('strength', 0),
                     'balance_before': self.initial_balance if len(trades) == 0 else trades[-1].get('balance_after', balance)
                 })
                 

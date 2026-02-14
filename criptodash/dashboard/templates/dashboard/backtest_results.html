@@ -363,6 +363,7 @@
                                         <th>Size</th>
                                         <th>P&L ($)</th>
                                         <th>P&L (%)</th>
+                                        <th>Signal Strength</th>
                                         <th>Result</th>
                                     </tr>
                                 </thead>
@@ -380,6 +381,18 @@
                                         </td>
                                         <td class="{% if trade.pnl_pct > 0 %}positive{% else %}negative{% endif %}">
                                             {{ trade.pnl_pct|floatformat:2 }}%
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="progress flex-grow-1"
+                                                    style="height: 6px; background: rgba(255,255,255,0.1);">
+                                                    <div class="progress-bar bg-info" role="progressbar"
+                                                        style="width: {% widthratio trade.strength 1 100 %}%;"
+                                                        aria-valuenow="{{ trade.strength }}" aria-valuemin="0"
+                                                        aria-valuemax="1"></div>
+                                                </div>
+                                                <span class="ms-2 small">{{ trade.strength|floatformat:2 }}</span>
+                                            </div>
                                         </td>
                                         <td>
                                             {% if trade.result == 'Win' %}
