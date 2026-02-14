@@ -115,6 +115,7 @@ def backtest_view(request):
                     'entry_price': buy['price'],
                     'exit_price': sell['price'],
                     'size': buy['size'],
+                    'strength': buy.get('strength', 0),
                     'pnl': pnl,
                     'pnl_pct': pnl_pct,
                     'result': 'Win' if pnl > 0 else 'Loss'
