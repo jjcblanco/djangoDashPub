@@ -128,6 +128,9 @@ def check_buy_sell_signals(df):
             print("You aren't in position, nothing to sell")
 
 def signals(df):
+    # Calcular EMA 200 para filtro de tendencia
+    df['ema_200'] = ema(df, 200)
+    
     # signals from supertrend indicator
     df['signal_buy_sell']='none'
     if 'signal_strenght' not in df.columns:
@@ -136,12 +139,26 @@ def signals(df):
     for current in range(1, len(df.index)):
         previous = current - 1
         current_strength = df['signal_strenght'].iloc[current]
+        current_price = df['close'].iloc[current]
+        ema_200 = df['ema_200'].iloc[current]
+        
+        # BUY signal with Trend Filter
         if not df['in_uptrend'][previous] and df['in_uptrend'][current]:
-            df['signal_buy_sell'][current]='buy'
-            df['signal_strenght'][current]=current_strength+1
+            # Solo comprar si el precio está por encima de la EMA 200
+            if current_price > ema_200:
+                df['signal_buy_sell'][current]='buy'
+                df['signal_strenght'][current]=current_strength+1
+            else:
+                print(f"Signal BUY ignored at {df['timestamp'][current]} due to downtrend (Price < EMA 200)")
+                
+        # SELL signal with Trend Filter
         if df['in_uptrend'][previous] and not df['in_uptrend'][current]:
-            df['signal_buy_sell'][current]='sell'
-            df['signal_strenght'][current]=current_strength+1
+            # Solo vender si el precio está por debajo de la EMA 200
+            if current_price < ema_200:
+                df['signal_buy_sell'][current]='sell'
+                df['signal_strenght'][current]=current_strength+1
+            else:
+                print(f"Signal SELL ignored at {df['timestamp'][current]} due to uptrend (Price > EMA 200)")
 
     # Señales RSI
     df = generate_rsi_signals(df)

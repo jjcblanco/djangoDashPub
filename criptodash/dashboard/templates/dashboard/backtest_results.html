@@ -100,18 +100,29 @@
 
         .table {
             color: var(--text-light);
+            --bs-table-striped-color: var(--text-light);
+            --bs-table-striped-bg: rgba(52, 152, 219, 0.1);
+            --bs-table-hover-color: var(--text-light);
+            --bs-table-hover-bg: rgba(52, 152, 219, 0.2);
         }
 
         .table thead {
             background: rgba(52, 152, 219, 0.2);
+            color: white;
         }
 
         .table-striped tbody tr:nth-of-type(odd) {
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(52, 152, 219, 0.1) !important;
+            color: var(--text-light) !important;
+        }
+
+        .table-striped tbody tr:nth-of-type(even) {
+            color: var(--text-light) !important;
         }
 
         .table-hover tbody tr:hover {
-            background: rgba(52, 152, 219, 0.2);
+            background: rgba(52, 152, 219, 0.25) !important;
+            cursor: pointer;
         }
 
         .badge {
@@ -229,6 +240,20 @@
                     <div class="summary-item">
                         <span>Min Signal Strength:</span>
                         <strong>{{ min_strength }}</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-3">
+                    <div class="summary-item">
+                        <span>Stop Loss:</span>
+                        <strong>{% if stop_loss_pct %}{{ stop_loss_pct }}%{% else %}Disabled{% endif %}</strong>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="summary-item">
+                        <span>Take Profit:</span>
+                        <strong>{% if take_profit_pct %}{{ take_profit_pct }}%{% else %}Disabled{% endif %}</strong>
                     </div>
                 </div>
             </div>
@@ -369,6 +394,7 @@
                                         <th>Size</th>
                                         <th>P&L ($)</th>
                                         <th>P&L (%)</th>
+                                        <th>Exit Reason</th>
                                         <th>Signal Strength</th>
                                         <th>Result</th>
                                     </tr>
@@ -387,6 +413,15 @@
                                         </td>
                                         <td class="{% if trade.pnl_pct > 0 %}positive{% else %}negative{% endif %}">
                                             {{ trade.pnl_pct|floatformat:2 }}%
+                                        </td>
+                                        <td>
+                                            {% if trade.reason == 'STOP_LOSS' %}
+                                            <span class="badge bg-danger">SL</span>
+                                            {% elif trade.reason == 'TAKE_PROFIT' %}
+                                            <span class="badge bg-success">TP</span>
+                                            {% else %}
+                                            <span class="badge bg-info">Signal</span>
+                                            {% endif %}
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center">
