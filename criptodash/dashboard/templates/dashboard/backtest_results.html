@@ -225,6 +225,12 @@
                         <strong>{{ results.total_trades }}</strong>
                     </div>
                 </div>
+                <div class="col-md-3">
+                    <div class="summary-item">
+                        <span>Min Signal Strength:</span>
+                        <strong>{{ min_strength }}</strong>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -387,11 +393,11 @@
                                                 <div class="progress flex-grow-1"
                                                     style="height: 6px; background: rgba(255,255,255,0.1);">
                                                     <div class="progress-bar bg-info" role="progressbar"
-                                                        style="width: {% widthratio trade.strength 1 100 %}%;"
+                                                        style="width: {{ trade.strength }}%;"
                                                         aria-valuenow="{{ trade.strength }}" aria-valuemin="0"
-                                                        aria-valuemax="1"></div>
+                                                        aria-valuemax="100"></div>
                                                 </div>
-                                                <span class="ms-2 small">{{ trade.strength|floatformat:2 }}</span>
+                                                <span class="ms-2 small">{{ trade.strength }}</span>
                                             </div>
                                         </td>
                                         <td>

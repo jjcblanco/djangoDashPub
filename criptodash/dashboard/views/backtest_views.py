@@ -33,6 +33,7 @@ def backtest_view(request):
             end_date_str = request.POST.get('end_date')
             initial_balance = float(request.POST.get('initial_balance', 10000))
             commission = float(request.POST.get('commission', 0.001))
+            min_strength = int(request.POST.get('min_strength', 0))
             strategy_type = request.POST.get('strategy', 'signal-based')  # 'signal-based' o 'supertrend'
 
             # Convertir fechas
@@ -48,7 +49,8 @@ def backtest_view(request):
                 results = backtester.run_backtest_from_signals(
                     pair_symbol=pair_symbol,
                     start_date=start_date,
-                    end_date=end_date
+                    end_date=end_date,
+                    min_strength=min_strength
                 )
             else:
                 # Usar estrategia Supertrend
@@ -131,6 +133,7 @@ def backtest_view(request):
                 'end_date': end_date_str,
                 'initial_balance': initial_balance,
                 'commission': commission,
+                'min_strength': min_strength,
                 'strategy': strategy_type,
                 'pairs': pairs,
                 'historical_results': historical_results

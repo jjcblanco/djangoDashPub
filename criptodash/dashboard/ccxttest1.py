@@ -40,7 +40,7 @@ binance = ccxt.binance({
 exchange = binance
 # binance.load_markets()
 # print("Markets loaded:", len(binance.markets))
-
+#Tinson290812
 # For historical data, we don't need API keys
 # binance.apiKey=config('BINANCE_APIKEY')
 binance.apiKey=config('BINANCE_APIKEY', default=None)
