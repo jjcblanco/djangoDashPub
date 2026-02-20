@@ -68,7 +68,7 @@ class Backtester:
         self.commission = commission  # 0.1% commission por defecto
         self.results = []
 
-    def run_backtest_from_signals(self, pair_symbol, start_date, end_date, signals_queryset=None):
+    def run_backtest_from_signals(self, pair_symbol, start_date, end_date, signals_queryset=None, min_strength=0):
         """
         Ejecuta backtest usando señales existentes de la base de datos
         
@@ -77,6 +77,7 @@ class Backtester:
             start_date: Fecha de inicio
             end_date: Fecha de fin
             signals_queryset: QuerySet de TradeSignal (opcional, si no se pasa se obtiene de la BD)
+            min_strength: Fuerza mínima de la señal (entero >= 0)
         
         Returns:
             dict con resultados del backtest
@@ -90,7 +91,8 @@ class Backtester:
                 signals_queryset = TradeSignal.objects.filter(
                     pair=pair,
                     timestamp__gte=start_date,
-                    timestamp__lte=end_date
+                    timestamp__lte=end_date,
+                    strength__gte=min_strength
                 ).order_by('timestamp')
             
             if not signals_queryset.exists():
@@ -168,7 +170,8 @@ class Backtester:
                 pair_symbol=pair_symbol,
                 start_date=start_date,
                 end_date=end_date,
-                results=results
+                results=results,
+                parameters={'min_strength': min_strength}
             )
             
             return results
