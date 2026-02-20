@@ -68,7 +68,7 @@ class Backtester:
         self.commission = commission  # 0.1% commission por defecto
         self.results = []
 
-    def run_backtest_from_signals(self, pair_symbol, start_date, end_date, signals_queryset=None):
+    def run_backtest_from_signals(self, pair_symbol, start_date, end_date, signals_queryset=None, min_strength=0, stop_loss_pct=None, take_profit_pct=None):
         """
         Ejecuta backtest usando señales existentes de la base de datos
         
@@ -77,6 +77,9 @@ class Backtester:
             start_date: Fecha de inicio
             end_date: Fecha de fin
             signals_queryset: QuerySet de TradeSignal (opcional, si no se pasa se obtiene de la BD)
+            min_strength: Fuerza mínima de la señal (entero >= 0)
+            stop_loss_pct: Porcentaje de stop loss (ej: 2.0 para 2%)
+            take_profit_pct: Porcentaje de take profit (ej: 4.0 para 4%)
         
         Returns:
             dict con resultados del backtest
@@ -90,7 +93,8 @@ class Backtester:
                 signals_queryset = TradeSignal.objects.filter(
                     pair=pair,
                     timestamp__gte=start_date,
-                    timestamp__lte=end_date
+                    timestamp__lte=end_date,
+                    strength__gte=min_strength
                 ).order_by('timestamp')
             
             if not signals_queryset.exists():
@@ -157,7 +161,7 @@ class Backtester:
             df_combined['signal'] = df_combined['signal'].str.upper()
             
             # 6. Simular trading
-            results = self.simulate_trading(df_combined)
+            results = self.simulate_trading(df_combined, stop_loss_pct=stop_loss_pct, take_profit_pct=take_profit_pct)
             
             # 7. Calcular métricas
             results.update(self.calculate_metrics(df_combined, results))
@@ -168,7 +172,12 @@ class Backtester:
                 pair_symbol=pair_symbol,
                 start_date=start_date,
                 end_date=end_date,
-                results=results
+                results=results,
+                parameters={
+                    'min_strength': min_strength,
+                    'stop_loss_pct': stop_loss_pct,
+                    'take_profit_pct': take_profit_pct
+                }
             )
             
             return results
@@ -225,45 +234,89 @@ class Backtester:
 
         return results
 
-    def simulate_trading(self, df):
-        """Simula ejecución de trades"""
+    def simulate_trading(self, df, stop_loss_pct=None, take_profit_pct=None):
+        """Simula ejecución de trades con gestión de riesgo"""
         balance = self.initial_balance
         position = 0
         trades = []
         equity_curve = []
         entry_price_actual = 0
+        sl_price = 0
+        tp_price = 0
 
         for i, row in df.iterrows():
             current_price = float(row['close'])
             signal = row.get('signal', 'HOLD')
             
-            # Aplicar comisión en cada trade
+            # 1. Verificar Stop Loss o Take Profit si estamos en posición
+            if position > 0:
+                exit_reason = None
+                if stop_loss_pct and current_price <= sl_price:
+                    exit_reason = 'STOP_LOSS'
+                elif take_profit_pct and current_price >= tp_price:
+                    exit_reason = 'TAKE_PROFIT'
+                
+                if exit_reason:
+                    exit_price = current_price * (1 - self.commission)
+                    balance = position * exit_price
+                    
+                    pnl = balance - trades[-1]['balance_before']
+                    pnl_pct = (pnl / trades[-1]['balance_before']) * 100
+                    
+                    trades.append({
+                        'timestamp': row['timestamp'],
+                        'action': 'SELL',
+                        'reason': exit_reason,
+                        'price': current_price,
+                        'exit_price': exit_price,
+                        'size': position,
+                        'balance_after': balance,
+                        'pnl': pnl,
+                        'pnl_pct': pnl_pct
+                    })
+                    position = 0
+                    continue # Saltamos el resto del loop para esta barra
+
+            # 2. Ejecutar señales normales
             if signal == 'BUY' and position == 0:
                 # Comprar
                 entry_price_actual = current_price * (1 + self.commission)
                 position = balance / entry_price_actual
-                balance = 0
+                
+                # Calcular niveles de SL/TP
+                if stop_loss_pct:
+                    sl_price = entry_price_actual * (1 - stop_loss_pct / 100)
+                if take_profit_pct:
+                    tp_price = entry_price_actual * (1 + take_profit_pct / 100)
+                
+                balance_before = self.initial_balance if not trades else (trades[-1].get('balance_after', balance) if trades[-1]['action'] == 'SELL' else trades[-1]['balance_before'])
+                
                 trades.append({
                     'timestamp': row['timestamp'],
                     'action': 'BUY',
                     'price': current_price,
                     'entry_price': entry_price_actual,
                     'size': position,
-                    'balance_before': self.initial_balance if len(trades) == 0 else trades[-1].get('balance_after', balance)
+                    'strength': row.get('strength', 0),
+                    'balance_before': balance_before,
+                    'sl_price': sl_price if stop_loss_pct else None,
+                    'tp_price': tp_price if take_profit_pct else None
                 })
+                balance = 0
                 
             elif signal == 'SELL' and position > 0:
-                # Vender
+                # Vender por señal (si no salió por SL/TP antes)
                 exit_price = current_price * (1 - self.commission)
                 balance = position * exit_price
                 
                 # Calcular P&L del trade
-                pnl = balance - (trades[-1]['balance_before'] if trades else self.initial_balance)
-                pnl_pct = (pnl / (trades[-1]['balance_before'] if trades else self.initial_balance)) * 100
+                pnl = balance - trades[-1]['balance_before']
+                pnl_pct = (pnl / trades[-1]['balance_before']) * 100
                 
                 trades.append({
                     'timestamp': row['timestamp'],
                     'action': 'SELL',
+                    'reason': 'SIGNAL',
                     'price': current_price,
                     'exit_price': exit_price,
                     'size': position,

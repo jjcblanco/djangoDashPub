@@ -136,6 +136,10 @@ def macd(df, short_period=12, long_period=26, signal_period=9):
     df['macd_hist'] = df['macd'] - df['signal_macd']
     return df
 
+def ema(df, period=200):
+    """Calcula la Media Móvil Exponencial"""
+    return df['close'].ewm(span=period, adjust=False).mean()
+
 # ///Calculate the Bollinger Bands with a window size of 20 and standard deviation of 2 ////
 
 # ***bollinger bands*** indican miden volatilidad(velocidad de cambio del precio) 

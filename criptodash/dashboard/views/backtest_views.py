@@ -33,6 +33,14 @@ def backtest_view(request):
             end_date_str = request.POST.get('end_date')
             initial_balance = float(request.POST.get('initial_balance', 10000))
             commission = float(request.POST.get('commission', 0.001))
+            min_strength = int(request.POST.get('min_strength', 0))
+            stop_loss = request.POST.get('stop_loss')
+            take_profit = request.POST.get('take_profit')
+            
+            # Convertir a float si existen
+            stop_loss_pct = float(stop_loss) if stop_loss else None
+            take_profit_pct = float(take_profit) if take_profit else None
+
             strategy_type = request.POST.get('strategy', 'signal-based')  # 'signal-based' o 'supertrend'
 
             # Convertir fechas
@@ -48,7 +56,10 @@ def backtest_view(request):
                 results = backtester.run_backtest_from_signals(
                     pair_symbol=pair_symbol,
                     start_date=start_date,
-                    end_date=end_date
+                    end_date=end_date,
+                    min_strength=min_strength,
+                    stop_loss_pct=stop_loss_pct,
+                    take_profit_pct=take_profit_pct
                 )
             else:
                 # Usar estrategia Supertrend
@@ -115,8 +126,12 @@ def backtest_view(request):
                     'entry_price': buy['price'],
                     'exit_price': sell['price'],
                     'size': buy['size'],
+                    'strength': buy.get('strength', 0),
                     'pnl': pnl,
                     'pnl_pct': pnl_pct,
+                    'reason': sell.get('reason', 'SIGNAL'),
+                    'sl_price': buy.get('sl_price'),
+                    'tp_price': buy.get('tp_price'),
                     'result': 'Win' if pnl > 0 else 'Loss'
                 })
 
@@ -130,6 +145,9 @@ def backtest_view(request):
                 'end_date': end_date_str,
                 'initial_balance': initial_balance,
                 'commission': commission,
+                'min_strength': min_strength,
+                'stop_loss_pct': stop_loss_pct,
+                'take_profit_pct': take_profit_pct,
                 'strategy': strategy_type,
                 'pairs': pairs,
                 'historical_results': historical_results
