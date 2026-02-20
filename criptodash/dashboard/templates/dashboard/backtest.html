@@ -290,6 +290,34 @@
                                 </div>
                             </div>
 
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="min_strength" class="form-label">
+                                        <i class="fas fa-signal"></i> Minimum Signal Strength
+                                    </label>
+                                    <input type="number" class="form-control" id="min_strength" name="min_strength"
+                                        value="0" step="1" min="0" required>
+                                    <small class="text-muted">Filter signals with strength >= this value (Integer >=
+                                        0)</small>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="stop_loss" class="form-label">
+                                        <i class="fas fa-hand-paper"></i> Stop Loss (%)
+                                    </label>
+                                    <input type="number" class="form-control" id="stop_loss" name="stop_loss"
+                                        placeholder="e.g. 2.0" step="0.1" min="0">
+                                    <small class="text-muted">Exit if price drops X% (Optional)</small>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="take_profit" class="form-label">
+                                        <i class="fas fa-bullseye"></i> Take Profit (%)
+                                    </label>
+                                    <input type="number" class="form-control" id="take_profit" name="take_profit"
+                                        placeholder="e.g. 5.0" step="0.1" min="0">
+                                    <small class="text-muted">Exit if price rises X% (Optional)</small>
+                                </div>
+                            </div>
+
                             <div class="info-box">
                                 <h5><i class="fas fa-info-circle"></i> How it works</h5>
                                 <p class="mb-0">
