@@ -25,7 +25,7 @@ from .backtest_views import backtest_view
 from .data_views import import_data
 
 # Importar API views
-from .api_views import run_bot_api
+from .api_views import run_bot_api, get_pairs
 
 # Importar Dash app
 from .dash_app import app
@@ -49,6 +49,7 @@ __all__ = [
     
     # API views
     'run_bot_api',
+    'get_pairs',
     
     # Dash app
     'app',

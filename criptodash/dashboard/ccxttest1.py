@@ -112,60 +112,89 @@ def check_buy_sell_signals(df):
             print("You aren't in position, nothing to sell")
 
 def signals(df):
-    # Calcular EMA 200 para filtro de tendencia
+    """
+    Calcula señales de trading con scoring de confluencia y gestión de riesgos.
+    """
+    # 1. Calcular indicadores base
     df['ema_200'] = ema(df, 200)
+    df['obv'] = obv(df)
+    df['vwap'] = vwap(df)
     
-    # signals from supertrend indicator
-    df['signal_buy_sell']='none'
+    # Asegurar que RSI y Ichimoku se calculan
+    df = generate_rsi_signals(df)
+    # Ichimoku Cloud ya calcula sus propias señales
+    
+    # 2. Inicializar columnas de señales
+    df['signal_buy_sell'] = 'none'
     if 'signal_strenght' not in df.columns:
         df['signal_strenght'] = 0
-
-    for current in range(1, len(df.index)):
+    
+    df['stop_loss'] = np.nan
+    df['take_profit'] = np.nan
+    
+    # 3. Calcular Scoring de Confluencia
+    for current in range(20, len(df.index)):
         previous = current - 1
-        current_strength = df['signal_strenght'].iloc[current]
+        score = 0
+        signal = 'none'
+        
         current_price = df['close'].iloc[current]
         ema_200 = df['ema_200'].iloc[current]
+        rsi = df['rsi'].iloc[current]
         
-        # BUY signal with Trend Filter
-        if not df['in_uptrend'][previous] and df['in_uptrend'][current]:
-            # Solo comprar si el precio está por encima de la EMA 200
+        # --- Lógica de COMPRA ---
+        # A. Gatillo: Supertrend alcista
+        if df['in_uptrend'].iloc[current]:
+            score += 1
+            # B. Filtro EMA 200
             if current_price > ema_200:
-                df['signal_buy_sell'][current]='buy'
-                df['signal_strenght'][current]=current_strength+1
-            else:
-                print(f"Signal BUY ignored at {df['timestamp'][current]} due to downtrend (Price < EMA 200)")
-                
-        # SELL signal with Trend Filter
-        if df['in_uptrend'][previous] and not df['in_uptrend'][current]:
-            # Solo vender si el precio está por debajo de la EMA 200
+                score += 1
+            # C. RSI favorable (no sobrecomprado, idealmente saliendo de sobreventa)
+            if rsi < 60:
+                score += 1
+            # D. Volumen (OBV subiendo)
+            if df['obv'].iloc[current] > df['obv'].iloc[previous]:
+                score += 1
+            # E. Ichimoku (Precio sobre la nube)
+            if 'senkou_a' in df.columns and current_price > max(df['senkou_a'].iloc[current], df['senkou_b'].iloc[current]):
+                score += 1
+            
+            # Si el score es alto o hubo un cambio de Supertrend, marcar señal
+            if (not df['in_uptrend'].iloc[previous] and df['in_uptrend'].iloc[current]) or (score >= 4):
+                signal = 'buy'
+
+        # --- Lógica de VENTA ---
+        # A. Gatillo: Supertrend bajista
+        elif not df['in_uptrend'].iloc[current]:
+            score += 1
+            # B. Filtro EMA 200
             if current_price < ema_200:
-                df['signal_buy_sell'][current]='sell'
-                df['signal_strenght'][current]=current_strength+1
-            else:
-                print(f"Signal SELL ignored at {df['timestamp'][current]} due to uptrend (Price > EMA 200)")
+                score += 1
+            # C. RSI favorable (no sobrevendido)
+            if rsi > 40:
+                score += 1
+            # D. Volumen (OBV bajando)
+            if df['obv'].iloc[current] < df['obv'].iloc[previous]:
+                score += 1
+            # E. Ichimoku (Precio bajo la nube)
+            if 'senkou_a' in df.columns and current_price < min(df['senkou_a'].iloc[current], df['senkou_b'].iloc[current]):
+                score += 1
+            
+            if (df['in_uptrend'].iloc[previous] and not df['in_uptrend'].iloc[current]) or (score >= 4):
+                signal = 'sell'
 
-    # Señales RSI
-    df = generate_rsi_signals(df)
+        # 4. Asignar Señal y Niveles de Riesgo
+        if signal != 'none':
+            df.at[df.index[current], 'signal_buy_sell'] = signal
+            df.at[df.index[current], 'signal_strenght'] = score
+            
+            # Calcular SL y TP
+            sl, tp = calculate_sl_tp(df.iloc[:current+1], signal)
+            df.at[df.index[current], 'stop_loss'] = sl.iloc[-1]
+            df.at[df.index[current], 'take_profit'] = tp.iloc[-1]
 
-    # Ichimoku Analisis de tendencias
-    df['tendencia_ichi'] = np.nan
-    for current in range(1, len(df.index)):
-        previous = current -1
-        if df['senkou_a'][current] < df['senkou_b'][current] and df['senkou_a'][previous] > df['senkou_b'][previous]:
-            df['tendencia_ichi'][current] = 'uptrend'
-        if df['senkou_a'][current] > df['senkou_b'][current] and df['senkou_a'][previous] < df['senkou_b'][previous]:
-            df['tendencia_ichi'][current] = 'downtrend'
+    return df
 
-    # ichicmoku cruce se tenkan-sen kijun-sen
-    print("analisis de cruces de tenkan y kinjun")
-    for current in range(1, len(df.index)):
-            previous = current - 1
-            if (not math.isnan(df['tenkan'][previous]))  and (not math.isnan(df['kijun'][previous])) and (not math.isnan(df['tenkan'][current])) and (not math.isnan(df['kijun'][current])):
-                if ((df['kijun'][previous] > df['tenkan'][previous]) and (df['tenkan'][current] > df['kijun'][current])):
-                    print("Timestamp",df['timestamp'][current]," Kijun",df['kijun'][current], "   Tenkan", df['tenkan'][current])                #if ((df['kijun'][previous] < df['tenkan'][previous]) and (df['tenkan'][current] < df['kijun'][current])):
-                    #print(df['tenkan'])
-
-    return(df)
 def table(df):
 
     # Connect to the MySQL server
@@ -284,9 +313,18 @@ def save_signals_to_db(df, pair_symbol):
                     indicators['macd'] = float(row['macd'])
                 if 'macd_signal' in row and not pd.isna(row['macd_signal']):
                     indicators['macd_signal'] = float(row['macd_signal'])
+                if 'obv' in row and not pd.isna(row['obv']):
+                    indicators['obv'] = float(row['obv'])
+                if 'vwap' in row and not pd.isna(row['vwap']):
+                    indicators['vwap'] = float(row['vwap'])
+                if 'stop_loss' in row and not pd.isna(row['stop_loss']):
+                    indicators['stop_loss'] = float(row['stop_loss'])
+                if 'take_profit' in row and not pd.isna(row['take_profit']):
+                    indicators['take_profit'] = float(row['take_profit'])
 
                 # Normalize signal type to match model choices
                 signal_type = row['signal_buy_sell'].upper()
+
                 # Determine strength (fall back to 1.0)
                 strength = float(row['signal_strenght']) if 'signal_strenght' in row and not pd.isna(row['signal_strenght']) else 1.0
 
