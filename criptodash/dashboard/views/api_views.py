@@ -10,6 +10,33 @@ from .. import ccxttest1
 import pandas as pd
 
 
+def get_pairs(request):
+    """
+    API endpoint que devuelve los pares de trading disponibles en Binance.
+
+    Parámetros GET opcionales:
+        - quote: Moneda de cotización para filtrar (default: 'USDT')
+
+    Returns:
+        JSON con la lista de pares disponibles
+    """
+    try:
+        quote_filter = request.GET.get('quote', 'USDT').upper()
+        binance = ccxttest1.binance
+
+        # Filter to spot markets with the requested quote currency
+        pairs = sorted([
+            symbol for symbol, market in binance.markets.items()
+            if market.get('quote') == quote_filter
+            and market.get('spot', True)
+            and market.get('active', True)
+        ])
+
+        return JsonResponse({'pairs': pairs})
+    except Exception as e:
+        return JsonResponse({'error': str(e), 'pairs': []}, status=500)
+
+
 def run_bot_api(request):
     """
     API endpoint para ejecutar el bot de trading.

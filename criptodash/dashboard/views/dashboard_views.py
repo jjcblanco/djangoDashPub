@@ -163,10 +163,22 @@ def dashboard_mejorado(request):
     # 7. Preparar contexto
     pairs = TradingPair.objects.all().order_by('symbol')
     
+    # Obtener pares disponibles desde Binance (ya cargados en memoria)
+    try:
+        available_pairs = sorted([
+            symbol for symbol, market in ccxttest1.binance.markets.items()
+            if market.get('quote') == 'USDT'
+            and market.get('spot', True)
+            and market.get('active', True)
+        ])
+    except Exception:
+        available_pairs = ['ETH/USDT', 'BTC/USDT', 'ADA/USDT', 'SOL/USDT']
+    
     context = {
         'señales': señales,
         'pairs': pairs,
         'pair_selected': pair_symbol,
+        'available_pairs': available_pairs,
         'fecha_inicio': fecha_inicio,
         'fecha_fin': fecha_fin,
         'stats': stats,

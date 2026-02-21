@@ -251,13 +251,19 @@ class Backtester:
             # 1. Verificar Stop Loss o Take Profit si estamos en posición
             if position > 0:
                 exit_reason = None
-                if stop_loss_pct and current_price <= sl_price:
+                
+                # Priorizar SL/TP dinámicos del DataFrame si existen
+                current_sl_price = row.get('stop_loss', sl_price) if not pd.isna(row.get('stop_loss')) else sl_price
+                current_tp_price = row.get('take_profit', tp_price) if not pd.isna(row.get('take_profit')) else tp_price
+
+                if current_sl_price and current_price <= current_sl_price:
                     exit_reason = 'STOP_LOSS'
-                elif take_profit_pct and current_price >= tp_price:
+                elif current_tp_price and current_price >= current_tp_price:
                     exit_reason = 'TAKE_PROFIT'
                 
                 if exit_reason:
                     exit_price = current_price * (1 - self.commission)
+
                     balance = position * exit_price
                     
                     pnl = balance - trades[-1]['balance_before']

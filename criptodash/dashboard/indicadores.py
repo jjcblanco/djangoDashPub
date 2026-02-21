@@ -140,6 +140,41 @@ def ema(df, period=200):
     """Calcula la Media Móvil Exponencial"""
     return df['close'].ewm(span=period, adjust=False).mean()
 
+def obv(df):
+    """
+    On-Balance Volume (OBV)
+    Measure buying and selling pressure as a cumulative indicator.
+    """
+    return (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+
+def vwap(df):
+    """
+    Volume Weighted Average Price (VWAP)
+    """
+    v = df['volume'].values
+    p = (df['high'] + df['low'] + df['close']).values / 3
+    return pd.Series((p * v).cumsum() / v.cumsum(), index=df.index)
+
+def calculate_sl_tp(df, signal_type, atr_period=14, atr_multiplier_sl=1.5, atr_multiplier_tp=3.0):
+    """
+    Calcula niveles de Stop Loss y Take Profit basados en ATR
+    """
+    if 'atr' not in df.columns:
+        df['atr'] = atr(df, atr_period)
+    
+    # Usar el valor actual de ATR para el cálculo
+    current_atr = df['atr']
+    
+    if signal_type == 'buy':
+        sl = df['close'] - (current_atr * atr_multiplier_sl)
+        tp = df['close'] + (current_atr * atr_multiplier_tp)
+    else:  # sell
+        sl = df['close'] + (current_atr * atr_multiplier_sl)
+        tp = df['close'] - (current_atr * atr_multiplier_tp)
+        
+    return sl, tp
+
+
 # ///Calculate the Bollinger Bands with a window size of 20 and standard deviation of 2 ////
 
 # ***bollinger bands*** indican miden volatilidad(velocidad de cambio del precio) 
