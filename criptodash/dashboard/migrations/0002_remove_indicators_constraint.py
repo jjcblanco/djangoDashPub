@@ -10,12 +10,12 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            # Remove the CHECK constraint on indicators field
-            sql="""
-                ALTER TABLE dashboard_tradesignal 
-                DROP CHECK dashboard_tradesignal_chk_1;
-            """,
-            reverse_sql=migrations.RunSQL.noop,
-        ),
+        # migrations.RunSQL(
+        #     # Remove the CHECK constraint on indicators field
+        #     sql="""
+        #         ALTER TABLE dashboard_tradesignal 
+        #         DROP CHECK dashboard_tradesignal_chk_1;
+        #     """,
+        #     reverse_sql=migrations.RunSQL.noop,
+        # ),
     ]

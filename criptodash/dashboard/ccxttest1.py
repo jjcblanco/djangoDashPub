@@ -27,7 +27,7 @@ import numpy as np
 from datetime import datetime
 import time
 from .plot import plotear
-from dashboard.models import Pair
+from .models import Pair
 
 binance = ccxt.binance({
     'options': {

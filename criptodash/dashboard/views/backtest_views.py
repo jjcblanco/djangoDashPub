@@ -80,7 +80,8 @@ def backtest_view(request):
                     strategy=strategy,
                     pair_symbol=pair_symbol,
                     start_date=start_date,
-                    end_date=end_date
+                    end_date=end_date,
+                    timeframe=timeframe
                 )
             elif strategy_type == 'day-trading':
                 # Usar estrategia Day-Trading
@@ -89,7 +90,8 @@ def backtest_view(request):
                     strategy=strategy,
                     pair_symbol=pair_symbol,
                     start_date=start_date,
-                    end_date=end_date
+                    end_date=end_date,
+                    timeframe=timeframe
                 )
 
             # Verificar si hubo error
