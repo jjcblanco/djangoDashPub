@@ -163,6 +163,16 @@
                         {% endfor %}
                     </select>
 
+                    <label for="timeframe">Intervalo:</label>
+                    <select id="timeframe" name="timeframe" class="form-control" style="width:120px;">
+                        <option value="1m" {% if timeframe == '1m' %}selected{% endif %}>1m</option>
+                        <option value="5m" {% if timeframe == '5m' %}selected{% endif %}>5m</option>
+                        <option value="15m" {% if timeframe == '15m' %}selected{% endif %}>15m</option>
+                        <option value="1h" {% if timeframe == '1h' %}selected{% endif %}>1h</option>
+                        <option value="4h" {% if timeframe == '4h' %}selected{% endif %}>4h</option>
+                        <option value="1d" {% if timeframe == '1d' %}selected{% endif %}>1d</option>
+                    </select>
+
                     <label for="fecha_inicio">Desde:</label>
                     <input id="fecha_inicio" name="fecha_inicio" type="date" value="{{ fecha_inicio }}"
                         class="form-control" />
@@ -176,6 +186,18 @@
                         <i class="fas fa-sync-alt"></i> Generar Nuevas Señales
                     </button>
                 </form>
+
+                {% if is_stale %}
+                <div class="alert alert-warning mt-3 border-warning" style="background-color: rgba(255, 193, 7, 0.1);">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>⚠️ Datos desactualizados:</strong> La última señal guardada para este par en la base de
+                    datos es del
+                    <span class="badge bg-warning text-dark">{{ stats.fecha_ultima_señal|date:"d M, Y H:i" }}</span>.
+                    Es probable que por eso el backtest reciente no encuentre resultados.
+                    Usa el botón <strong>"Actualizar Datos"</strong> o cambia el filtro de fechas para buscar nuevas
+                    señales.
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -238,9 +260,29 @@
             </div>
             <div class="col-xl-2 col-md-4 mb-3">
                 <div class="card bg-secondary text-white text-center">
-                    <div class="card-body py-3">
-                        <h6 class="card-title">Precio Mín</h6>
+                    <div class="card-body py-3 px-1">
+                        <h6 class="card-title" style="font-size: 0.8rem;">Precio Mín</h6>
                         <h5>${{ stats.precio_min|default:0|floatformat:2 }}</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-2 col-md-4 mb-3">
+                <div
+                    class="card {% if is_stale %}bg-warning text-dark{% else %}bg-dark text-white{% endif %} text-center">
+                    <div class="card-body py-3 px-1">
+                        <h6 class="card-title" style="font-size: 0.8rem;">Última Señal</h6>
+                        <h6 class="mb-0">
+                            {% if stats.fecha_ultima_señal %}
+                            {{ stats.fecha_ultima_señal|date:"d M" }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </h6>
+                        <small>
+                            {% if stats.fecha_ultima_señal %}
+                            {{ stats.fecha_ultima_señal|date:"H:i" }}
+                            {% endif %}
+                        </small>
                     </div>
                 </div>
             </div>
@@ -276,6 +318,7 @@
                                 <th>Precio</th>
                                 <th>SL / TP</th>
                                 <th>Tendencia</th>
+                                <th title="Average Directional Index - Fuerza de Tendencia">ADX 💪</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -308,8 +351,10 @@
                                 <td>${{ señal.price|floatformat:2 }}</td>
                                 <td>
                                     {% if señal.indicators.stop_loss and señal.indicators.take_profit %}
-                                    <small class="text-danger">SL: {{ señal.indicators.stop_loss|floatformat:2 }}</small><br>
-                                    <small class="text-success">TP: {{ señal.indicators.take_profit|floatformat:2 }}</small>
+                                    <small class="text-danger">SL: {{ señal.indicators.stop_loss|floatformat:2
+                                        }}</small><br>
+                                    <small class="text-success">TP: {{ señal.indicators.take_profit|floatformat:2
+                                        }}</small>
                                     {% else %}
                                     -
                                     {% endif %}
@@ -320,6 +365,16 @@
                                     <span class="text-success">↑ Alcista</span>
                                     {% else %}
                                     <span class="text-danger">↓ Bajista</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if señal.indicators.adx %}
+                                    <span
+                                        class="badge {% if señal.indicators.adx >= 30 %}bg-success{% elif señal.indicators.adx >= 20 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                                        {{ señal.indicators.adx|floatformat:1 }}
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -344,8 +399,12 @@
 
     <!-- Custom JavaScript -->
     <script>
-        // Auto-submit form when pair selection changes
+        // Auto-submit form when pair or timeframe selection changes
         document.getElementById('pair').addEventListener('change', function () {
+            this.form.submit();
+        });
+
+        document.getElementById('timeframe').addEventListener('change', function () {
             this.form.submit();
         });
 

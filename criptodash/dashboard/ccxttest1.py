@@ -7,7 +7,7 @@ import json
 import math
 
 # mis libs
-from . import config
+from decouple import config
 from . import estilos
 from .indicadores import *
 
@@ -39,9 +39,8 @@ exchange = binance
 binance.load_markets()
 print("Markets loaded:", len(binance.markets))
 # For historical data, we don't need API keys
-# binance.apiKey=config.BINANCE_APIKEY
-binance.apiKey=config.BINANCE_APIKEY
-binance.secret=config.BINANCE_SECRET
+binance.apiKey=config('BINANCE_APIKEY', default=None)
+binance.secret=config('BINANCE_SECRET', default=None)
 # binance.secret=config.BINANCE_SECRET
 print(binance.check_required_credentials())
 balance =binance.fetch_balance()
@@ -113,16 +112,21 @@ def check_buy_sell_signals(df):
 
 def signals(df):
     """
-    Calcula señales de trading con scoring de confluencia y gestión de riesgos.
+    Calcula señales de trading con scoring de confluencia y gestión de riesgos refinada.
     """
     # 1. Calcular indicadores base
     df['ema_200'] = ema(df, 200)
     df['obv'] = obv(df)
     df['vwap'] = vwap(df)
+    df['adx'] = adx(df)
+    df['vol_ma'] = volume_ma(df)
     
-    # Asegurar que RSI y Ichimoku se calculan
+    # Asegurar que todos los indicadores requeridos se calculan
+    df = supertrend(df)
     df = generate_rsi_signals(df)
-    # Ichimoku Cloud ya calcula sus propias señales
+    df = ichimoku_cloud(df)
+    # bollinger_bands ya se llama si es necesario, pero aquí usamos indicadores específicos
+    df = bollinger_bands(df, window=20, num_std=2, generate_signals=True)
     
     # 2. Inicializar columnas de señales
     df['signal_buy_sell'] = 'none'
@@ -133,7 +137,7 @@ def signals(df):
     df['take_profit'] = np.nan
     
     # 3. Calcular Scoring de Confluencia
-    for current in range(20, len(df.index)):
+    for current in range(30, len(df.index)): # Empezar un poco después para tener datos de ADX/MA
         previous = current - 1
         score = 0
         signal = 'none'
@@ -141,46 +145,62 @@ def signals(df):
         current_price = df['close'].iloc[current]
         ema_200 = df['ema_200'].iloc[current]
         rsi = df['rsi'].iloc[current]
+        current_adx = df['adx'].iloc[current]
+        current_vol = df['volume'].iloc[current]
+        vol_ma = df['vol_ma'].iloc[current]
         
+        # FILTRO CRÍTICO: Fuerza de Tendencia (ADX)
+        # No operamos si el mercado está demasiado lateral
+        if current_adx < 20:
+            continue
+
         # --- Lógica de COMPRA ---
-        # A. Gatillo: Supertrend alcista
-        if df['in_uptrend'].iloc[current]:
-            score += 1
-            # B. Filtro EMA 200
-            if current_price > ema_200:
+        # A. Gatillo: Supertrend alcista Y filtro EMA 200 (Tendencia principal)
+        if df['in_uptrend'].iloc[current] and current_price > ema_200:
+            score += 2 # 2 puntos por alineación de tendencia
+            
+            # B. Confirmación de Volumen (Pico de volumen)
+            if current_vol > vol_ma * 1.2:
                 score += 1
-            # C. RSI favorable (no sobrecomprado, idealmente saliendo de sobreventa)
-            if rsi < 60:
+                
+            # C. RSI favorable (no sobrecomprado, con momentum alcista)
+            if 45 < rsi < 70:
                 score += 1
-            # D. Volumen (OBV subiendo)
+                
+            # D. OBV subiendo
             if df['obv'].iloc[current] > df['obv'].iloc[previous]:
-                score += 1
+                score += 0.5
+                
             # E. Ichimoku (Precio sobre la nube)
             if 'senkou_a' in df.columns and current_price > max(df['senkou_a'].iloc[current], df['senkou_b'].iloc[current]):
                 score += 1
             
-            # Si el score es alto o hubo un cambio de Supertrend, marcar señal
-            if (not df['in_uptrend'].iloc[previous] and df['in_uptrend'].iloc[current]) or (score >= 4):
+            # Requerir al menos 4 puntos (Fuerte confluencia alcista)
+            if score >= 4:
                 signal = 'buy'
 
         # --- Lógica de VENTA ---
-        # A. Gatillo: Supertrend bajista
-        elif not df['in_uptrend'].iloc[current]:
-            score += 1
-            # B. Filtro EMA 200
-            if current_price < ema_200:
+        # A. Gatillo: Supertrend bajista Y filtro EMA 200 (Tendencia principal)
+        elif not df['in_uptrend'].iloc[current] and current_price < ema_200:
+            score += 2
+            
+            # B. Confirmación de Volumen
+            if current_vol > vol_ma * 1.2:
                 score += 1
-            # C. RSI favorable (no sobrevendido)
-            if rsi > 40:
+                
+            # C. RSI favorable (no sobrevendido, con momentum bajista)
+            if 30 < rsi < 55:
                 score += 1
-            # D. Volumen (OBV bajando)
+                
+            # D. OBV bajando
             if df['obv'].iloc[current] < df['obv'].iloc[previous]:
-                score += 1
+                score += 0.5
+                
             # E. Ichimoku (Precio bajo la nube)
             if 'senkou_a' in df.columns and current_price < min(df['senkou_a'].iloc[current], df['senkou_b'].iloc[current]):
                 score += 1
             
-            if (df['in_uptrend'].iloc[previous] and not df['in_uptrend'].iloc[current]) or (score >= 4):
+            if score >= 4:
                 signal = 'sell'
 
         # 4. Asignar Señal y Niveles de Riesgo
@@ -189,7 +209,7 @@ def signals(df):
             df.at[df.index[current], 'signal_strenght'] = score
             
             # Calcular SL y TP
-            sl, tp = calculate_sl_tp(df.iloc[:current+1], signal)
+            sl, tp = calculate_sl_tp(df.iloc[:current+1], signal, atr_multiplier_sl=2.0, atr_multiplier_tp=3.0)
             df.at[df.index[current], 'stop_loss'] = sl.iloc[-1]
             df.at[df.index[current], 'take_profit'] = tp.iloc[-1]
 
@@ -198,7 +218,12 @@ def signals(df):
 def table(df):
 
     # Connect to the MySQL server
-    cnx = mysql.connector.connect(user='root', password='retsam77', host='10.120.1.124', database='tbot')
+    cnx = mysql.connector.connect(
+        user=config('DB_USER'),
+        password=config('DB_PASSWORD'),
+        host='10.120.1.124',
+        database='tbot'
+    )
 
     # Create a MySQL table
     cursor = cnx.cursor()
@@ -217,25 +242,60 @@ def table(df):
     cnx.close()
 def table_insert(df):
    # Connect to the MySQL server
-   cnx = mysql.connector.connect(user='root', password='retsam77', host='192.168.0.181', database='tbot')
+   cnx = mysql.connector.connect(
+       user=config('DB_USER'),
+       password=config('DB_PASSWORD'),
+       host='192.168.0.181',
+       database='tbot'
+   )
    cursor = cnx.cursor()
-   engine = create_engine('mysql+mysqlconnector://root:retsam77@192.168.0.181/tbot')
+   engine = create_engine(f"mysql+mysqlconnector://{config('DB_USER')}:{config('DB_PASSWORD')}@192.168.0.181/tbot")
    df.to_sql('df_data', engine, if_exists='replace', index=False)
    cursor.close()
    cnx.close()
 
-def historical_fetch_ohlcv(pair,date_from,timeframe):
-    from_ts = binance.parse8601(date_from)
+def historical_fetch_ohlcv(pair, date_from=None, timeframe='1h', since=None, limit=None):
+    # Support both date_from (positional/keyword) and since (keyword)
+    actual_since = since if since is not None else date_from
+    
+    if actual_since is None:
+        # Por defecto los últimos 1000 bars
+        return binance.fetch_ohlcv(pair, timeframe, limit=1000)
+    
+    # Manejar datetime objects
+    if hasattr(actual_since, 'strftime'):
+        from_ts = int(actual_since.timestamp() * 1000)
+    else:
+        # Asumir string para parse8601
+        try:
+            from_ts = binance.parse8601(str(actual_since))
+        except Exception:
+            # Si ya es un timestamp
+            from_ts = int(actual_since)
+
     ohlcv_list = []
     ohlcv = binance.fetch_ohlcv(pair, timeframe, since=from_ts, limit=1000)
-    ohlcv_list.append(ohlcv)
+    if not ohlcv:
+        return []
+        
+    ohlcv_list.extend(ohlcv)
+    
+    # Si pedimos un límite específico y ya lo tenemos, paramos
+    if limit and len(ohlcv_list) >= limit:
+        return ohlcv_list[:limit]
+        
     while True:
-        from_ts = ohlcv[-1][0]
+        from_ts = ohlcv_list[-1][0] + 1 # +1 para no repetir la última vela
         new_ohlcv = binance.fetch_ohlcv(pair, timeframe, since=from_ts, limit=1000)
-        ohlcv.extend(new_ohlcv)
-        if len(new_ohlcv)!=1000:
+        if not new_ohlcv:
             break
-    return(ohlcv)
+        ohlcv_list.extend(new_ohlcv)
+        if len(new_ohlcv) != 1000:
+            break
+        if limit and len(ohlcv_list) >= limit:
+            return ohlcv_list[:limit]
+            
+    return ohlcv_list
 
 
 def run_bot(pair,date_from,timeframe):
@@ -270,12 +330,12 @@ def run_bot(pair,date_from,timeframe):
     #table_insert(ichi)
     #check_buy_sell_signals(supertrend_data)
 
-    # Save signals to database
-    save_signals_to_db(sig, pair)
+    # Save signals to database with timeframe
+    save_signals_to_db(sig, pair, timeframe)
 
     return(sig)
 
-def save_signals_to_db(df, pair_symbol):
+def save_signals_to_db(df, pair_symbol, timeframe='1h'):
     """Save trading signals to database"""
     from dashboard.models import TradeSignal, TradingPair, Exchange
     from django.utils import timezone
@@ -305,22 +365,41 @@ def save_signals_to_db(df, pair_symbol):
             if row.get('signal_buy_sell') in ['buy', 'sell']:
                 # Prepare indicators data
                 indicators = {}
-                if 'rsi' in row and not pd.isna(row['rsi']):
-                    indicators['rsi'] = float(row['rsi'])
+                
+                def safe_float(val):
+                    if pd.isna(val) or np.isinf(val):
+                        return None
+                    return float(val)
+
+                if 'rsi' in row:
+                    v = safe_float(row['rsi'])
+                    if v is not None: indicators['rsi'] = v
                 if 'in_uptrend' in row and not pd.isna(row['in_uptrend']):
                     indicators['in_uptrend'] = bool(row['in_uptrend'])
-                if 'macd' in row and not pd.isna(row['macd']):
-                    indicators['macd'] = float(row['macd'])
-                if 'macd_signal' in row and not pd.isna(row['macd_signal']):
-                    indicators['macd_signal'] = float(row['macd_signal'])
-                if 'obv' in row and not pd.isna(row['obv']):
-                    indicators['obv'] = float(row['obv'])
-                if 'vwap' in row and not pd.isna(row['vwap']):
-                    indicators['vwap'] = float(row['vwap'])
-                if 'stop_loss' in row and not pd.isna(row['stop_loss']):
-                    indicators['stop_loss'] = float(row['stop_loss'])
-                if 'take_profit' in row and not pd.isna(row['take_profit']):
-                    indicators['take_profit'] = float(row['take_profit'])
+                if 'macd' in row:
+                    v = safe_float(row['macd'])
+                    if v is not None: indicators['macd'] = v
+                if 'macd_signal' in row:
+                    v = safe_float(row['macd_signal'])
+                    if v is not None: indicators['macd_signal'] = v
+                if 'obv' in row:
+                    v = safe_float(row['obv'])
+                    if v is not None: indicators['obv'] = v
+                if 'vwap' in row:
+                    v = safe_float(row['vwap'])
+                    if v is not None: indicators['vwap'] = v
+                if 'adx' in row:
+                    v = safe_float(row['adx'])
+                    if v is not None: indicators['adx'] = v
+                if 'vol_ma' in row:
+                    v = safe_float(row['vol_ma'])
+                    if v is not None: indicators['vol_ma'] = v
+                if 'stop_loss' in row:
+                    v = safe_float(row['stop_loss'])
+                    if v is not None: indicators['stop_loss'] = v
+                if 'take_profit' in row:
+                    v = safe_float(row['take_profit'])
+                    if v is not None: indicators['take_profit'] = v
 
                 # Normalize signal type to match model choices
                 signal_type = row['signal_buy_sell'].upper()
@@ -343,8 +422,10 @@ def save_signals_to_db(df, pair_symbol):
                     pair=pair,
                     timestamp=row['timestamp'],
                     signal_type=signal_type,
+                    timeframe=timeframe,
                     defaults=defaults
                 )
+                print(f"DEBUG DB: Saving {signal_type} for {pair_symbol} at {row['timestamp']} (Created: {created})")
                 if created:
                     signals_created += 1
 

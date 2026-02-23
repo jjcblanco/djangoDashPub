@@ -60,15 +60,16 @@ class TradeSignal(models.Model):
     timestamp = models.DateTimeField()
     signal_type = models.CharField(max_length=4, choices=SIGNAL_TYPES)
     price = models.DecimalField(max_digits=20, decimal_places=8)
-    indicator = models.CharField(max_length=50, blank=True, null=True)  # Ichimoku, RSI, etc.
+    indicator = models.CharField(max_length=200, blank=True, null=True)  # Ichimoku, RSI, etc.
     strength = models.FloatField(default=1.0)  # 0-1 scale
     # Optional JSON field to store computed indicators or metadata
     indicators = models.JSONField(null=True, blank=True)
+    timeframe = models.CharField(max_length=10, default='1h') # 1m, 5m, 15m, 1h, etc.
     
     class Meta:
         indexes = [
-            models.Index(fields=['pair', 'timestamp', 'signal_type']),
-            models.Index(fields=['pair_ref', 'timestamp', 'signal_type']),
+            models.Index(fields=['pair', 'timestamp', 'signal_type', 'timeframe']),
+            models.Index(fields=['pair_ref', 'timestamp', 'signal_type', 'timeframe']),
         ]
 
 class BacktestResult(models.Model):
@@ -78,6 +79,7 @@ class BacktestResult(models.Model):
     start_date = models.DateTimeField()
     end_date = models.DateTimeField()
     strategy_name = models.CharField(max_length=50)
+    timeframe = models.CharField(max_length=10, default='1h')
     parameters = models.JSONField()  # Parámetros usados
 
     # Resultados

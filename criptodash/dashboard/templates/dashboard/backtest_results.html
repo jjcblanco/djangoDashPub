@@ -205,7 +205,7 @@
         <!-- Header -->
         <div class="page-header">
             <h1><i class="fas fa-chart-bar"></i> Backtest Results</h1>
-            <p class="lead">{{ pair }} | {{ start_date }} to {{ end_date }}</p>
+            <p class="lead">{{ pair }} | {{ timeframe }} | {{ start_date }} to {{ end_date }}</p>
         </div>
 
         <!-- Summary Box -->
@@ -216,6 +216,12 @@
                     <div class="summary-item">
                         <span>Strategy:</span>
                         <strong>{{ strategy|title }}</strong>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="summary-item">
+                        <span>Timeframe:</span>
+                        <strong class="text-primary">{{ timeframe }}</strong>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -242,6 +248,21 @@
                         <strong>{{ min_strength }}</strong>
                     </div>
                 </div>
+                <div class="col-md-3">
+                    <div class="summary-item">
+                        <span>Min ADX Threshold:</span>
+                        <strong>
+                            {% if min_adx and min_adx > 0 %}
+                            <span
+                                class="{% if min_adx >= 25 %}text-success{% elif min_adx >= 20 %}text-warning{% else %}text-muted{% endif %}">
+                                {{ min_adx|floatformat:0 }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted">No filter</span>
+                            {% endif %}
+                        </strong>
+                    </div>
+                </div>
             </div>
             <div class="row mt-2">
                 <div class="col-md-3">
@@ -254,6 +275,32 @@
                     <div class="summary-item">
                         <span>Take Profit:</span>
                         <strong>{% if take_profit_pct %}{{ take_profit_pct }}%{% else %}Disabled{% endif %}</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-3">
+                    <div class="summary-item">
+                        <span>ATR SL Mult:</span>
+                        <strong>{{ atr_mult_sl }}</strong>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="summary-item">
+                        <span>ATR TP Mult:</span>
+                        <strong>{{ atr_mult_tp }}</strong>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="summary-item">
+                        <span>Trailing Stop:</span>
+                        <strong>
+                            {% if trailing_stop %}
+                            <span class="text-success">Enabled</span>
+                            {% else %}
+                            Disabled
+                            {% endif %}
+                        </strong>
                     </div>
                 </div>
             </div>

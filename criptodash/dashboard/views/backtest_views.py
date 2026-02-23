@@ -9,10 +9,10 @@ from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 
-from ..backtester import Backtester, SignalBasedStrategy, SupertrendStrategy
+from ..backtester import Backtester, SignalBasedStrategy, SupertrendStrategy, DayTradingStrategy
 from ..models import TradingPair, TradeSignal, BacktestResult, OHLCVData
 
 
@@ -34,18 +34,25 @@ def backtest_view(request):
             initial_balance = float(request.POST.get('initial_balance', 10000))
             commission = float(request.POST.get('commission', 0.001))
             min_strength = int(request.POST.get('min_strength', 0))
+            min_adx = float(request.POST.get('min_adx', 0))
             stop_loss = request.POST.get('stop_loss')
             take_profit = request.POST.get('take_profit')
             
             # Convertir a float si existen
             stop_loss_pct = float(stop_loss) if stop_loss else None
             take_profit_pct = float(take_profit) if take_profit else None
+            
+            atr_mult_sl = float(request.POST.get('atr_mult_sl', 1.5))
+            atr_mult_tp = float(request.POST.get('atr_mult_tp', 3.0))
+            trailing_stop = request.POST.get('trailing_stop') == 'on'
 
             strategy_type = request.POST.get('strategy', 'signal-based')  # 'signal-based' o 'supertrend'
+            timeframe = request.POST.get('timeframe', '1h')
 
             # Convertir fechas
             start_date = timezone.make_aware(datetime.strptime(start_date_str, '%Y-%m-%d'))
-            end_date = timezone.make_aware(datetime.strptime(end_date_str, '%Y-%m-%d'))
+            # +1 día para incluir el día final completo
+            end_date = timezone.make_aware(datetime.strptime(end_date_str, '%Y-%m-%d')) + timedelta(days=1)
 
             # Crear backtester
             backtester = Backtester(initial_balance=initial_balance, commission=commission)
@@ -57,13 +64,27 @@ def backtest_view(request):
                     pair_symbol=pair_symbol,
                     start_date=start_date,
                     end_date=end_date,
+                    timeframe=timeframe,
                     min_strength=min_strength,
+                    min_adx=min_adx,
                     stop_loss_pct=stop_loss_pct,
-                    take_profit_pct=take_profit_pct
+                    take_profit_pct=take_profit_pct,
+                    atr_mult_sl=atr_mult_sl,
+                    atr_mult_tp=atr_mult_tp,
+                    trailing_stop=trailing_stop
                 )
-            else:
+            elif strategy_type == 'supertrend':
                 # Usar estrategia Supertrend
                 strategy = SupertrendStrategy()
+                results = backtester.run_backtest(
+                    strategy=strategy,
+                    pair_symbol=pair_symbol,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+            elif strategy_type == 'day-trading':
+                # Usar estrategia Day-Trading
+                strategy = DayTradingStrategy()
                 results = backtester.run_backtest(
                     strategy=strategy,
                     pair_symbol=pair_symbol,
@@ -88,7 +109,8 @@ def backtest_view(request):
                 ohlcv_data = OHLCVData.objects.filter(
                     pair=pair,
                     timestamp__gte=start_date,
-                    timestamp__lte=end_date
+                    timestamp__lte=end_date,
+                    timeframe=timeframe
                 ).order_by('timestamp')
                 
                 if ohlcv_data.exists():
@@ -146,9 +168,14 @@ def backtest_view(request):
                 'initial_balance': initial_balance,
                 'commission': commission,
                 'min_strength': min_strength,
+                'min_adx': min_adx,
                 'stop_loss_pct': stop_loss_pct,
                 'take_profit_pct': take_profit_pct,
+                'atr_mult_sl': atr_mult_sl,
+                'atr_mult_tp': atr_mult_tp,
+                'trailing_stop': trailing_stop,
                 'strategy': strategy_type,
+                'timeframe': timeframe,
                 'pairs': pairs,
                 'historical_results': historical_results
             }
