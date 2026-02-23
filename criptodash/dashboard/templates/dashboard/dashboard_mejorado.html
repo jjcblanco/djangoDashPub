@@ -113,30 +113,28 @@
                 <ul class="navbar-nav">
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'dashboard_index' %}"><i class="fas fa-home"></i> Inicio</a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'dashboard_nuevo' %}"><i class="fas fa-chart-area"></i>
                             Dashboard</a>
                     </li>
-                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'technical_analysis' %}"><i class="fas fa-chart-line"></i>
                             Análisis Técnico</a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'backtest' %}"><i class="fas fa-flask"></i> Backtesting</a>
                     </li>
-                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'run_bot' %}"><i class="fas fa-robot"></i> Bot Trading</a>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'import_data' %}"><i class="fas fa-download"></i> Importar
-                            Datos</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'import_data' %}"><i class="fas fa-download"></i> Importar Datos</a>
                     </li>
                 </ul>
                 {% if user.is_authenticated %}
                 <div class="nav-user-section" style="display: flex; align-items: center; gap: 15px; margin-left: auto;">
-                    <span class="user-welcome" style="color: rgba(255, 255, 255, 0.95); font-size: 14px;">👋 ¡Hola, {{
-                        user.first_name|default:user.username }}!</span>
+                    <span class="user-welcome" style="color: rgba(255, 255, 255, 0.95); font-size: 14px;">👋 ¡Hola, {{ user.first_name | default:user.username }}!</span>
                     <a href="{% url 'profile' %}" class="btn btn-light btn-sm">
                         <i class="fas fa-user-circle"></i> Perfil
                     </a>
@@ -351,10 +349,8 @@
                                 <td>${{ señal.price|floatformat:2 }}</td>
                                 <td>
                                     {% if señal.indicators.stop_loss and señal.indicators.take_profit %}
-                                    <small class="text-danger">SL: {{ señal.indicators.stop_loss|floatformat:2
-                                        }}</small><br>
-                                    <small class="text-success">TP: {{ señal.indicators.take_profit|floatformat:2
-                                        }}</small>
+                                    <small class="text-danger">SL: {{ señal.indicators.stop_loss|floatformat:2 }}</small><br>
+                                    <small class="text-success">TP: {{ señal.indicators.take_profit|floatformat:2 }}</small>
                                     {% else %}
                                     -
                                     {% endif %}
