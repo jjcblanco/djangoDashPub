@@ -67,17 +67,20 @@ def atr(data, period):
 #  
 def calculate_rsi(df, period=14):
     # Calculate the differences between each consecutive closing price
-    differences = df['close'].diff()
+    delta = df['close'].diff()
     
-    # Calculate the absolute value of the differences
-    absolute_differences = differences.abs()
+    # Gain (up) and Loss (down)
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
     
-    # Calculate the average gain and average loss
-    avg_gain = absolute_differences.rolling(window=period).mean()
-    avg_loss = -absolute_differences.rolling(window=period).mean()
+    # Calculate the RS (Relative Strength)
+    rs = gain / loss
     
     # Calculate the RSI value
-    rsi = 100 - (100 / (1 + (avg_gain / avg_loss)))
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Handle division by zero (loss=0)
+    rsi = rsi.fillna(100)
     
     return rsi
 
@@ -151,9 +154,48 @@ def vwap(df):
     """
     Volume Weighted Average Price (VWAP)
     """
-    v = df['volume'].values
-    p = (df['high'] + df['low'] + df['close']).values / 3
-    return pd.Series((p * v).cumsum() / v.cumsum(), index=df.index)
+    v = df['volume']
+    p = (df['high'] + df['low'] + df['close']) / 3
+    return (p * v).cumsum() / v.cumsum()
+
+
+def adx(df, period=14):
+    """
+    Average Directional Index (ADX)
+    Mide la fuerza de la tendencia.
+    """
+    df = df.copy()
+    df['tr'] = tr(df)
+    
+    # +DM y -DM
+    df['up_move'] = df['high'] - df['high'].shift(1)
+    df['down_move'] = df['low'].shift(1) - df['low']
+    
+    df['plus_dm'] = np.where((df['up_move'] > df['down_move']) & (df['up_move'] > 0), df['up_move'], 0)
+    df['minus_dm'] = np.where((df['down_move'] > df['up_move']) & (df['down_move'] > 0), df['down_move'], 0)
+    
+    # Wilder's Smoothing
+    alpha = 1 / period
+    df['tr_smooth'] = df['tr'].ewm(alpha=alpha, adjust=False).mean()
+    df['plus_dm_smooth'] = df['plus_dm'].ewm(alpha=alpha, adjust=False).mean()
+    df['minus_dm_smooth'] = df['minus_dm'].ewm(alpha=alpha, adjust=False).mean()
+    
+    # DI+ y DI-
+    df['plus_di'] = 100 * (df['plus_dm_smooth'] / df['tr_smooth'])
+    df['minus_di'] = 100 * (df['minus_dm_smooth'] / df['tr_smooth'])
+    
+    # DX y ADX
+    df['dx'] = 100 * (abs(df['plus_di'] - df['minus_di']) / (df['plus_di'] + df['minus_di']))
+    adx_series = df['dx'].ewm(alpha=alpha, adjust=False).mean()
+    
+    return adx_series
+
+
+def volume_ma(df, period=20):
+    """
+    Calcula la media móvil del volumen para detectar picos.
+    """
+    return df['volume'].rolling(window=period).mean()
 
 def calculate_sl_tp(df, signal_type, atr_period=14, atr_multiplier_sl=1.5, atr_multiplier_tp=3.0):
     """
@@ -698,6 +740,58 @@ def calculate_rsi_with_signals(df, period=14, overbought=70, oversold=30):
     """
     df = calculate_rsi(df, period)
     df = generate_rsi_signals(df, period, overbought, oversold)
+    return df
+
+# --- Candlestick Patterns ---
+
+def detect_candlestick_patterns(df):
+    """
+    Detects basic candlestick patterns: Hammer, Shooting Star, Engulfing.
+    Returns the dataframe with pattern flags.
+    """
+    # 1. Body and Wicks calculation
+    df['body_size'] = (df['close'] - df['open']).abs()
+    df['candle_range'] = df['high'] - df['low']
+    df['upper_wick'] = df['high'] - df[['open', 'close']].max(axis=1)
+    df['lower_wick'] = df[['open', 'close']].min(axis=1) - df['low']
+    
+    # Avoid division by zero
+    range_safe = df['candle_range'].replace(0, 0.000001)
+    
+    # 2. Pattern: Hammer (Martillo)
+    # Green/Red candle with small body, long lower wick (>= 2x body), little to no upper wick
+    df['is_hammer'] = (
+        (df['lower_wick'] >= 2 * df['body_size']) & 
+        (df['upper_wick'] <= 0.1 * df['candle_range']) &
+        (df['body_size'] > 0)
+    )
+    
+    # 3. Pattern: Shooting Star (Estrella Fugaz)
+    # Green/Red candle with small body, long upper wick (>= 2x body), little to no lower wick
+    df['is_shooting_star'] = (
+        (df['upper_wick'] >= 2 * df['body_size']) & 
+        (df['lower_wick'] <= 0.1 * df['candle_range']) &
+        (df['body_size'] > 0)
+    )
+    
+    # 4. Pattern: Bullish Engulfing (Envolvente Alcista)
+    # Previous: Red, Current: Green, Current body covers previous body
+    df['is_bullish_engulfing'] = (
+        (df['close'].shift(1) < df['open'].shift(1)) & # Prev red
+        (df['close'] > df['open']) &                  # Curr green
+        (df['close'] > df['open'].shift(1)) &         # Green close higher than red open
+        (df['open'] < df['close'].shift(1))           # Green open lower than red close
+    )
+    
+    # 5. Pattern: Bearish Engulfing (Envolvente Bajista)
+    # Previous: Green, Current: Red, Current body covers previous body
+    df['is_bearish_engulfing'] = (
+        (df['close'].shift(1) > df['open'].shift(1)) & # Prev green
+        (df['close'] < df['open']) &                  # Curr red
+        (df['close'] < df['open'].shift(1)) &         # Red close lower than green open
+        (df['open'] > df['close'].shift(1))           # Red open higher than green close
+    )
+    
     return df
 
 

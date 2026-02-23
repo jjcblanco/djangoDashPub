@@ -230,7 +230,7 @@
                             {% csrf_token %}
 
                             <div class="row">
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-4 mb-3">
                                     <label for="pair" class="form-label">
                                         <i class="fas fa-exchange-alt"></i> Trading Pair
                                     </label>
@@ -243,7 +243,21 @@
                                     </select>
                                 </div>
 
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-4 mb-3">
+                                    <label for="timeframe" class="form-label">
+                                        <i class="fas fa-clock"></i> Timeframe
+                                    </label>
+                                    <select class="form-select" id="timeframe" name="timeframe" required>
+                                        <option value="1m">1 Minute</option>
+                                        <option value="5m">5 Minutes</option>
+                                        <option value="15m">15 Minutes</option>
+                                        <option value="1h" selected>1 Hour</option>
+                                        <option value="4h">4 Hours</option>
+                                        <option value="1d">1 Day</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-4 mb-3">
                                     <label for="strategy" class="form-label">
                                         <i class="fas fa-brain"></i> Strategy
                                     </label>
@@ -251,6 +265,7 @@
                                         <option value="signal-based" selected>Signal-Based (Use Existing Signals)
                                         </option>
                                         <option value="supertrend">Supertrend Strategy</option>
+                                        <option value="day-trading">Day Trading (EMA Ribbon Scalper)</option>
                                     </select>
                                 </div>
                             </div>
@@ -291,15 +306,35 @@
                             </div>
 
                             <div class="row">
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-4 mb-3">
                                     <label for="min_strength" class="form-label">
-                                        <i class="fas fa-signal"></i> Minimum Signal Strength
+                                        <i class="fas fa-signal"></i> Min Signal Strength
                                     </label>
                                     <input type="number" class="form-control" id="min_strength" name="min_strength"
                                         value="0" step="1" min="0" required>
-                                    <small class="text-muted">Filter signals with strength >= this value (Integer >=
-                                        0)</small>
+                                    <small class="text-muted">Filter signals with strength >= this value</small>
                                 </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="min_adx" class="form-label">
+                                        <i class="fas fa-chart-bar"></i> Min ADX Threshold 💪
+                                    </label>
+                                    <input type="number" class="form-control" id="min_adx" name="min_adx" value="0"
+                                        step="1" min="0" max="100">
+                                    <small class="text-muted">0 = no filter &nbsp;|&nbsp; 20 = trending &nbsp;|&nbsp; 25
+                                        = strong trend</small>
+                                </div>
+                                <div class="col-md-4 mb-3 d-flex align-items-end pb-4">
+                                    <div>
+                                        <span class="badge bg-secondary me-1">ADX&nbsp;0</span> Sin filtro
+                                        <br>
+                                        <span class="badge bg-warning text-dark me-1">ADX 20</span> Mercado en tendencia
+                                        <br>
+                                        <span class="badge bg-success me-1">ADX 25</span> Tendencia fuerte
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
                                 <div class="col-md-3 mb-3">
                                     <label for="stop_loss" class="form-label">
                                         <i class="fas fa-hand-paper"></i> Stop Loss (%)
@@ -314,7 +349,35 @@
                                     </label>
                                     <input type="number" class="form-control" id="take_profit" name="take_profit"
                                         placeholder="e.g. 5.0" step="0.1" min="0">
-                                    <small class="text-muted">Exit if price rises X% (Optional)</small>
+                                    <small class="text-muted">Exit if price rises X%</small>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-3 mb-3">
+                                    <label for="atr_mult_sl" class="form-label">
+                                        <i class="fas fa-ruler-vertical"></i> ATR SL Multiplier
+                                    </label>
+                                    <input type="number" class="form-control" id="atr_mult_sl" name="atr_mult_sl"
+                                        value="1.5" step="0.1" min="0">
+                                    <small class="text-muted">For dynamic SL (ATR * Mult)</small>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="atr_mult_tp" class="form-label">
+                                        <i class="fas fa-long-arrow-alt-up"></i> ATR TP Multiplier
+                                    </label>
+                                    <input type="number" class="form-control" id="atr_mult_tp" name="atr_mult_tp"
+                                        value="3.0" step="0.1" min="0">
+                                    <small class="text-muted">For dynamic TP (ATR * Mult)</small>
+                                </div>
+                                <div class="col-md-6 mb-3 d-flex align-items-center">
+                                    <div class="form-check form-switch mt-3">
+                                        <input class="form-check-input" type="checkbox" id="trailing_stop"
+                                            name="trailing_stop">
+                                        <label class="form-check-label" for="trailing_stop">
+                                            <strong>Enable Trailing Stop</strong> (Protects profits)
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
 

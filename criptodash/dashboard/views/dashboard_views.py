@@ -41,9 +41,10 @@ def dashboard_mejorado(request):
     """
     print("ejecutando dashboard_mejorado")
     pair_symbol = request.GET.get('pair', 'ETH/USDT')
+    timeframe = request.GET.get('timeframe', '1h') # Sync default to 1h to match backtester
     fecha_inicio = request.GET.get('fecha_inicio')
     fecha_fin = request.GET.get('fecha_fin')
-    print(f"Par seleccionado: {pair_symbol}, Fecha inicio: {fecha_inicio}, Fecha fin: {fecha_fin}")
+    print(f"Par seleccionado: {pair_symbol}, Timeframe: {timeframe}, Fecha inicio: {fecha_inicio}, Fecha fin: {fecha_fin}")
     
     # Inicializar variables
     señales = TradeSignal.objects.none()
@@ -68,8 +69,8 @@ def dashboard_mejorado(request):
         if pair_created:
             print(f"Nuevo par creado: {pair_symbol}")
         
-        # 3. Buscar señales
-        señales = TradeSignal.objects.filter(pair=pair).order_by('-timestamp')
+        # 3. Buscar señales (Filtradas por timeframe)
+        señales = TradeSignal.objects.filter(pair=pair, timeframe=timeframe).order_by('-timestamp')
         
         # 4. Aplicar filtros de fecha
         fecha_inicio_dt = None
@@ -97,13 +98,13 @@ def dashboard_mejorado(request):
         # 5. Si no hay señales O si se solicita refresh, ejecutar bot
         señales_count = señales.count()
         force_refresh = request.GET.get('refresh') == '1'
-        print(f"Señales encontradas después del filtrado: {señales_count}, Force refresh: {force_refresh}")
+        print(f"Señales encontradas para {timeframe}: {señales_count}, Force refresh: {force_refresh}")
         
         if señales_count == 0 or force_refresh:
             if force_refresh:
-                print("Refresh solicitado, ejecutando bot...")
+                print(f"Refresh solicitado para {timeframe}, ejecutando bot...")
             else:
-                print("No hay señales, ejecutando bot...")
+                print(f"No hay señales para {timeframe}, ejecutando bot...")
             try:
                 # Formatear fecha para ccxt (ISO 8601)
                 if fecha_inicio:
@@ -112,15 +113,15 @@ def dashboard_mejorado(request):
                     # Si no hay fecha de inicio, usar una fecha reciente por defecto
                     date_from_str = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
                 
-                print(f"Ejecutando bot con date_from={date_from_str}")
+                print(f"Ejecutando bot con date_from={date_from_str}, timeframe={timeframe}")
                 
                 # Ejecutar bot
-                ccxttest1.run_bot(pair=pair_symbol, date_from=date_from_str, timeframe='1m')
+                ccxttest1.run_bot(pair=pair_symbol, date_from=date_from_str, timeframe=timeframe)
                 
                 print("Bot ejecutado exitosamente, recargando señales...")
                 
                 # Recargar señales
-                señales = TradeSignal.objects.filter(pair=pair).order_by('-timestamp')
+                señales = TradeSignal.objects.filter(pair=pair, timeframe=timeframe).order_by('-timestamp')
                 
                 # Aplicar filtros de fecha nuevamente
                 if fecha_inicio_dt:
@@ -128,7 +129,7 @@ def dashboard_mejorado(request):
                 if fecha_fin_dt:
                     señales = señales.filter(timestamp__lt=fecha_fin_dt)
                 
-                fuente_datos = 'Binance API (recién obtenido)'
+                fuente_datos = f'Binance API ({timeframe} recién obtenido)'
                 print(f"Señales después de ejecutar bot: {señales.count()}")
                     
             except Exception as e:
@@ -147,6 +148,13 @@ def dashboard_mejorado(request):
     try:
         stats = calcular_estadisticas_desde_señales(señales)
         grafico = generar_grafico_desde_señales(señales, pair_symbol)
+        
+        # Verificar si la data está obsoleta (más de 24 horas)
+        is_stale = False
+        if stats['fecha_ultima_señal']:
+            ahora = timezone.now()
+            if ahora - stats['fecha_ultima_señal'] > timedelta(hours=24):
+                is_stale = True
     except Exception as e:
         print(f"Error al calcular estadísticas o gráfico: {e}")
         stats = {
@@ -159,6 +167,7 @@ def dashboard_mejorado(request):
             'fecha_ultima_señal': None,
         }
         grafico = None
+        is_stale = False
     
     # 7. Preparar contexto
     pairs = TradingPair.objects.all().order_by('symbol')
@@ -178,11 +187,13 @@ def dashboard_mejorado(request):
         'señales': señales,
         'pairs': pairs,
         'pair_selected': pair_symbol,
+        'timeframe': timeframe,
         'available_pairs': available_pairs,
         'fecha_inicio': fecha_inicio,
         'fecha_fin': fecha_fin,
         'stats': stats,
         'grafico': grafico,
+        'is_stale': is_stale,
         'fuente_datos': fuente_datos,
         'error_message': error_message,
     }

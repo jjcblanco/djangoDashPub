@@ -36,6 +36,92 @@ class SignalBasedStrategy(TradingStrategy):
         return df
 
 
+class DayTradingStrategy(TradingStrategy):
+    """
+    Estrategia de Day Trading / Scalping basada en EMA Ribbon y RSI.
+    Diseñada para temporalidades bajas (5m, 15m).
+    Lógica:
+    - Compra: EMA 9 > EMA 21, y ambas sobre EMA 50 y EMA 200. RSI > 55.
+    - Venta: EMA 9 < EMA 21, y ambas bajo EMA 50 y EMA 200. RSI < 45.
+    """
+    def __init__(self):
+        super().__init__("Day Trading (EMA Ribbon Scalper)")
+        self.parameters = {
+            'ema_fast': 9,
+            'ema_med': 21,
+            'ema_slow': 50,
+            'ema_trend': 200,
+            'rsi_period': 14,
+            'rsi_buy': 55,
+            'rsi_sell': 45,
+            'atr_sl': 3.0,
+            'atr_tp': 2.0,
+            'use_candles': True # Nuevo parámetro
+        }
+
+    def generate_signals(self, df):
+        # 1. Calcular EMAs del Ribbon
+        df['ema9'] = df['close'].ewm(span=self.parameters['ema_fast'], adjust=False).mean()
+        df['ema21'] = df['close'].ewm(span=self.parameters['ema_med'], adjust=False).mean()
+        df['ema50'] = df['close'].ewm(span=self.parameters['ema_slow'], adjust=False).mean()
+        df['ema200'] = df['close'].ewm(span=self.parameters['ema_trend'], adjust=False).mean()
+        
+        # 2. Calcular RSI, ATR y Patrones de Velas
+        df['rsi'] = calculate_rsi(df, self.parameters['rsi_period'])
+        df['atr'] = atr(df, 14)
+        df = detect_candlestick_patterns(df)
+        
+        # 3. Inicializar señales
+        df['signal'] = 'HOLD'
+        df['stop_loss'] = np.nan
+        df['take_profit'] = np.nan
+        
+        # 4. Generar condiciones base de Compra
+        buy_cond = (
+            (df['ema9'] > df['ema21']) & 
+            (df['ema9'].shift(1) <= df['ema21'].shift(1)) & # Cruce alcista
+            (df['close'] > df['ema50']) &
+            (df['close'] > df['ema200']) &
+            (df['rsi'] > self.parameters['rsi_buy'])
+        )
+        
+        # 5. Generar condiciones base de Venta
+        sell_cond = (
+            (df['ema9'] < df['ema21']) & 
+            (df['ema9'].shift(1) >= df['ema21'].shift(1)) & # Cruce bajista
+            (df['close'] < df['ema50']) &
+            (df['close'] < df['ema200']) &
+            (df['rsi'] < self.parameters['rsi_sell'])
+        )
+        
+        # 6. Aplicar filtro de Velas (si está activado)
+        if self.parameters.get('use_candles', False):
+            # Requiere patrón alcista en la vela actual o anterior
+            bullish_pattern = (df['is_bullish_engulfing'] | df['is_hammer'] | df['is_bullish_engulfing'].shift(1) | df['is_hammer'].shift(1))
+            buy_cond = buy_cond & bullish_pattern
+            
+            # Requiere patrón bajista en la vela actual o anterior
+            bearish_pattern = (df['is_bearish_engulfing'] | df['is_shooting_star'] | df['is_bearish_engulfing'].shift(1) | df['is_shooting_star'].shift(1))
+            sell_cond = sell_cond & bearish_pattern
+        
+        # Asignar señales
+        df.loc[buy_cond, 'signal'] = 'BUY'
+        df.loc[sell_cond, 'signal'] = 'SELL'
+        
+        # 6. Calcular SL/TP dinámicos para cada señal
+        for idx in df.index[buy_cond]:
+            sl, tp = calculate_sl_tp(df.loc[:idx], 'buy', atr_multiplier_sl=self.parameters['atr_sl'], atr_multiplier_tp=self.parameters['atr_tp'])
+            df.at[idx, 'stop_loss'] = sl.iloc[-1]
+            df.at[idx, 'take_profit'] = tp.iloc[-1]
+            
+        for idx in df.index[sell_cond]:
+            sl, tp = calculate_sl_tp(df.loc[:idx], 'sell', atr_multiplier_sl=self.parameters['atr_sl'], atr_multiplier_tp=self.parameters['atr_tp'])
+            df.at[idx, 'stop_loss'] = sl.iloc[-1]
+            df.at[idx, 'take_profit'] = tp.iloc[-1]
+            
+        return df
+
+
 class SupertrendStrategy(TradingStrategy):
     """Estrategia basada en Supertrend"""
     def __init__(self, parameters=None):
@@ -68,7 +154,7 @@ class Backtester:
         self.commission = commission  # 0.1% commission por defecto
         self.results = []
 
-    def run_backtest_from_signals(self, pair_symbol, start_date, end_date, signals_queryset=None, min_strength=0, stop_loss_pct=None, take_profit_pct=None):
+    def run_backtest_from_signals(self, pair_symbol, start_date, end_date, timeframe='1h', signals_queryset=None, min_strength=0, min_adx=0, stop_loss_pct=None, take_profit_pct=None, trailing_stop=False, atr_mult_sl=1.5, atr_mult_tp=3.0):
         """
         Ejecuta backtest usando señales existentes de la base de datos
         
@@ -76,10 +162,15 @@ class Backtester:
             pair_symbol: Símbolo del par (ej: 'ETH/USDT')
             start_date: Fecha de inicio
             end_date: Fecha de fin
+            timeframe: Timeframe de las señales (ej: '1h', '15m')
             signals_queryset: QuerySet de TradeSignal (opcional, si no se pasa se obtiene de la BD)
             min_strength: Fuerza mínima de la señal (entero >= 0)
+            min_adx: Umbral mínimo de ADX para filtrar señales (0 = sin filtro)
             stop_loss_pct: Porcentaje de stop loss (ej: 2.0 para 2%)
             take_profit_pct: Porcentaje de take profit (ej: 4.0 para 4%)
+            trailing_stop: Si se debe aplicar trailing stop
+            atr_mult_sl: Multiplicador ATR para Stop Loss
+            atr_mult_tp: Multiplicador ATR para Take Profit
         
         Returns:
             dict con resultados del backtest
@@ -88,14 +179,27 @@ class Backtester:
             # 1. Obtener el par
             pair = TradingPair.objects.get(symbol=pair_symbol)
             
+            # DEBUG: Imprimir parámetros de búsqueda
+            print(f"BACKTEST DEBUG: Buscando señales para Par={pair.id}({pair_symbol}), Inicio={start_date}, Fin={end_date}, TF={timeframe}, Fuerza={min_strength}")
+
             # 2. Obtener señales si no se pasaron
             if signals_queryset is None:
                 signals_queryset = TradeSignal.objects.filter(
                     pair=pair,
                     timestamp__gte=start_date,
-                    timestamp__lte=end_date,
+                    timestamp__lt=end_date,
+                    timeframe=timeframe,
                     strength__gte=min_strength
                 ).order_by('timestamp')
+                
+                # Apply ADX filter if specified (filter by stored JSON value)
+                if min_adx and min_adx > 0:
+                    signals_queryset = signals_queryset.filter(
+                        indicators__adx__gte=min_adx
+                    )
+            
+            # DEBUG: Cantidad de señales encontradas
+            print(f"BACKTEST DEBUG: Señales encontradas: {signals_queryset.count() if signals_queryset else 0}")
             
             if not signals_queryset.exists():
                 return {
@@ -111,13 +215,20 @@ class Backtester:
             # 3. Convertir señales a DataFrame
             signals_data = []
             for signal in signals_queryset:
-                signals_data.append({
+                data = {
                     'timestamp': signal.timestamp,
                     'signal_type': signal.signal_type,
                     'price': float(signal.price),
                     'strength': signal.strength,
                     'indicator': signal.indicator
-                })
+                }
+                # Unpack dynamic SL/TP from JSON if available
+                if signal.indicators:
+                    if 'stop_loss' in signal.indicators:
+                        data['stop_loss'] = float(signal.indicators['stop_loss'])
+                    if 'take_profit' in signal.indicators:
+                        data['take_profit'] = float(signal.indicators['take_profit'])
+                signals_data.append(data)
             
             df_signals = pd.DataFrame(signals_data)
             df_signals['timestamp'] = pd.to_datetime(df_signals['timestamp'])
@@ -127,7 +238,8 @@ class Backtester:
             ohlcv_data = OHLCVData.objects.filter(
                 pair=pair,
                 timestamp__gte=start_date,
-                timestamp__lte=end_date
+                timestamp__lt=end_date,
+                timeframe=timeframe
             ).order_by('timestamp')
             
             if ohlcv_data.exists():
@@ -149,9 +261,15 @@ class Backtester:
                 df_ohlcv['volume'] = 0
             
             # 5. Combinar señales con datos OHLCV
+            signal_cols = ['timestamp', 'signal_type', 'strength']
+            if 'stop_loss' in df_signals.columns:
+                signal_cols.append('stop_loss')
+            if 'take_profit' in df_signals.columns:
+                signal_cols.append('take_profit')
+
             df_combined = pd.merge_asof(
                 df_ohlcv.sort_values('timestamp'),
-                df_signals[['timestamp', 'signal_type', 'strength']].sort_values('timestamp'),
+                df_signals[signal_cols].sort_values('timestamp'),
                 on='timestamp',
                 direction='nearest',
                 tolerance=pd.Timedelta('5min')
@@ -161,7 +279,14 @@ class Backtester:
             df_combined['signal'] = df_combined['signal'].str.upper()
             
             # 6. Simular trading
-            results = self.simulate_trading(df_combined, stop_loss_pct=stop_loss_pct, take_profit_pct=take_profit_pct)
+            results = self.simulate_trading(
+                df_combined, 
+                stop_loss_pct=stop_loss_pct, 
+                take_profit_pct=take_profit_pct, 
+                trailing_stop=trailing_stop,
+                atr_multiplier_sl=atr_mult_sl,
+                atr_multiplier_tp=atr_mult_tp
+            )
             
             # 7. Calcular métricas
             results.update(self.calculate_metrics(df_combined, results))
@@ -175,8 +300,12 @@ class Backtester:
                 results=results,
                 parameters={
                     'min_strength': min_strength,
+                    'min_adx': min_adx,
                     'stop_loss_pct': stop_loss_pct,
-                    'take_profit_pct': take_profit_pct
+                    'take_profit_pct': take_profit_pct,
+                    'trailing_stop': trailing_stop,
+                    'atr_mult_sl': atr_mult_sl,
+                    'atr_mult_tp': atr_mult_tp
                 }
             )
             
@@ -211,7 +340,12 @@ class Backtester:
         # 1. Obtener datos
         df = DataManager.get_or_fetch(pair_symbol, timeframe, start=start_date, end=end_date)
         if df.empty:
-            raise ValueError(f"No data found for {pair_symbol} in the specified range")
+            return {'error': f"No data found for {pair_symbol} in the specified range"}
+
+        # Asegurar tipos float para cálculos
+        for col in ['open', 'high', 'low', 'close', 'volume']:
+            if col in df.columns:
+                df[col] = df[col].astype(float)
 
         # 2. Generar señales usando la estrategia
         df = strategy.generate_signals(df)
@@ -234,8 +368,8 @@ class Backtester:
 
         return results
 
-    def simulate_trading(self, df, stop_loss_pct=None, take_profit_pct=None):
-        """Simula ejecución de trades con gestión de riesgo"""
+    def simulate_trading(self, df, stop_loss_pct=None, take_profit_pct=None, trailing_stop=False, atr_multiplier_sl=1.5, atr_multiplier_tp=3.0):
+        """Simula ejecución de trades con gestión de riesgo avanzada"""
         balance = self.initial_balance
         position = 0
         trades = []
@@ -243,6 +377,7 @@ class Backtester:
         entry_price_actual = 0
         sl_price = 0
         tp_price = 0
+        max_price_since_entry = 0
 
         for i, row in df.iterrows():
             current_price = float(row['close'])
@@ -252,9 +387,19 @@ class Backtester:
             if position > 0:
                 exit_reason = None
                 
-                # Priorizar SL/TP dinámicos del DataFrame si existen
+                # Priorizar SL/TP dinámicos del DataFrame si existen (enviados desde señales con ATR)
                 current_sl_price = row.get('stop_loss', sl_price) if not pd.isna(row.get('stop_loss')) else sl_price
                 current_tp_price = row.get('take_profit', tp_price) if not pd.isna(row.get('take_profit')) else tp_price
+
+                # Lógica de Trailing Stop
+                if trailing_stop and stop_loss_pct:
+                    if current_price > max_price_since_entry:
+                        max_price_since_entry = current_price
+                        # Mover SL hacia arriba
+                        new_sl = max_price_since_entry * (1 - stop_loss_pct / 100)
+                        if new_sl > current_sl_price:
+                            current_sl_price = new_sl
+                            sl_price = new_sl # Actualizar para la siguiente barra
 
                 if current_sl_price and current_price <= current_sl_price:
                     exit_reason = 'STOP_LOSS'
@@ -288,13 +433,20 @@ class Backtester:
                 # Comprar
                 entry_price_actual = current_price * (1 + self.commission)
                 position = balance / entry_price_actual
+                max_price_since_entry = entry_price_actual
                 
-                # Calcular niveles de SL/TP
+                # Niveles iniciales (se pueden sobreescribir por los de la señal en la siguiente barra)
                 if stop_loss_pct:
                     sl_price = entry_price_actual * (1 - stop_loss_pct / 100)
                 if take_profit_pct:
                     tp_price = entry_price_actual * (1 + take_profit_pct / 100)
                 
+                # Sobreescribir con valores dinámicos si la señal los traía
+                if 'stop_loss' in row and not pd.isna(row['stop_loss']):
+                    sl_price = float(row['stop_loss'])
+                if 'take_profit' in row and not pd.isna(row['take_profit']):
+                    tp_price = float(row['take_profit'])
+
                 balance_before = self.initial_balance if not trades else (trades[-1].get('balance_after', balance) if trades[-1]['action'] == 'SELL' else trades[-1]['balance_before'])
                 
                 trades.append({
@@ -305,8 +457,8 @@ class Backtester:
                     'size': position,
                     'strength': row.get('strength', 0),
                     'balance_before': balance_before,
-                    'sl_price': sl_price if stop_loss_pct else None,
-                    'tp_price': tp_price if take_profit_pct else None
+                    'sl_price': sl_price if sl_price else None,
+                    'tp_price': tp_price if tp_price else None
                 })
                 balance = 0
                 
