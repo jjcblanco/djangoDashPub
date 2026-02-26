@@ -12,7 +12,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 import pandas as pd
 
-from ..backtester import Backtester, SignalBasedStrategy, SupertrendStrategy, DayTradingStrategy
+from ..backtester import Backtester, SignalBasedStrategy, SupertrendStrategy, DayTradingStrategy, GridStrategy
 from ..models import TradingPair, TradeSignal, BacktestResult, OHLCVData
 
 
@@ -45,9 +45,17 @@ def backtest_view(request):
             atr_mult_sl = float(request.POST.get('atr_mult_sl', 1.5))
             atr_mult_tp = float(request.POST.get('atr_mult_tp', 3.0))
             trailing_stop = request.POST.get('trailing_stop') == 'on'
+            use_candles = request.POST.get('use_candles') == 'on'
 
-            strategy_type = request.POST.get('strategy', 'signal-based')  # 'signal-based' o 'supertrend'
+            strategy_type = request.POST.get('strategy', 'signal-based')  # 'signal-based', 'supertrend', 'day-trading', 'grid'
             timeframe = request.POST.get('timeframe', '1h')
+            
+            # Parámetros específicos de Grid
+            upper_price = request.POST.get('upper_price')
+            lower_price = request.POST.get('lower_price')
+            grid_levels = request.POST.get('grid_levels', 10)
+            amount_per_level = request.POST.get('amount_per_level', 100)
+            global_stop_loss = request.POST.get('global_stop_loss')
 
             # Convertir fechas
             start_date = timezone.make_aware(datetime.strptime(start_date_str, '%Y-%m-%d'))
@@ -81,11 +89,45 @@ def backtest_view(request):
                     pair_symbol=pair_symbol,
                     start_date=start_date,
                     end_date=end_date,
-                    timeframe=timeframe
+                    timeframe=timeframe,
+                    stop_loss_pct=stop_loss_pct,
+                    take_profit_pct=take_profit_pct,
+                    trailing_stop=trailing_stop,
+                    atr_mult_sl=atr_mult_sl,
+                    atr_mult_tp=atr_mult_tp
                 )
             elif strategy_type == 'day-trading':
-                # Usar estrategia Day-Trading
-                strategy = DayTradingStrategy()
+                # Usar estrategia Day-Trading con parámetros del usuario
+                strategy_params = {
+                    'min_strength': min_strength,
+                    'min_adx': min_adx,
+                    'atr_sl': atr_mult_sl,
+                    'atr_tp': atr_mult_tp,
+                    'use_candles': use_candles
+                }
+                strategy = DayTradingStrategy(parameters=strategy_params)
+                results = backtester.run_backtest(
+                    strategy=strategy,
+                    pair_symbol=pair_symbol,
+                    start_date=start_date,
+                    end_date=end_date,
+                    timeframe=timeframe,
+                    stop_loss_pct=stop_loss_pct,
+                    take_profit_pct=take_profit_pct,
+                    trailing_stop=trailing_stop,
+                    atr_mult_sl=atr_mult_sl,
+                    atr_mult_tp=atr_mult_tp
+                )
+            elif strategy_type == 'grid':
+                # Estrategia de Grid Trading
+                grid_params = {
+                    'upper_price': float(upper_price) if upper_price else 0,
+                    'lower_price': float(lower_price) if lower_price else 0,
+                    'grid_levels': int(grid_levels),
+                    'amount_per_level': float(amount_per_level),
+                    'global_stop_loss': float(global_stop_loss) if global_stop_loss else None
+                }
+                strategy = GridStrategy(parameters=grid_params)
                 results = backtester.run_backtest(
                     strategy=strategy,
                     pair_symbol=pair_symbol,
@@ -176,9 +218,16 @@ def backtest_view(request):
                 'atr_mult_sl': atr_mult_sl,
                 'atr_mult_tp': atr_mult_tp,
                 'trailing_stop': trailing_stop,
+                'use_candles': use_candles,
                 'strategy': strategy_type,
                 'timeframe': timeframe,
                 'pairs': pairs,
+                # More grid params for context
+                'upper_price': upper_price,
+                'lower_price': lower_price,
+                'grid_levels': grid_levels,
+                'amount_per_level': amount_per_level,
+                'global_stop_loss': global_stop_loss,
                 'historical_results': historical_results
             }
 

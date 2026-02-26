@@ -44,9 +44,10 @@ class DayTradingStrategy(TradingStrategy):
     - Compra: EMA 9 > EMA 21, y ambas sobre EMA 50 y EMA 200. RSI > 55.
     - Venta: EMA 9 < EMA 21, y ambas bajo EMA 50 y EMA 200. RSI < 45.
     """
-    def __init__(self):
-        super().__init__("Day Trading (EMA Ribbon Scalper)")
-        self.parameters = {
+    def __init__(self, parameters=None):
+        super().__init__("Day Trading (EMA Ribbon Scalper)", parameters)
+        # Parámetros por defecto si no vienen especificados
+        default_params = {
             'ema_fast': 9,
             'ema_med': 21,
             'ema_slow': 50,
@@ -56,51 +57,90 @@ class DayTradingStrategy(TradingStrategy):
             'rsi_sell': 45,
             'atr_sl': 3.0,
             'atr_tp': 2.0,
-            'use_candles': True # Nuevo parámetro
+            'use_candles': True,
+            'min_strength': 0,
+            'min_adx': 0
         }
+        # Mezclar con los pasados
+        self.parameters = {**default_params, **(parameters or {})}
 
     def generate_signals(self, df):
-        # 1. Calcular EMAs del Ribbon
+        # 1. Calcular indicadores base
         df['ema9'] = df['close'].ewm(span=self.parameters['ema_fast'], adjust=False).mean()
         df['ema21'] = df['close'].ewm(span=self.parameters['ema_med'], adjust=False).mean()
         df['ema50'] = df['close'].ewm(span=self.parameters['ema_slow'], adjust=False).mean()
         df['ema200'] = df['close'].ewm(span=self.parameters['ema_trend'], adjust=False).mean()
-        
-        # 2. Calcular RSI, ATR y Patrones de Velas
         df['rsi'] = calculate_rsi(df, self.parameters['rsi_period'])
         df['atr'] = atr(df, 14)
+        
+        if 'adx' not in df.columns:
+            df['adx'] = adx(df, 14)
+        if 'obv' not in df.columns:
+            df['obv'] = obv(df)
+        if 'senkou_a' not in df.columns:
+            df = ichimoku_cloud(df)
+            
         df = detect_candlestick_patterns(df)
         
-        # 3. Inicializar señales
+        # 2. Inicializar columnas de señales
+        df['strength'] = 0.0
         df['signal'] = 'HOLD'
         df['stop_loss'] = np.nan
         df['take_profit'] = np.nan
         
-        # 4. Generar condiciones base de Compra
+        # 3. Calcular Fortaleza (Independiente de la señal de entrada)
+        # EMA Alignment (2 pts)
+        df.loc[(df['close'] > df['ema50']) & (df['close'] > df['ema200']), 'strength'] += 2
+        df.loc[(df['close'] < df['ema50']) & (df['close'] < df['ema200']), 'strength'] += 2
+        
+        # RSI Momentum (1 pt)
+        df.loc[(df['rsi'] > 55) & (df['rsi'] < 75), 'strength'] += 1
+        df.loc[(df['rsi'] < 45) & (df['rsi'] > 25), 'strength'] += 1
+        
+        # ADX Trend Strength (1 pt)
+        df.loc[df['adx'] > 25, 'strength'] += 1
+        
+        # Volumen / OBV (1 pt)
+        if 'volume' in df.columns:
+            vol_ma = df['volume'].rolling(window=20).mean()
+            df.loc[df['volume'] > vol_ma * 1.2, 'strength'] += 0.5
+        df.loc[df['obv'] > df['obv'].shift(1), 'strength'] += 0.5
+        df.loc[df['obv'] < df['obv'].shift(1), 'strength'] += 0.5
+        
+        # Ichimoku confirmation (1 pt)
+        df.loc[df['close'] > df[['senkou_a', 'senkou_b']].max(axis=1), 'strength'] += 1
+        df.loc[df['close'] < df[['senkou_a', 'senkou_b']].min(axis=1), 'strength'] += 1
+
+        # 4. Generar condiciones base de Compra (Crossover EMA)
         buy_cond = (
             (df['ema9'] > df['ema21']) & 
-            (df['ema9'].shift(1) <= df['ema21'].shift(1)) & # Cruce alcista
+            (df['ema9'].shift(1) <= df['ema21'].shift(1)) & 
             (df['close'] > df['ema50']) &
-            (df['close'] > df['ema200']) &
             (df['rsi'] > self.parameters['rsi_buy'])
         )
         
         # 5. Generar condiciones base de Venta
         sell_cond = (
             (df['ema9'] < df['ema21']) & 
-            (df['ema9'].shift(1) >= df['ema21'].shift(1)) & # Cruce bajista
+            (df['ema9'].shift(1) >= df['ema21'].shift(1)) & 
             (df['close'] < df['ema50']) &
-            (df['close'] < df['ema200']) &
             (df['rsi'] < self.parameters['rsi_sell'])
         )
         
-        # 6. Aplicar filtro de Velas (si está activado)
+        # 6. Aplicar filtros de Usuario
+        if self.parameters.get('min_adx', 0) > 0:
+            buy_cond = buy_cond & (df['adx'] >= self.parameters['min_adx'])
+            sell_cond = sell_cond & (df['adx'] >= self.parameters['min_adx'])
+            
+        if self.parameters.get('min_strength', 0) > 0:
+            buy_cond = buy_cond & (df['strength'] >= self.parameters['min_strength'])
+            sell_cond = sell_cond & (df['strength'] >= self.parameters['min_strength'])
+
+        # 7. Aplicar filtro de Velas (si está activado)
         if self.parameters.get('use_candles', False):
-            # Requiere patrón alcista en la vela actual o anterior
             bullish_pattern = (df['is_bullish_engulfing'] | df['is_hammer'] | df['is_bullish_engulfing'].shift(1) | df['is_hammer'].shift(1))
             buy_cond = buy_cond & bullish_pattern
             
-            # Requiere patrón bajista en la vela actual o anterior
             bearish_pattern = (df['is_bearish_engulfing'] | df['is_shooting_star'] | df['is_bearish_engulfing'].shift(1) | df['is_shooting_star'].shift(1))
             sell_cond = sell_cond & bearish_pattern
         
@@ -108,7 +148,7 @@ class DayTradingStrategy(TradingStrategy):
         df.loc[buy_cond, 'signal'] = 'BUY'
         df.loc[sell_cond, 'signal'] = 'SELL'
         
-        # 6. Calcular SL/TP dinámicos para cada señal
+        # 8. Calcular SL/TP dinámicos
         for idx in df.index[buy_cond]:
             sl, tp = calculate_sl_tp(df.loc[:idx], 'buy', atr_multiplier_sl=self.parameters['atr_sl'], atr_multiplier_tp=self.parameters['atr_tp'])
             df.at[idx, 'stop_loss'] = sl.iloc[-1]
@@ -122,25 +162,50 @@ class DayTradingStrategy(TradingStrategy):
         return df
 
 
+class GridStrategy(TradingStrategy):
+    """
+    Estrategia de Grid Trading (Malla).
+    Coloca órdenes de compra y venta a intervalos regulares dentro de un rango.
+    """
+    def __init__(self, parameters=None):
+        super().__init__("Grid Trading", parameters)
+        default_params = {
+            'upper_price': 0,
+            'lower_price': 0,
+            'grid_levels': 10,
+            'amount_per_level': 100, # USD por nivel
+            'global_stop_loss': None,
+            'global_take_profit': None
+        }
+        self.parameters = {**default_params, **(parameters or {})}
+
+    def generate_signals(self, df):
+        # El Grid no genera señales de entrada tradicionales (BUY/SELL) en cada vela,
+        # sino que el motor de simulación maneja la ejecución basada en niveles de precio.
+        df['signal'] = 'GRID' 
+        return df
+
+
 class SupertrendStrategy(TradingStrategy):
     """Estrategia basada en Supertrend"""
     def __init__(self, parameters=None):
         super().__init__("Supertrend", parameters)
 
     def generate_signals(self, df):
-        # Aplicar indicadores
+        # Aplicar indicadores necesarios para el scoring de Supertrend
         df = supertrend(df)
         df = macd(df)
-        df = enhanced_bollinger_bands(df, window=20, num_std=2, strategy='all')
         df = ichimoku_cloud(df)
+        df = detect_candlestick_patterns(df)
 
-        # Generar señales
+        # Generar señales (Usa la lógica de scoring de ccxttest1.py integrada a través de generate_signals_from_ccxt)
         df = generate_signals_from_ccxt(df)
 
-        # Convertir señales a formato estándar
+        # Convertir señales a formato estándar para el backtester
         df['signal'] = 'HOLD'
-        df.loc[df['signal_buy_sell'] == 'buy', 'signal'] = 'BUY'
-        df.loc[df['signal_buy_sell'] == 'sell', 'signal'] = 'SELL'
+        if 'signal_buy_sell' in df.columns:
+            df.loc[df['signal_buy_sell'] == 'buy', 'signal'] = 'BUY'
+            df.loc[df['signal_buy_sell'] == 'sell', 'signal'] = 'SELL'
 
         return df
 
@@ -334,7 +399,9 @@ class Backtester:
                 'equity_curve': []
             }
 
-    def run_backtest(self, strategy, pair_symbol, start_date, end_date, timeframe='1m'):
+    def run_backtest(self, strategy, pair_symbol, start_date, end_date, timeframe='1m', 
+                     stop_loss_pct=None, take_profit_pct=None, trailing_stop=False, 
+                     atr_mult_sl=1.5, atr_mult_tp=3.0):
         """Ejecuta un backtest completo con una estrategia específica"""
 
         # 1. Obtener datos
@@ -350,8 +417,18 @@ class Backtester:
         # 2. Generar señales usando la estrategia
         df = strategy.generate_signals(df)
 
-        # 3. Simular trading
-        results = self.simulate_trading(df)
+        # 3. Simular trading (Seleccionar motor según la estrategia)
+        if strategy.name == "Grid Trading":
+            results = self.simulate_grid_trading(df, strategy.parameters)
+        else:
+            results = self.simulate_trading(
+                df, 
+                stop_loss_pct=stop_loss_pct, 
+                take_profit_pct=take_profit_pct, 
+                trailing_stop=trailing_stop,
+                atr_multiplier_sl=atr_mult_sl,
+                atr_multiplier_tp=atr_mult_tp
+            )
 
         # 4. Calcular métricas adicionales
         results.update(self.calculate_metrics(df, results))
@@ -721,3 +798,120 @@ class Backtester:
         )
         
         return fig.to_html(full_html=False, include_plotlyjs='cdn')
+
+    def simulate_grid_trading(self, df, params):
+        """
+        Simula una estrategia de Grid Trading con múltiples niveles abiertos simultáneamente.
+        """
+        upper = float(params.get('upper_price', 0))
+        lower = float(params.get('lower_price', 0))
+        levels_count = int(params.get('grid_levels', 10))
+        amount_per_level = float(params.get('amount_per_level', 100))
+        stop_loss_price = params.get('global_stop_loss')
+        if stop_loss_price: stop_loss_price = float(stop_loss_price)
+
+        # Validaciones básicas
+        if upper <= lower or levels_count < 2:
+            return {'error': 'Configuración de Grid inválida (Rango o niveles incorrectos)'}
+
+        # Calcular niveles (Malla aritmética)
+        grid_step = (upper - lower) / (levels_count - 1)
+        grid_levels = [lower + i * grid_step for i in range(levels_count)]
+        
+        balance = self.initial_balance
+        active_positions = [] # [{'entry_price': f, 'size': f, 'target_tp': f}]
+        trades = []
+        equity_curve = []
+        is_stopped = False
+        
+        for i, row in df.iterrows():
+            current_price = float(row['close'])
+            
+            if is_stopped:
+                # Si se detuvo por SL Global, solo registramos la curva de equity (balance estático)
+                equity_curve.append({'timestamp': row['timestamp'], 'equity': balance})
+                continue
+
+            # 1. Verificar Stop Loss Global (Riesgo máximo)
+            if stop_loss_price and current_price <= stop_loss_price and active_positions:
+                for pos in active_positions:
+                    exit_price = current_price * (1 - self.commission)
+                    balance += pos['size'] * exit_price
+                    trades.append({
+                        'timestamp': row['timestamp'],
+                        'action': 'SELL',
+                        'reason': 'GLOBAL_STOP_LOSS',
+                        'price': current_price,
+                        'exit_price': exit_price,
+                        'size': pos['size'],
+                        'pnl': (exit_price - pos['entry_price']) * pos['size']
+                    })
+                active_positions = []
+                is_stopped = True # Detener estrategia tras el desastre
+                continue
+
+            # 2. Verificar Cierres (Take Profit de cada nivel)
+            remaining_positions = []
+            for pos in active_positions:
+                if current_price >= pos['target_tp']:
+                    exit_price = current_price * (1 - self.commission)
+                    balance += pos['size'] * exit_price
+                    trades.append({
+                        'timestamp': row['timestamp'],
+                        'action': 'SELL',
+                        'reason': 'GRID_TAKE_PROFIT',
+                        'price': current_price,
+                        'entry_price': pos['entry_price'],
+                        'exit_price': exit_price,
+                        'size': pos['size'],
+                        'pnl': (exit_price - pos['entry_price']) * pos['size']
+                    })
+                else:
+                    remaining_positions.append(pos)
+            active_positions = remaining_positions
+
+            # 3. Verificar Entradas (Nuevas compras en niveles)
+            # Solo comprar si estamos por encima del límite inferior (dentro de la malla)
+            if current_price >= (lower - grid_step * 0.5):
+                for level in grid_levels:
+                    # Compramos si el precio baja al nivel O está por debajo de él
+                    if current_price <= level:
+                        # No comprar si ya hay una posición abierta en este exacto nivel
+                        already_bought = any(abs(pos['entry_price'] - level) < (grid_step * 0.1) for pos in active_positions)
+                        
+                        if not already_bought and balance >= amount_per_level:
+                            entry_price = current_price * (1 + self.commission)
+                            size = amount_per_level / entry_price
+                            balance -= amount_per_level
+                            
+                            active_positions.append({
+                                'entry_price': level,
+                                'actual_entry': entry_price,
+                                'size': size,
+                                'target_tp': level + grid_step
+                            })
+                            
+                            trades.append({
+                                'timestamp': row['timestamp'],
+                                'action': 'BUY',
+                                'reason': 'GRID_BUY',
+                                'price': current_price,
+                                'entry_price': entry_price,
+                                'size': size
+                            })
+
+            # Equity Curve: Balance Efectivo + Valor de mercado de posiciones abiertas
+            unrealized_value = sum(pos['size'] * current_price for pos in active_positions)
+            current_equity = balance + unrealized_value
+            equity_curve.append({
+                'timestamp': row['timestamp'],
+                'equity': current_equity
+            })
+
+        return {
+            'total_return': ((equity_curve[-1]['equity'] / self.initial_balance) - 1) * 100 if equity_curve else 0,
+            'total_trades': len(trades),
+            'trades': trades,
+            'equity_curve': equity_curve,
+            'final_balance': equity_curve[-1]['equity'] if equity_curve else balance
+        }
