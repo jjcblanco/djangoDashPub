@@ -1,0 +1,41 @@
+Day Trading Strategy Implementation
+Planning
+ Research indicator availability
+ Create Implementation Plan
+ Design DayTradingStrategy class logic
+Execution
+ Implement 
+DayTradingStrategy
+ in 
+backtester.py
+ Add strategy to 
+backtest_views.py
+ Add strategy option to 
+backtest.html
+Verification
+ Run backtest in 5m/15m timeframes
+ Verify signal accuracy
+ Update walkthrough
+Candlestick Analysis Enhancement
+ Implement detection functions for Engulfing, Hammer, and Shooting Star in 
+indicadores.py
+ Integrate pattern detection into 
+DayTradingStrategy
+ as confirmation filters
+ Verify enhancement results with backtests
+Debugging: Zero Signals Issue
+ Standardize 
+DayTradingStrategy
+ scoring to reach 5 points
+ Propagate form parameters (ADX, Strength, SL/TP) to backtest engine
+ Add "Use Candlestick Filters" toggle to UI for better control
+Grid Trading Strategy
+ Implement GridStrategy class in 
+backtester.py
+ Implement simulate_grid_trading with Global Stop Loss logic
+ Create UI fields for Grid Range, Levels and Stop Price in 
+backtest.html
+ Integrate Grid logic into 
+backtest_view
+ Verify functionality with a debug script
+ 

@@ -197,6 +197,14 @@
             color: var(--secondary-color);
             font-weight: 600;
         }
+
+        /* New styles for Grid parameters */
+        .grid-header {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            color: var(--secondary-color);
+        }
     </style>
 </head>
 
@@ -261,11 +269,12 @@
                                     <label for="strategy" class="form-label">
                                         <i class="fas fa-brain"></i> Strategy
                                     </label>
-                                    <select class="form-select" id="strategy" name="strategy" required>
-                                        <option value="signal-based" selected>Signal-Based (Use Existing Signals)
-                                        </option>
+                                    <select class="form-select" id="strategy" name="strategy" required
+                                        onchange="toggleStrategyFields()">
+                                        <option value="signal-based" selected>Signal-Based</option>
                                         <option value="supertrend">Supertrend Strategy</option>
-                                        <option value="day-trading">Day Trading (EMA Ribbon Scalper)</option>
+                                        <option value="day-trading">Day Trading (EMA Ribbon)</option>
+                                        <option value="grid">Grid Trading (Malla)</option>
                                     </select>
                                 </div>
                             </div>
@@ -305,89 +314,100 @@
                                 </div>
                             </div>
 
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label for="min_strength" class="form-label">
-                                        <i class="fas fa-signal"></i> Min Signal Strength
-                                    </label>
-                                    <input type="number" class="form-control" id="min_strength" name="min_strength"
-                                        value="0" step="1" min="0" required>
-                                    <small class="text-muted">Filter signals with strength >= this value</small>
+                            <!-- Grid Parameters (Conditional) -->
+                            <div id="grid-params" style="display: none;">
+                                <h4 class="grid-header"><i class="fas fa-th"></i> Grid Configuration</h4>
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Upper Price</label>
+                                        <input type="number" name="upper_price" class="form-control" step="0.00000001"
+                                            placeholder="95.50">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Lower Price</label>
+                                        <input type="number" name="lower_price" class="form-control" step="0.00000001"
+                                            placeholder="85.00">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Grid Levels</label>
+                                        <input type="number" name="grid_levels" class="form-control" value="10" min="2">
+                                    </div>
                                 </div>
-                                <div class="col-md-4 mb-3">
-                                    <label for="min_adx" class="form-label">
-                                        <i class="fas fa-chart-bar"></i> Min ADX Threshold 💪
-                                    </label>
-                                    <input type="number" class="form-control" id="min_adx" name="min_adx" value="0"
-                                        step="1" min="0" max="100">
-                                    <small class="text-muted">0 = no filter &nbsp;|&nbsp; 20 = trending &nbsp;|&nbsp; 25
-                                        = strong trend</small>
-                                </div>
-                                <div class="col-md-4 mb-3 d-flex align-items-end pb-4">
-                                    <div>
-                                        <span class="badge bg-secondary me-1">ADX&nbsp;0</span> Sin filtro
-                                        <br>
-                                        <span class="badge bg-warning text-dark me-1">ADX 20</span> Mercado en tendencia
-                                        <br>
-                                        <span class="badge bg-success me-1">ADX 25</span> Tendencia fuerte
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Amount per Level (USDT)</label>
+                                        <input type="number" name="amount_per_level" class="form-control" value="100"
+                                            min="10">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Global Stop Loss (Price)</label>
+                                        <input type="number" name="global_stop_loss" class="form-control"
+                                            step="0.00000001" placeholder="80.00">
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="row">
-                                <div class="col-md-3 mb-3">
-                                    <label for="stop_loss" class="form-label">
-                                        <i class="fas fa-hand-paper"></i> Stop Loss (%)
-                                    </label>
-                                    <input type="number" class="form-control" id="stop_loss" name="stop_loss"
-                                        placeholder="e.g. 2.0" step="0.1" min="0">
-                                    <small class="text-muted">Exit if price drops X% (Optional)</small>
-                                </div>
-                                <div class="col-md-3 mb-3">
-                                    <label for="take_profit" class="form-label">
-                                        <i class="fas fa-bullseye"></i> Take Profit (%)
-                                    </label>
-                                    <input type="number" class="form-control" id="take_profit" name="take_profit"
-                                        placeholder="e.g. 5.0" step="0.1" min="0">
-                                    <small class="text-muted">Exit if price rises X%</small>
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-3 mb-3">
-                                    <label for="atr_mult_sl" class="form-label">
-                                        <i class="fas fa-ruler-vertical"></i> ATR SL Multiplier
-                                    </label>
-                                    <input type="number" class="form-control" id="atr_mult_sl" name="atr_mult_sl"
-                                        value="1.5" step="0.1" min="0">
-                                    <small class="text-muted">For dynamic SL (ATR * Mult)</small>
-                                </div>
-                                <div class="col-md-3 mb-3">
-                                    <label for="atr_mult_tp" class="form-label">
-                                        <i class="fas fa-long-arrow-alt-up"></i> ATR TP Multiplier
-                                    </label>
-                                    <input type="number" class="form-control" id="atr_mult_tp" name="atr_mult_tp"
-                                        value="3.0" step="0.1" min="0">
-                                    <small class="text-muted">For dynamic TP (ATR * Mult)</small>
-                                </div>
-                                <div class="col-md-6 mb-3 d-flex align-items-center">
-                                    <div class="form-check form-switch mt-3">
-                                        <input class="form-check-input" type="checkbox" id="trailing_stop"
-                                            name="trailing_stop">
-                                        <label class="form-check-label" for="trailing_stop">
-                                            <strong>Enable Trailing Stop</strong> (Protects profits)
+                            <!-- Standard Filters Section -->
+                            <div id="standard-filters">
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <label for="min_strength" class="form-label">
+                                            <i class="fas fa-signal"></i> Min Signal Strength
                                         </label>
+                                        <input type="number" class="form-control" id="min_strength" name="min_strength"
+                                            value="0" step="1" min="0">
                                     </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="min_adx" class="form-label">
+                                            <i class="fas fa-chart-bar"></i> Min ADX Threshold
+                                        </label>
+                                        <input type="number" class="form-control" id="min_adx" name="min_adx" value="0"
+                                            step="1" min="0" max="100">
+                                    </div>
+                                    <div class="col-md-4 mb-3 d-flex align-items-end pb-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="use_candles"
+                                                name="use_candles" checked>
+                                            <label class="form-check-label" for="use_candles">Candle Filters</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-3 mb-3">
+                                        <label for="stop_loss" class="form-label">Stop Loss (%)</label>
+                                        <input type="number" class="form-control" id="stop_loss" name="stop_loss"
+                                            step="0.1" min="0">
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <label for="take_profit" class="form-label">Take Profit (%)</label>
+                                        <input type="number" class="form-control" id="take_profit" name="take_profit"
+                                            step="0.1" min="0">
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <label for="atr_mult_sl" class="form-label">ATR SL</label>
+                                        <input type="number" class="form-control" id="atr_mult_sl" name="atr_mult_sl"
+                                            value="1.5" step="0.1">
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <label for="atr_mult_tp" class="form-label">ATR TP</label>
+                                        <input type="number" class="form-control" id="atr_mult_tp" name="atr_mult_tp"
+                                            value="3.0" step="0.1">
+                                    </div>
+                                </div>
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" id="trailing_stop"
+                                        name="trailing_stop">
+                                    <label class="form-check-label" for="trailing_stop">Enable Trailing Stop</label>
                                 </div>
                             </div>
 
                             <div class="info-box">
                                 <h5><i class="fas fa-info-circle"></i> How it works</h5>
                                 <p class="mb-0">
-                                    <strong>Signal-Based:</strong> Uses existing trading signals from your database to
-                                    simulate trades.<br>
-                                    <strong>Supertrend:</strong> Generates new signals using the Supertrend indicator
-                                    strategy.
+                                    <strong>Signal-Based:</strong> Uses database signals.<br>
+                                    <strong>Supertrend/Day Trading:</strong> Generates new signals.<br>
+                                    <strong>Grid:</strong> Buys at regular price intervals within a range.
                                 </p>
                             </div>
 
@@ -445,37 +465,36 @@
                         {% endif %}
                     </div>
                 </div>
-
-                <!-- Quick Stats -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3><i class="fas fa-lightbulb"></i> Tips</h3>
-                    </div>
-                    <div class="card-body">
-                        <ul class="list-unstyled">
-                            <li class="mb-2"><i class="fas fa-check text-success"></i> Use realistic commission rates
-                            </li>
-                            <li class="mb-2"><i class="fas fa-check text-success"></i> Test multiple time periods</li>
-                            <li class="mb-2"><i class="fas fa-check text-success"></i> Compare different strategies</li>
-                            <li class="mb-2"><i class="fas fa-check text-success"></i> Analyze win rate and drawdown
-                            </li>
-                        </ul>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Set default dates (last 30 days)
+        function toggleStrategyFields() {
+            const strategy = document.getElementById('strategy').value;
+            const gridParams = document.getElementById('grid-params');
+            const standardFilters = document.getElementById('standard-filters');
+
+            if (strategy === 'grid') {
+                gridParams.style.display = 'block';
+                standardFilters.style.display = 'none';
+            } else {
+                gridParams.style.display = 'none';
+                standardFilters.style.display = 'block';
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
+            // Set default dates
             const endDate = new Date();
             const startDate = new Date();
             startDate.setDate(startDate.getDate() - 30);
-
             document.getElementById('end_date').valueAsDate = endDate;
             document.getElementById('start_date').valueAsDate = startDate;
+
+            // Initial toggle
+            toggleStrategyFields();
         });
     </script>
 </body>
