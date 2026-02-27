@@ -23,3 +23,5 @@ urlpatterns = [
     path('', include('dashboard.urls')),
     path('django_plotly_dash/', include('django_plotly_dash.urls')),
 ]
+
+# Reload trigger

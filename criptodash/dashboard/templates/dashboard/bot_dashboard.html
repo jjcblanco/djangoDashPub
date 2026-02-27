@@ -1,0 +1,371 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CriptoDash - Gestión de Bots</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4e73df;
+            --secondary: #858796;
+            --success: #1cc88a;
+            --info: #36b9cc;
+            --warning: #f6c23e;
+            --danger: #e74a3b;
+            --dark: #5a5c69;
+        }
+
+        body {
+            background-color: #f8f9fc;
+            font-family: 'Nunito', sans-serif;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+        }
+
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .bot-card-grid {
+            border-left: 0.25rem solid var(--primary) !important;
+        }
+
+        .bot-card-daytraining {
+            border-left: 0.25rem solid var(--success) !important;
+        }
+
+        .pnl-positive {
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        .pnl-negative {
+            color: var(--danger);
+            font-weight: bold;
+        }
+
+        .btn-round {
+            border-radius: 30px;
+            padding: 0.5rem 1.5rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand font-weight-bold" href="/"><i class="fas fa-robot me-2"></i>CriptoDash Live Bots</a>
+            <div class="ms-auto">
+                <a href="{% url 'dashboard_nuevo' %}" class="btn btn-outline-light btn-sm me-2"><i
+                        class="fas fa-chart-line me-1"></i>Dashboard</a>
+                <a href="{% url 'backtest' %}" class="btn btn-outline-light btn-sm"><i
+                        class="fas fa-flask me-1"></i>Backtest</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container shadow-sm p-4 bg-white rounded-3">
+        <div class="d-sm-flex align-items-center justify-content-between mb-4">
+            <h1 class="h3 mb-0 text-gray-800">Panel de Control de Bots</h1>
+            <div>
+                <button class="btn btn-sm btn-info shadow-sm me-2" onclick="updateAllBots()">
+                    <i class="fas fa-sync-alt fa-sm text-white-50 me-1"></i> Actualizar Bots
+                </button>
+                <button class="btn btn-sm btn-primary shadow-sm" data-bs-toggle="modal"
+                    data-bs-target="#createBotModal">
+                    <i class="fas fa-plus fa-sm text-white-50 me-1"></i> Nuevo Bot
+                </button>
+            </div>
+        </div>
+
+        {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        <div class="row">
+            {% for data in bots_data %}
+            <div class="col-xl-4 col-md-6 mb-4">
+                <div
+                    class="card h-100 py-2 {% if data.bot.strategy_type == 'GRID' %}bot-card-grid{% else %}bot-card-daytraining{% endif %}">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                    {{ data.bot.pair.symbol }} | {{ data.bot.get_strategy_type_display }}
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ data.bot.name }}</div>
+                                <div class="mt-2">
+                                    <span
+                                        class="badge {% if data.bot.status == 'RUNNING' %}bg-success{% elif data.bot.status == 'STOPPED' %}bg-warning{% else %}bg-danger{% endif %}">
+                                        {{ data.bot.status }}
+                                    </span>
+                                    {% if data.bot.last_error %}
+                                    <i class="fas fa-exclamation-triangle text-danger ms-2"
+                                        title="{{ data.bot.last_error }}" style="cursor: help;"></i>
+                                    {% endif %}
+                                    <small class="text-muted ms-2">Balance: ${{ data.bot.current_balance|floatformat:2
+                                        }}</small>
+                                </div>
+                                <div class="row mt-3">
+                                    <div class="col-6">
+                                        <small class="text-muted d-block">PnL Tot:</small>
+                                        <span
+                                            class="{% if data.total_pnl >= 0 %}pnl-positive{% else %}pnl-negative{% endif %}">
+                                            ${{ data.total_pnl|floatformat:2 }} ({{ data.profit_pct|floatformat:2 }}%)
+                                        </span>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted d-block">Trades Act:</small>
+                                        <span class="fw-bold">{{ data.active_trades }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-robot fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="d-flex justify-content-end gap-2">
+                            <form action="{% url 'bot_action' data.bot.id %}" method="POST">
+                                {% csrf_token %}
+                                {% if data.bot.status != 'RUNNING' %}
+                                <button type="submit" name="action" value="start" class="btn btn-sm btn-success">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                                {% else %}
+                                <button type="submit" name="action" value="stop" class="btn btn-sm btn-warning">
+                                    <i class="fas fa-pause"></i>
+                                </button>
+                                {% endif %}
+                                <button type="submit" name="action" value="delete" class="btn btn-sm btn-danger"
+                                    onclick="return confirm('¿Borrar este bot?')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12 text-center py-5">
+                <p class="text-muted">No tienes bots configurados. ¡Crea uno para empezar!</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Tabla de Actividad Reciente -->
+        <div class="card mt-4 shadow-sm">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 text-gray-800"><i class="fas fa-history me-2 text-primary"></i>Actividad Reciente y
+                    Órdenes</h5>
+                <span class="badge bg-secondary">Últimas 50 operaciones</span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle" style="color: #333;">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Bot / Par</th>
+                                <th>Tipo</th>
+                                <th>Precio Entrada</th>
+                                <th>Precio Salida</th>
+                                <th>Cantidad</th>
+                                <th>PnL (USD)</th>
+                                <th>Estado</th>
+                                <th>Fecha</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for trade in recent_trades %}
+                            <tr>
+                                <td>
+                                    <div class="fw-bold">{{ trade.bot.name }}</div>
+                                    <small class="text-muted">{{ trade.bot.pair.symbol }}</small>
+                                </td>
+                                <td>
+                                    <span
+                                        class="badge {% if trade.side == 'BUY' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+                                        {{ trade.side }}
+                                    </span>
+                                </td>
+                                <td>${{ trade.entry_price|floatformat:4 }}</td>
+                                <td>
+                                    {% if trade.exit_price %}
+                                    ${{ trade.exit_price|floatformat:4 }}
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ trade.amount|floatformat:6 }}</td>
+                                <td>
+                                    {% if trade.status == 'CLOSED' %}
+                                    <span class="{% if trade.pnl >= 0 %}pnl-positive{% else %}pnl-negative{% endif %}">
+                                        {% if trade.pnl >= 0 %}+{% endif %}${{ trade.pnl|floatformat:2 }}
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted italic small">Abierta</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span
+                                        class="badge {% if trade.status == 'OPEN' %}bg-success{% elif trade.status == 'CLOSED' %}bg-dark{% else %}bg-warning text-dark{% endif %}">
+                                        {{ trade.status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <small class="text-muted">{{ trade.entry_time|date:"d/m H:i" }}</small>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center py-4 text-muted">
+                                    No hay operaciones registradas todavía. ¡Iniciá un bot y dale a 'Actualizar'!
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Crear Bot -->
+    <div class="modal fade" id="createBotModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <form action="{% url 'create_bot' %}" method="POST">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title">Lanzar Nuevo Bot de Estrategia</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Nombre del Bot</label>
+                                <input type="text" name="name" class="form-control" required placeholder="Mi Super Bot">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Par</label>
+                                <select name="pair" class="form-select">
+                                    {% for p in available_pairs %}
+                                    <option value="{{ p.id }}">{{ p.symbol }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Balance (USD)</label>
+                                <input type="number" name="balance" class="form-control" required step="0.01"
+                                    value="1000">
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">Estrategia</label>
+                                <select name="strategy_type" id="strategySelector" class="form-select"
+                                    onchange="toggleStrategyFields()">
+                                    <option value="GRID">Grid Trading (Malla)</option>
+                                    <option value="DAYTRADING">Day Trading EMA/RSI</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Campos específicos para Grid -->
+                        <div id="gridFields" class="mt-4 p-3 bg-light rounded shadow-sm">
+                            <h6>Parámetros de Malla (Grid)</h6>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Precio Superior</label>
+                                    <input type="number" name="upper_price" class="form-control" step="0.0001">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Precio Inferior</label>
+                                    <input type="number" name="lower_price" class="form-control" step="0.0001">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Niveles</label>
+                                    <input type="number" name="grid_levels" class="form-control" value="10">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Monto por Nivel (USD)</label>
+                                    <input type="number" name="amount_per_level" class="form-control" value="100">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Stop Loss Global (Precio)</label>
+                                    <input type="number" name="global_stop_loss" class="form-control" step="0.0001">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Campos específicos para Day Trading -->
+                        <div id="daytradingFields" class="mt-4 p-3 bg-light rounded shadow-sm d-none">
+                            <h6>Parámetros Day Trading</h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Fuerza Mínima (1-5)</label>
+                                    <input type="number" name="min_strength" class="form-control" value="3" min="1"
+                                        max="5">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">ADX Mínimo</label>
+                                    <input type="number" name="min_adx" class="form-control" value="20">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Lanzar Bot</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function toggleStrategyFields() {
+            const strategy = document.getElementById('strategySelector').value;
+            document.getElementById('gridFields').classList.toggle('d-none', strategy !== 'GRID');
+            document.getElementById('daytradingFields').classList.toggle('d-none', strategy !== 'DAYTRADING');
+        }
+
+        async function updateAllBots() {
+            const btn = event.target.closest('button');
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Actualizando...';
+
+            try {
+                const response = await fetch("{% url 'trigger_bot_update' %}");
+                const data = await response.json();
+                location.reload();
+            } catch (e) {
+                console.error(e);
+                alert("Error al actualizar bots");
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+    </script>
+</body>
+
+</html>

@@ -16,4 +16,10 @@ urlpatterns = [
     path('api/run-bot/', views.run_bot_api, name='run_bot_api'),
     path('api/pairs/', views.get_pairs, name='api_pairs'),
     path('backtest/', views.backtest_view, name='backtest'),
+    
+    # Bot Management URLs
+    path('bots/', views.bot_dashboard, name='bot_dashboard'),
+    path('bots/create/', views.create_bot, name='create_bot'),
+    path('bots/action/<int:bot_id>/', views.bot_action, name='bot_action'),
+    path('bots/update/', views.trigger_bot_update, name='trigger_bot_update'),
 ]

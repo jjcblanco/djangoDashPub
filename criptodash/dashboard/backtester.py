@@ -430,6 +430,10 @@ class Backtester:
                 atr_multiplier_tp=atr_mult_tp
             )
 
+        # Si hubo un error en la simulación, retornar inmediatamente
+        if 'error' in results:
+            return results
+
         # 4. Calcular métricas adicionales
         results.update(self.calculate_metrics(df, results))
 
