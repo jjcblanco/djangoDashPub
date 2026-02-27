@@ -118,12 +118,16 @@
                                         class="badge {% if data.bot.status == 'RUNNING' %}bg-success{% elif data.bot.status == 'STOPPED' %}bg-warning{% else %}bg-danger{% endif %}">
                                         {{ data.bot.status }}
                                     </span>
+                                    <span class="badge {% if data.bot.is_live %}bg-danger{% else %}bg-info text-dark{% endif %} ms-1">
+                                        {% if data.bot.is_live %}<i class="fas fa-satellite-dish me-1"></i>LIVE{% else %}<i class="fas fa-vial me-1"></i>PAPER{% endif %}
+                                    </span>
                                     {% if data.bot.last_error %}
-                                    <i class="fas fa-exclamation-triangle text-danger ms-2"
-                                        title="{{ data.bot.last_error }}" style="cursor: help;"></i>
+                                    <div class="alert alert-danger p-2 mt-2 small" style="font-size: 0.75rem;">
+                                        <i class="fas fa-exclamation-circle me-1"></i>
+                                        <strong>Error:</strong> {{ data.bot.last_error }}
+                                    </div>
                                     {% endif %}
-                                    <small class="text-muted ms-2">Balance: ${{ data.bot.current_balance|floatformat:2
-                                        }}</small>
+                                    <small class="text-muted ms-2">Balance: ${{ data.bot.current_balance|floatformat:2 }}</small>
                                 </div>
                                 <div class="row mt-3">
                                     <div class="col-6">
@@ -154,6 +158,11 @@
                                 {% else %}
                                 <button type="submit" name="action" value="stop" class="btn btn-sm btn-warning">
                                     <i class="fas fa-pause"></i>
+                                </button>
+                                {% endif %}
+                                {% if data.bot.last_error %}
+                                <button type="submit" name="action" value="clear_error" class="btn btn-sm btn-info" title="Limpiar Error">
+                                    <i class="fas fa-broom"></i>
                                 </button>
                                 {% endif %}
                                 <button type="submit" name="action" value="delete" class="btn btn-sm btn-danger"
@@ -285,6 +294,15 @@
                                     <option value="GRID">Grid Trading (Malla)</option>
                                     <option value="DAYTRADING">Day Trading EMA/RSI</option>
                                 </select>
+                            </div>
+                            <div class="col-md-12">
+                                <div class="form-check form-switch p-3 bg-light border rounded">
+                                    <input class="form-check-input ms-0 me-2" type="checkbox" name="is_live" id="isLiveSwitch">
+                                    <label class="form-check-label fw-bold text-danger" for="isLiveSwitch">
+                                        <i class="fas fa-exclamation-triangle me-1"></i> ¿EJECUTAR EN REAL? (Dinero Real)
+                                    </label>
+                                    <div class="form-text mt-1">Si se activa, el bot enviará órdenes reales a Binance. Si se deja desactivado, funcionará como simulación.</div>
+                                </div>
                             </div>
                         </div>
 

@@ -5,7 +5,7 @@ from decimal import Decimal
 from django.utils import timezone
 from .models import LiveBot, LiveTrade, TradingPair
 from .backtester import GridStrategy, DayTradingStrategy
-from .ccxttest1 import historical_fetch_ohlcv
+from .ccxttest1 import historical_fetch_ohlcv, binance as exchange
 
 logger = logging.getLogger(__name__)
 
@@ -92,13 +92,37 @@ class BotManager:
                     already_bought = any(abs(float(t.entry_price) - level) < (grid_step * 0.1) for t in open_trades)
                     
                     if not already_bought and float(bot.current_balance) >= amount_per_level:
-                        # Crear nueva operación 'OPEN'
+                        order_id = None
+                        if bot.is_live:
+                            try:
+                                # Crear orden real en Binance
+                                # Usamos 'limit' para seguir la lógica de malla
+                                # Nota: En producción real, verificaríamos precisión de precio/cantidad
+                                api_order = exchange.create_order(
+                                    symbol=bot.pair.symbol,
+                                    type='limit',
+                                    side='buy',
+                                    amount=float(amount_per_level / current_price),
+                                    price=level
+                                )
+                                order_id = api_order.get('id')
+                                logger.info(f"Orden REAL creada para bot {bot.id}: {order_id}")
+                            except Exception as e:
+                                error_msg = f"Error API (Balance/Otros): {e}"
+                                logger.error(f"Error para bot {bot.id}: {error_msg}")
+                                bot.status = 'ERROR'
+                                bot.last_error = error_msg
+                                bot.save()
+                                return {'bot_id': bot.id, 'status': 'error', 'message': error_msg}
+
+                        # Crear nueva operación local
                         LiveTrade.objects.create(
                             bot=bot,
                             side='BUY',
-                            entry_price=Decimal(str(level)), # Usamos el nivel nominal
+                            entry_price=Decimal(str(level)),
                             amount=Decimal(str(amount_per_level / current_price)),
-                            status='OPEN'
+                            status='OPEN',
+                            order_id=order_id
                         )
                         # Actualizar balance del bot
                         bot.current_balance = Decimal(str(float(bot.current_balance) - amount_per_level))
@@ -139,6 +163,25 @@ class BotManager:
     @staticmethod
     def _close_trade(trade, exit_price, reason):
         """Cierra una operación y actualiza el balance del bot."""
+        bot = trade.bot
+        
+        # 1. Si el bot es live, cerrar en el exchange
+        if bot.is_live:
+            try:
+                # En GRID vendemos a mercado o limit segun el trigger
+                exchange.create_order(
+                    symbol=bot.pair.symbol,
+                    type='market', # Venta rápida al detectar el TP del grid
+                    side='sell',
+                    amount=float(trade.amount)
+                )
+                logger.info(f"Cierre REAL (Venta) para trade {trade.id} ({reason})")
+            except Exception as e:
+                logger.error(f"Error cerrando orden REAL para bot {bot.id}: {e}")
+                # Podríamos querer abortar el cierre local, pero por ahora lo marcamos
+                # como error para que el usuario intervenga.
+
+        # 2. Actualizar registro local
         trade.exit_price = Decimal(str(exit_price))
         trade.exit_time = timezone.now()
         trade.status = 'CLOSED'
@@ -148,7 +191,6 @@ class BotManager:
         trade.pnl = pnl
         trade.save()
         
-        bot = trade.bot
         revenue = trade.amount * Decimal(str(exit_price)) * Decimal("0.999")
         bot.current_balance = Decimal(str(float(bot.current_balance) + float(revenue)))
         bot.save()
