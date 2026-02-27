@@ -21,6 +21,14 @@ from .trading_views import (
 # Importar vistas de backtest
 from .backtest_views import backtest_view
 
+# Importar vistas de bot
+from .bot_views import (
+    bot_dashboard,
+    create_bot,
+    bot_action,
+    trigger_bot_update
+)
+
 # Importar vistas de datos
 from .data_views import import_data
 
@@ -51,6 +59,12 @@ __all__ = [
     'run_bot_api',
     'get_pairs',
     
+    # Bot views
+    'bot_dashboard',
+    'create_bot',
+    'bot_action',
+    'trigger_bot_update',
+
     # Dash app
     'app',
 ]

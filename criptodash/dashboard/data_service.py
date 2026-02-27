@@ -171,6 +171,25 @@ def calcular_estadisticas_desde_señales(señales):
     fecha_primera = min(fechas) if fechas else None
     fecha_ultima = max(fechas) if fechas else None
 
+    # Calcular Estado del Mercado (Lateralización)
+    # Basado en el ADX promedio de las señales que lo tengan
+    adx_values = [s.indicators.get('adx') for s in señales_list if s.indicators and s.indicators.get('adx')]
+    avg_adx = sum(adx_values) / len(adx_values) if adx_values else 0
+    
+    # Lógica de lateralización
+    if not adx_values:
+        market_state = "Indeterminado"
+        grid_recommendation = "N/A"
+    elif avg_adx < 20:
+        market_state = "Ranging (Lateral)"
+        grid_recommendation = "¡Muy conveniente!"
+    elif avg_adx < 25:
+        market_state = "Consolidación"
+        grid_recommendation = "Conveniente"
+    else:
+        market_state = "Trending (Tendencia)"
+        grid_recommendation = "Evitar Grid"
+
     return {
         'total_señales': total_señales,
         'compras': compras,
@@ -179,6 +198,9 @@ def calcular_estadisticas_desde_señales(señales):
         'precio_promedio': round(precio_promedio, 4),
         'fecha_primera_señal': fecha_primera,
         'fecha_ultima_señal': fecha_ultima,
+        'avg_adx': round(avg_adx, 1),
+        'market_state': market_state,
+        'grid_recommendation': grid_recommendation,
     }
 
 

@@ -126,15 +126,17 @@
                         <a class="nav-link" href="{% url 'backtest' %}"><i class="fas fa-flask"></i> Backtesting</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'run_bot' %}"><i class="fas fa-robot"></i> Bot Trading</a>
+                        <a class="nav-link" href="{% url 'bot_dashboard' %}"><i class="fas fa-robot"></i> Live Bots</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'import_data' %}"><i class="fas fa-download"></i> Importar Datos</a>
+                        <a class="nav-link" href="{% url 'import_data' %}"><i class="fas fa-download"></i> Importar
+                            Datos</a>
                     </li>
                 </ul>
                 {% if user.is_authenticated %}
                 <div class="nav-user-section" style="display: flex; align-items: center; gap: 15px; margin-left: auto;">
-                    <span class="user-welcome" style="color: rgba(255, 255, 255, 0.95); font-size: 14px;">👋 ¡Hola, {{ user.first_name | default:user.username }}!</span>
+                    <span class="user-welcome" style="color: rgba(255, 255, 255, 0.95); font-size: 14px;">👋 ¡Hola, {{
+                        user.first_name | default:user.username }}!</span>
                     <a href="{% url 'profile' %}" class="btn btn-light btn-sm">
                         <i class="fas fa-user-circle"></i> Perfil
                     </a>
@@ -284,6 +286,19 @@
                     </div>
                 </div>
             </div>
+            <!-- Nueva tarjeta de Estado de Mercado -->
+            <div class="col-xl-2 col-md-4 mb-3">
+                <div
+                    class="card {% if stats.market_state == 'Ranging (Lateral)' %}bg-success{% elif stats.market_state == 'Consolidación' %}bg-info{% else %}bg-secondary{% endif %} text-white text-center">
+                    <div class="card-body py-3 px-1">
+                        <h6 class="card-title" style="font-size: 0.8rem;">Estado Mercado</h6>
+                        <h6 class="mb-0">{{ stats.market_state|default:"-" }}</h6>
+                        <small title="ADX < 20 = Lateral | ADX > 25 = Tendencia">
+                            Grid: <strong>{{ stats.grid_recommendation|default:"-" }}</strong>
+                        </small>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Gráfico Principal -->
@@ -349,8 +364,10 @@
                                 <td>${{ señal.price|floatformat:2 }}</td>
                                 <td>
                                     {% if señal.indicators.stop_loss and señal.indicators.take_profit %}
-                                    <small class="text-danger">SL: {{ señal.indicators.stop_loss|floatformat:2 }}</small><br>
-                                    <small class="text-success">TP: {{ señal.indicators.take_profit|floatformat:2 }}</small>
+                                    <small class="text-danger">SL: {{ señal.indicators.stop_loss|floatformat:2
+                                        }}</small><br>
+                                    <small class="text-success">TP: {{ señal.indicators.take_profit|floatformat:2
+                                        }}</small>
                                     {% else %}
                                     -
                                     {% endif %}

@@ -121,3 +121,55 @@ class Pair(models.Model):
     def __str__(self):
         return self.symbol
 
+class LiveBot(models.Model):
+    STATUS_CHOICES = [
+        ('RUNNING', 'Running'),
+        ('PAUSED', 'Paused'),
+        ('STOPPED', 'Stopped'),
+        ('ERROR', 'Error'),
+    ]
+    
+    STRATEGY_CHOICES = [
+        ('GRID', 'Grid Trading'),
+        ('DAYTRADING', 'Day Trading'),
+    ]
+
+    name = models.CharField(max_length=100)
+    pair = models.ForeignKey(TradingPair, on_delete=models.CASCADE)
+    strategy_type = models.CharField(max_length=20, choices=STRATEGY_CHOICES)
+    parameters = models.JSONField(help_text="Configuración técnica de la estrategia")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='STOPPED')
+    initial_balance = models.DecimalField(max_digits=20, decimal_places=8)
+    current_balance = models.DecimalField(max_digits=20, decimal_places=8)
+    last_error = models.TextField(null=True, blank=True, help_text="Último mensaje de error técnico")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.pair.symbol} - {self.strategy_type})"
+
+class LiveTrade(models.Model):
+    SIDE_CHOICES = [
+        ('BUY', 'Buy'),
+        ('SELL', 'Sell'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('OPEN', 'Open'),
+        ('CLOSED', 'Closed'),
+        ('CANCELED', 'Canceled'),
+    ]
+
+    bot = models.ForeignKey(LiveBot, on_delete=models.CASCADE, related_name='trades')
+    side = models.CharField(max_length=4, choices=SIDE_CHOICES)
+    entry_price = models.DecimalField(max_digits=20, decimal_places=8)
+    exit_price = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    amount = models.DecimalField(max_digits=20, decimal_places=8)
+    pnl = models.DecimalField(max_digits=20, decimal_places=8, default=0)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OPEN')
+    entry_time = models.DateTimeField(auto_now_add=True)
+    exit_time = models.DateTimeField(null=True, blank=True)
+    order_id = models.CharField(max_length=100, blank=True, null=True, help_text="ID de orden del exchange")
+
+    def __str__(self):
+        return f"{self.side} {self.amount} {self.bot.pair.symbol} at {self.entry_price}"
