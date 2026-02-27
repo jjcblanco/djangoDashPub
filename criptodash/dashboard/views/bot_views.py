@@ -66,6 +66,7 @@ def create_bot(request):
             }
 
         pair = TradingPair.objects.get(id=pair_id)
+        is_live = request.POST.get('is_live') == 'on'
         
         bot = LiveBot.objects.create(
             name=name,
@@ -74,7 +75,8 @@ def create_bot(request):
             parameters=params,
             initial_balance=Decimal(balance),
             current_balance=Decimal(balance),
-            status='STOPPED'
+            status='STOPPED',
+            is_live=is_live
         )
         
         messages.success(request, f"Bot '{name}' creado exitosamente.")
@@ -99,6 +101,11 @@ def bot_action(request, bot_id):
             bot.status = 'STOPPED'
             bot.save()
             messages.success(request, f"Bot '{bot.name}' detenido.")
+        elif action == 'clear_error':
+            bot.last_error = None
+            bot.status = 'STOPPED'
+            bot.save()
+            messages.success(request, f"Error de '{bot.name}' limpiado. Estado reseteado a STOPPED.")
         elif action == 'delete':
             bot.delete()
             messages.success(request, "Bot eliminado.")

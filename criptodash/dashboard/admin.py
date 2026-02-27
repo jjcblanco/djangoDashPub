@@ -1,37 +1,49 @@
 from django.contrib import admin
-from .models import Exchange, TradingPair, Pair, OHLCVData, TradeSignal, BacktestResult
+from .models import Exchange, TradingPair, Pair, OHLCVData, TradeSignal, BacktestResult, LiveBot, LiveTrade
 
 
 @admin.register(Exchange)
 class ExchangeAdmin(admin.ModelAdmin):
-	list_display = ('name', 'is_active')
+    list_display = ('name', 'is_active')
 
 
 @admin.register(TradingPair)
 class TradingPairAdmin(admin.ModelAdmin):
-	list_display = ('symbol', 'exchange', 'is_active')
-	search_fields = ('symbol',)
+    list_display = ('symbol', 'exchange', 'is_active')
+    search_fields = ('symbol',)
 
 
 @admin.register(Pair)
 class PairAdmin(admin.ModelAdmin):
-	list_display = ('symbol', 'pair_type', 'exchange', 'created_at')
-	search_fields = ('symbol',)
+    list_display = ('symbol', 'pair_type', 'exchange', 'created_at')
+    search_fields = ('symbol',)
 
 
 @admin.register(OHLCVData)
 class OHLCVDataAdmin(admin.ModelAdmin):
-	list_display = ('pair', 'timestamp', 'close')
-	list_filter = ('timeframe',)
+    list_display = ('pair', 'timestamp', 'close')
+    list_filter = ('timeframe',)
 
 
 @admin.register(TradeSignal)
 class TradeSignalAdmin(admin.ModelAdmin):
-	list_display = ('pair', 'pair_ref', 'timestamp', 'signal_type', 'price')
-	list_filter = ('signal_type',)
-	search_fields = ('pair__symbol', 'pair_ref__symbol')
+    list_display = ('pair', 'pair_ref', 'timestamp', 'signal_type', 'price')
+    list_filter = ('signal_type',)
+    search_fields = ('pair__symbol', 'pair_ref__symbol')
 
 
 @admin.register(BacktestResult)
 class BacktestResultAdmin(admin.ModelAdmin):
-	list_display = ('name', 'pair', 'strategy_name', 'total_return', 'created_at')
+    list_display = ('name', 'pair', 'strategy_name', 'total_return', 'created_at')
+
+
+@admin.register(LiveBot)
+class LiveBotAdmin(admin.ModelAdmin):
+    list_display = ('name', 'pair', 'strategy_type', 'status', 'is_live', 'current_balance')
+    list_filter = ('status', 'is_live', 'strategy_type')
+
+
+@admin.register(LiveTrade)
+class LiveTradeAdmin(admin.ModelAdmin):
+    list_display = ('bot', 'side', 'entry_price', 'exit_price', 'status', 'pnl')
+    list_filter = ('status', 'side')

@@ -141,6 +141,7 @@ class LiveBot(models.Model):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='STOPPED')
     initial_balance = models.DecimalField(max_digits=20, decimal_places=8)
     current_balance = models.DecimalField(max_digits=20, decimal_places=8)
+    is_live = models.BooleanField(default=False, help_text="Si es True, ejecuta órdenes reales en el exchange")
     last_error = models.TextField(null=True, blank=True, help_text="Último mensaje de error técnico")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
