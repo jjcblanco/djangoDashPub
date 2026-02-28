@@ -351,6 +351,15 @@
         <div class="row mb-4">
             <div class="col-md-3">
                 <div class="metric-card">
+                    <div class="metric-label">Total Fees Paid</div>
+                    <div class="metric-value neutral">
+                        ${{ results.total_fees|floatformat:2 }}
+                    </div>
+                    <small>Accumulated commissions</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
                     <div class="metric-label">Profit Factor</div>
                     <div class="metric-value {% if results.profit_factor > 1 %}positive{% else %}negative{% endif %}">
                         {{ results.profit_factor|floatformat:2 }}

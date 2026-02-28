@@ -43,7 +43,7 @@ binance.apiKey=config('BINANCE_APIKEY', default=None)
 binance.secret=config('BINANCE_SECRET', default=None)
 # binance.secret=config.BINANCE_SECRET
 print(binance.check_required_credentials())
-balance =binance.fetch_balance()
+# balance =binance.fetch_balance()
 #print(type(balance))
 
 #for x,y in balance['free'].items():
