@@ -71,7 +71,9 @@
             <a class="navbar-brand font-weight-bold" href="/"><i class="fas fa-robot me-2"></i>CriptoDash Live Bots</a>
             <div class="ms-auto">
                 <a href="{% url 'dashboard_nuevo' %}" class="btn btn-outline-light btn-sm me-2"><i
-                        class="fas fa-chart-line me-1"></i>Dashboard</a>
+                        class="fas fa-chart-line me-1"></i>Señales</a>
+                <a href="{% url 'range_scanner' %}" class="btn btn-outline-light btn-sm me-2"><i
+                        class="fas fa-search-dollar me-1"></i>Escanear Rango</a>
                 <a href="{% url 'backtest' %}" class="btn btn-outline-light btn-sm"><i
                         class="fas fa-flask me-1"></i>Backtest</a>
             </div>
@@ -82,7 +84,7 @@
         <div class="d-sm-flex align-items-center justify-content-between mb-4">
             <h1 class="h3 mb-0 text-gray-800">Panel de Control de Bots</h1>
             <div>
-                <button class="btn btn-sm btn-info shadow-sm me-2" onclick="updateAllBots()">
+                <button class="btn btn-sm btn-info shadow-sm me-2" onclick="updateAllBots(event)">
                     <i class="fas fa-sync-alt fa-sm text-white-50 me-1"></i> Actualizar Bots
                 </button>
                 <button class="btn btn-sm btn-primary shadow-sm" data-bs-toggle="modal"
@@ -118,8 +120,13 @@
                                         class="badge {% if data.bot.status == 'RUNNING' %}bg-success{% elif data.bot.status == 'STOPPED' %}bg-warning{% else %}bg-danger{% endif %}">
                                         {{ data.bot.status }}
                                     </span>
-                                    <span class="badge {% if data.bot.is_live %}bg-danger{% else %}bg-info text-dark{% endif %} ms-1">
-                                        {% if data.bot.is_live %}<i class="fas fa-satellite-dish me-1"></i>LIVE{% else %}<i class="fas fa-vial me-1"></i>PAPER{% endif %}
+                                    <span
+                                        class="badge {% if data.bot.is_live %}bg-danger{% else %}bg-info text-dark{% endif %} ms-1">
+                                        {% if data.bot.is_live %}
+                                        <i class="fas fa-satellite-dish me-1"></i>LIVE
+                                        {% else %}
+                                        <i class="fas fa-vial me-1"></i>PAPER
+                                        {% endif %}
                                     </span>
                                     {% if data.bot.last_error %}
                                     <div class="alert alert-danger p-2 mt-2 small" style="font-size: 0.75rem;">
@@ -161,7 +168,8 @@
                                 </button>
                                 {% endif %}
                                 {% if data.bot.last_error %}
-                                <button type="submit" name="action" value="clear_error" class="btn btn-sm btn-info" title="Limpiar Error">
+                                <button type="submit" name="action" value="clear_error" class="btn btn-sm btn-info"
+                                    title="Limpiar Error">
                                     <i class="fas fa-broom"></i>
                                 </button>
                                 {% endif %}
@@ -194,11 +202,14 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Bot / Par</th>
+                                <th>ID Orden</th>
                                 <th>Tipo</th>
+                                <th>Pr. Actual</th>
                                 <th>Precio Entrada</th>
                                 <th>Precio Salida</th>
                                 <th>Cantidad</th>
-                                <th>PnL (USD)</th>
+                                <th>Comisión (USD)</th>
+                                <th>PnL Neto (USD)</th>
                                 <th>Estado</th>
                                 <th>Fecha</th>
                             </tr>
@@ -211,15 +222,32 @@
                                     <small class="text-muted">{{ trade.bot.pair.symbol }}</small>
                                 </td>
                                 <td>
+                                    <small class="text-muted font-monospace">{{ trade.order_id|default:"-" }}</small>
+                                </td>
+                                <td>
                                     <span
                                         class="badge {% if trade.side == 'BUY' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
                                         {{ trade.side }}
                                     </span>
                                 </td>
+                                <td>
+                                    {% if trade.status == 'OPEN' and trade.current_price %}
+                                    <span
+                                        class="{% if trade.current_price >= trade.entry_price %}pnl-positive{% else %}pnl-negative{% endif %}">
+                                        ${{ trade.current_price|floatformat:4 }}
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
                                 <td>${{ trade.entry_price|floatformat:4 }}</td>
                                 <td>
                                     {% if trade.exit_price %}
                                     ${{ trade.exit_price|floatformat:4 }}
+                                    {% elif trade.status == 'OPEN' and trade.target_price %}
+                                    <span class="text-info" title="Precio Objetivo de Venta">
+                                        ${{ trade.target_price|floatformat:4 }}*
+                                    </span>
                                     {% else %}
                                     <span class="text-muted">-</span>
                                     {% endif %}
@@ -227,7 +255,17 @@
                                 <td>{{ trade.amount|floatformat:6 }}</td>
                                 <td>
                                     {% if trade.status == 'CLOSED' %}
-                                    <span class="{% if trade.pnl >= 0 %}pnl-positive{% else %}pnl-negative{% endif %}">
+                                    <span class="text-muted" title="Comisión entrada + salida (0.1% c/u)">
+                                        ${{ trade.commission|floatformat:4 }}
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted italic small">Pendiente</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if trade.status == 'CLOSED' %}
+                                    <span
+                                        class="{% if trade.pnl >= 0 %}pnl-positive{% else %}pnl-negative{% endif %} fw-bold">
                                         {% if trade.pnl >= 0 %}+{% endif %}${{ trade.pnl|floatformat:2 }}
                                     </span>
                                     {% else %}
@@ -246,7 +284,7 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="8" class="text-center py-4 text-muted">
+                                <td colspan="11" class="text-center py-4 text-muted">
                                     No hay operaciones registradas todavía. ¡Iniciá un bot y dale a 'Actualizar'!
                                 </td>
                             </tr>
@@ -283,6 +321,15 @@
                                 </select>
                             </div>
                             <div class="col-md-3">
+                                <label class="form-label">Temporalidad</label>
+                                <select name="timeframe" id="timeframeSelector" class="form-select">
+                                    <option value="15m">15m</option>
+                                    <option value="1h" selected>1h</option>
+                                    <option value="4h">4h</option>
+                                    <option value="1d">1d</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
                                 <label class="form-label">Balance (USD)</label>
                                 <input type="number" name="balance" class="form-control" required step="0.01"
                                     value="1000">
@@ -297,11 +344,14 @@
                             </div>
                             <div class="col-md-12">
                                 <div class="form-check form-switch p-3 bg-light border rounded">
-                                    <input class="form-check-input ms-0 me-2" type="checkbox" name="is_live" id="isLiveSwitch">
+                                    <input class="form-check-input ms-0 me-2" type="checkbox" name="is_live"
+                                        id="isLiveSwitch">
                                     <label class="form-check-label fw-bold text-danger" for="isLiveSwitch">
-                                        <i class="fas fa-exclamation-triangle me-1"></i> ¿EJECUTAR EN REAL? (Dinero Real)
+                                        <i class="fas fa-exclamation-triangle me-1"></i> ¿EJECUTAR EN REAL? (Dinero
+                                        Real)
                                     </label>
-                                    <div class="form-text mt-1">Si se activa, el bot enviará órdenes reales a Binance. Si se deja desactivado, funcionará como simulación.</div>
+                                    <div class="form-text mt-1">Si se activa, el bot enviará órdenes reales a Binance.
+                                        Si se deja desactivado, funcionará como simulación.</div>
                                 </div>
                             </div>
                         </div>
@@ -366,23 +416,68 @@
             document.getElementById('daytradingFields').classList.toggle('d-none', strategy !== 'DAYTRADING');
         }
 
-        async function updateAllBots() {
-            const btn = event.target.closest('button');
-            const originalHtml = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Actualizando...';
+        async function updateAllBots(e) {
+            const btn = e ? e.target.closest('button') : document.querySelector('button[onclick*="updateAllBots"]');
+            if (btn) {
+                const originalHtml = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Actualizando...';
 
-            try {
-                const response = await fetch("{% url 'trigger_bot_update' %}");
-                const data = await response.json();
-                location.reload();
-            } catch (e) {
-                console.error(e);
-                alert("Error al actualizar bots");
-                btn.disabled = false;
-                btn.innerHTML = originalHtml;
+                try {
+                    const response = await fetch("{% url 'trigger_bot_update' %}");
+                    if (!response.ok) {
+                        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                    }
+                    const data = await response.json();
+                    location.reload();
+                } catch (err) {
+                    console.error(err);
+                    alert("Error al actualizar bots: " + err.message);
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
             }
         }
+
+        // Auto-select pair and strategy from URL params (for Range Scanner)
+        document.addEventListener('DOMContentLoaded', function () {
+            const urlParams = new URLSearchParams(window.location.search);
+            const pairSymbol = urlParams.get('pair');
+            const strategy = urlParams.get('strategy');
+            const timeframe = urlParams.get('timeframe');
+            const lowerPrice = urlParams.get('lower');
+            const upperPrice = urlParams.get('upper');
+            const stopPrice = urlParams.get('stop');
+
+            if (pairSymbol || strategy || timeframe || lowerPrice || upperPrice || stopPrice) {
+                const modal = new bootstrap.Modal(document.getElementById('createBotModal'));
+
+                if (pairSymbol) {
+                    const pairSelect = document.querySelector('select[name="pair"]');
+                    const option = Array.from(pairSelect.options).find(opt => opt.text === pairSymbol);
+                    if (option) {
+                        pairSelect.value = option.value;
+                    }
+                }
+
+                if (strategy) {
+                    const stratSelect = document.getElementById('strategySelector');
+                    stratSelect.value = strategy;
+                    toggleStrategyFields();
+                }
+
+                if (timeframe) {
+                    const tfSelect = document.getElementById('timeframeSelector');
+                    if (tfSelect) tfSelect.value = timeframe;
+                }
+
+                if (lowerPrice) document.querySelector('input[name="lower_price"]').value = lowerPrice;
+                if (upperPrice) document.querySelector('input[name="upper_price"]').value = upperPrice;
+                if (stopPrice) document.querySelector('input[name="global_stop_loss"]').value = stopPrice;
+
+                modal.show();
+            }
+        });
     </script>
 </body>
 

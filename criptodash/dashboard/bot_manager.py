@@ -39,7 +39,8 @@ class BotManager:
     def update_bot(bot):
         """Ejecuta un ciclo de decisión para un bot específico."""
         # 1. Obtener datos recientes
-        df = BotManager._get_live_df(bot.pair.symbol)
+        timeframe = bot.parameters.get('timeframe', '1h')
+        df = BotManager._get_live_df(bot.pair.symbol, timeframe=timeframe)
         if df is None or df.empty:
             return {'bot_id': bot.id, 'status': 'no_data'}
 
@@ -124,8 +125,10 @@ class BotManager:
                             status='OPEN',
                             order_id=order_id
                         )
-                        # Actualizar balance del bot
-                        bot.current_balance = Decimal(str(float(bot.current_balance) - amount_per_level))
+                        # Actualizar balance del bot (Monto + 0.1% comisión)
+                        commission_rate = Decimal("0.001")
+                        buy_fee = Decimal(str(amount_per_level)) * commission_rate
+                        bot.current_balance = Decimal(str(float(bot.current_balance) - (amount_per_level + float(buy_fee))))
                         bot.save()
 
         return {'bot_id': bot.id, 'status': 'updated'}
@@ -182,27 +185,39 @@ class BotManager:
                 # como error para que el usuario intervenga.
 
         # 2. Actualizar registro local
+        # Configuración de comisión (0.1% por operación)
+        commission_rate = Decimal("0.001")
+        
+        # Calcular comisiones (entrada + salida)
+        cost_entry = trade.entry_price * trade.amount * commission_rate
+        cost_exit = Decimal(str(exit_price)) * trade.amount * commission_rate
+        total_commission = cost_entry + cost_exit
+        
+        # Calcular PnL Neto (Ganancia bruta - Comisiones totales)
+        gross_pnl = (Decimal(str(exit_price)) - trade.entry_price) * trade.amount
+        net_pnl = gross_pnl - total_commission
+        
         trade.exit_price = Decimal(str(exit_price))
         trade.exit_time = timezone.now()
         trade.status = 'CLOSED'
-        
-        # Simplificamos comisión al 0.1%
-        pnl = (Decimal(str(exit_price)) - trade.entry_price) * trade.amount
-        trade.pnl = pnl
+        trade.commission = total_commission
+        trade.pnl = net_pnl
         trade.save()
         
-        revenue = trade.amount * Decimal(str(exit_price)) * Decimal("0.999")
+        # El balance se actualiza con el revenue neto (Venta - Comisión de salida)
+        revenue = (trade.amount * Decimal(str(exit_price))) - cost_exit
         bot.current_balance = Decimal(str(float(bot.current_balance) + float(revenue)))
         bot.save()
 
     @staticmethod
-    def _get_live_df(symbol):
+    def _get_live_df(symbol, timeframe='1h'):
         """Obtiene las últimas velas para análisis en vivo."""
         try:
-            bars = historical_fetch_ohlcv(symbol, timeframe='1h', limit=100)
+            bars = historical_fetch_ohlcv(symbol, timeframe=timeframe, limit=100)
             if not bars: return None
             df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             return df
-        except Exception:
+        except Exception as e:
+            print(f"Error _get_live_df for {symbol} ({timeframe}): {e}")
             return None

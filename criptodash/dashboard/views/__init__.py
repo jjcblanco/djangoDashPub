@@ -9,7 +9,8 @@ Los imports están expuestos aquí para mantener compatibilidad con el código e
 from .dashboard_views import (
     index,
     technical_analysis,
-    dashboard_mejorado
+    dashboard_mejorado,
+    range_scanner
 )
 
 # Importar vistas de trading
@@ -33,17 +34,22 @@ from .bot_views import (
 from .data_views import import_data
 
 # Importar API views
-from .api_views import run_bot_api, get_pairs
+from .api_views import (
+    LiveBotViewSet,
+    LiveTradeViewSet,
+    TradingPairViewSet,
+    CustomObtainAuthToken
+)
 
 # Importar Dash app
 from .dash_app import app
 
 # Exportar todas las vistas para compatibilidad con urls.py
 __all__ = [
-    # Dashboard views
     'index',
     'technical_analysis',
     'dashboard_mejorado',
+    'range_scanner',
     
     # Trading views
     'ejecutar_analisis_trading',
@@ -56,8 +62,11 @@ __all__ = [
     'import_data',
     
     # API views
-    'run_bot_api',
-    'get_pairs',
+    # API views
+    'LiveBotViewSet',
+    'LiveTradeViewSet',
+    'TradingPairViewSet',
+    'CustomObtainAuthToken',
     
     # Bot views
     'bot_dashboard',

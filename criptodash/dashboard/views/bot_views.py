@@ -11,6 +11,8 @@ from decimal import Decimal
 @login_required
 def bot_dashboard(request):
     """Vista principal para gestionar bots."""
+    from ..ccxttest1 import binance as exchange
+    
     bots = LiveBot.objects.all().order_by('-created_at')
     available_pairs = TradingPair.objects.filter(is_active=True)
     
@@ -29,7 +31,38 @@ def bot_dashboard(request):
         })
 
     # Obtener las últimas 50 operaciones globales para el historial
-    recent_trades = LiveTrade.objects.all().order_by('-entry_time')[:50]
+    recent_trades = list(LiveTrade.objects.all().order_by('-entry_time')[:50])
+    
+    # Obtener precios actuales para los símbolos involucrados
+    symbols = list(set([t.bot.pair.symbol for t in recent_trades if t.status == 'OPEN']))
+    current_prices = {}
+    if symbols:
+        try:
+            # Añadir un timeout corto para no colgar la vista principal
+            exchange.timeout = 5000  # 5 segundos
+            tickers = exchange.fetch_tickers(symbols)
+            current_prices = {s: tickers[s]['last'] for s in symbols if s in tickers}
+        except Exception as e:
+            print(f"Error fetching tickers in dashboard: {e}")
+
+    # Enriquecer trades para la vista
+    for trade in recent_trades:
+        if trade.status == 'OPEN':
+            symbol = trade.bot.pair.symbol
+            trade.current_price = current_prices.get(symbol)
+            
+            # Calcular precio objetivo para Grid
+            if trade.bot.strategy_type == 'GRID':
+                params = trade.bot.parameters
+                try:
+                    upper = float(params.get('upper_price', 0))
+                    lower = float(params.get('lower_price', 0))
+                    levels = int(params.get('grid_levels', 2))
+                    if levels > 1:
+                        grid_step = (upper - lower) / (levels - 1)
+                        trade.target_price = float(trade.entry_price) + grid_step
+                except (ValueError, TypeError):
+                    trade.target_price = None
 
     context = {
         'bots_data': bots_data,
@@ -48,9 +81,10 @@ def create_bot(request):
         pair_id = request.POST.get('pair')
         strategy_type = request.POST.get('strategy_type')
         balance = request.POST.get('balance')
+        timeframe = request.POST.get('timeframe', '1h')
         
         # Extraer parámetros dinámicos según estrategia
-        params = {}
+        params = {'timeframe': timeframe}
         if strategy_type == 'GRID':
             params = {
                 'upper_price': request.POST.get('upper_price'),
@@ -118,5 +152,17 @@ def bot_action(request, bot_id):
 @login_required
 def trigger_bot_update(request):
     """Fuerza una actualización de todos los bots activos."""
-    results = BotManager.update_all_active_bots()
-    return JsonResponse({'status': 'ok', 'updated_count': len(results), 'results': results})
+    try:
+        print(f"DEBUG: Iniciando actualización manual de bots para usuario {request.user}")
+        results = BotManager.update_all_active_bots()
+        print(f"DEBUG: Actualización completada. Bots procesados: {len(results)}")
+        return JsonResponse({
+            'status': 'ok', 
+            'updated_count': len(results), 
+            'results': results
+        })
+    except Exception as e:
+        print(f"ERROR en trigger_bot_update: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

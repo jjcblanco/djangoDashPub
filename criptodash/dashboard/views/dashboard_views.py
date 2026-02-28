@@ -13,6 +13,7 @@ from ..data_service import calcular_estadisticas_desde_señales, generar_grafico
 from django.utils import timezone
 from datetime import datetime, timedelta
 from .. import ccxttest1
+import pandas as pd
 
 
 def index(request):
@@ -199,3 +200,52 @@ def dashboard_mejorado(request):
     }
     
     return render(request, 'dashboard/dashboard_mejorado.html', context)
+@login_required
+def range_scanner(request):
+    """Escanea múltiples pares de trading para encontrar mercados lateralizados."""
+    from ..range_finder import calculate_range_score
+    import concurrent.futures
+    
+    # 1. Obtener lista de pares populares a escanear
+    # Por ahora escaneamos los top 15 por volumen real o seleccionados
+    popular_symbols = [
+        'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'ADA/USDT', 
+        'XRP/USDT', 'DOT/USDT', 'MATIC/USDT', 'LINK/USDT', 'AVA/USDT',
+        'LTC/USDT', 'BCH/USDT', 'ATOM/USDT', 'ETC/USDT', 'UNI/USDT'
+    ]
+    
+    timeframe = request.GET.get('timeframe', '1h')
+    results = []
+
+    def scan_symbol(symbol):
+        try:
+            bars = ccxttest1.historical_fetch_ohlcv(symbol, timeframe=timeframe, limit=100)
+            if not bars: return None
+            df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            score, details = calculate_range_score(df)
+            return {
+                'symbol': symbol,
+                'score': score,
+                'details': details
+            }
+        except Exception as e:
+            print(f"Error scanning {symbol}: {e}")
+            return None
+
+    # Escaneo en paralelo (max 5 hilos para no saturar API)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_symbol = {executor.submit(scan_symbol, s): s for s in popular_symbols}
+        for future in concurrent.futures.as_completed(future_to_symbol):
+            res = future.result()
+            if res:
+                results.append(res)
+    
+    # Ordenar por puntuación descendente
+    results.sort(key=lambda x: x['score'], reverse=True)
+    
+    context = {
+        'results': results,
+        'timeframe': timeframe,
+        'page_title': 'Escáner de Rango (Grid Finder)',
+    }
+    return render(request, 'dashboard/range_scanner.html', context)

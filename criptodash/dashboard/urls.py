@@ -1,6 +1,13 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from . import views
 from . import auth_views
+from .views import api_views
+
+router = DefaultRouter()
+router.register(r'bots', api_views.LiveBotViewSet, basename='api_bots')
+router.register(r'trades', api_views.LiveTradeViewSet, basename='api_trades')
+router.register(r'trading-pairs', api_views.TradingPairViewSet, basename='api_trading_pairs')
 
 urlpatterns = [
     path('', views.index, name='dashboard_index'),
@@ -13,13 +20,16 @@ urlpatterns = [
     path('import-data/', views.import_data, name='import_data'),
     path('ejecutar-analisis/', views.ejecutar_analisis_trading, name='ejecutar_analisis'),
     path('nuevo/', views.dashboard_mejorado, name='dashboard_nuevo'),
-    path('api/run-bot/', views.run_bot_api, name='run_bot_api'),
-    path('api/pairs/', views.get_pairs, name='api_pairs'),
     path('backtest/', views.backtest_view, name='backtest'),
+    path('range-scanner/', views.range_scanner, name='range_scanner'),
     
     # Bot Management URLs
     path('bots/', views.bot_dashboard, name='bot_dashboard'),
     path('bots/create/', views.create_bot, name='create_bot'),
     path('bots/action/<int:bot_id>/', views.bot_action, name='bot_action'),
     path('bots/update/', views.trigger_bot_update, name='trigger_bot_update'),
+
+    # REST API V1
+    path('api/v1/', include(router.urls)),
+    path('api/v1/token/', api_views.CustomObtainAuthToken.as_view(), name='api_token'),
 ]

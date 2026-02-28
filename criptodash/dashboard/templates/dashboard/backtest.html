@@ -308,9 +308,22 @@
                                     <label for="commission" class="form-label">
                                         <i class="fas fa-percentage"></i> Commission Rate
                                     </label>
-                                    <input type="number" class="form-control" id="commission" name="commission"
-                                        value="0.001" step="0.0001" min="0" max="0.1" required>
-                                    <small class="text-muted">Default: 0.001 (0.1%)</small>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="commission" name="commission"
+                                            value="0.001" step="0.0001" min="0" max="0.1" required>
+                                        <select class="form-select" id="fee_preset" onchange="applyFeePreset()"
+                                            style="max-width: 150px;">
+                                            <option value="">Presets...</option>
+                                            <option value="0.001">Binance Std (0.1%)</option>
+                                            <option value="0.00075">Binance BNB (0.075%)</option>
+                                            <option value="0.0005">Binance VIP1 (0.05%)</option>
+                                            <option value="0.0">No Fees (0%)</option>
+                                        </select>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">
+                                        <i class="fas fa-info-circle"></i>
+                                        Standard: 0.1% (0.001) | BNB Discount: 0.075% (0.00075)
+                                    </small>
                                 </div>
                             </div>
 
@@ -481,6 +494,13 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        function applyFeePreset() {
+            const preset = document.getElementById('fee_preset').value;
+            if (preset !== "") {
+                document.getElementById('commission').value = preset;
+            }
+        }
+
         function toggleStrategyFields() {
             const strategy = document.getElementById('strategy').value;
             const gridParams = document.getElementById('grid-params');

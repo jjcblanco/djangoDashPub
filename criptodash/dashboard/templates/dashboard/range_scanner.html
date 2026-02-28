@@ -1,0 +1,181 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }} - CriptoDash</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4e73df;
+            --secondary: #858796;
+            --success: #1cc88a;
+            --info: #36b9cc;
+            --warning: #f6c23e;
+            --danger: #e74a3b;
+        }
+
+        body {
+            background-color: #f8f9fc;
+            font-family: 'Nunito', sans-serif;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+        }
+
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        }
+
+        .score-badge {
+            font-size: 1.2rem;
+            font-weight: bold;
+            padding: 10px 15px;
+            border-radius: 50px;
+        }
+
+        .high-range {
+            background-color: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .mid-range {
+            background-color: #fff3cd;
+            color: #664d03;
+        }
+
+        .low-range {
+            background-color: #f8d7da;
+            color: #842029;
+        }
+
+        .progress {
+            height: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand font-weight-bold" href="/"><i class="fas fa-robot me-2"></i>CriptoDash Scanner</a>
+            <div class="ms-auto">
+                <a href="{% url 'bot_dashboard' %}" class="btn btn-outline-light btn-sm me-2"><i
+                        class="fas fa-th me-1"></i>Bots</a>
+                <a href="{% url 'dashboard_nuevo' %}" class="btn btn-outline-light btn-sm me-2"><i
+                        class="fas fa-chart-line me-1"></i>Señales</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="d-sm-flex align-items-center justify-content-between mb-4">
+            <h1 class="h3 mb-0 text-gray-800">Buscador de Mercados Laterales</h1>
+            <div class="d-flex align-items-center">
+                <form method="GET" class="d-flex align-items-center me-3">
+                    <label class="me-2 text-muted fw-bold">Temporalidad:</label>
+                    <select name="timeframe" class="form-select form-select-sm shadow-sm" style="width: 100px;"
+                        onchange="this.form.submit()">
+                        <option value="15m" {% if timeframe == '15m' %}selected{% endif %}>15m</option>
+                        <option value="1h" {% if timeframe == '1h' %}selected{% endif %}>1h</option>
+                        <option value="4h" {% if timeframe == '4h' %}selected{% endif %}>4h</option>
+                        <option value="1d" {% if timeframe == '1d' %}selected{% endif %}>1d</option>
+                    </select>
+                </form>
+                <span class="badge bg-secondary p-2">Analizado: {{ timeframe }}</span>
+            </div>
+        </div>
+
+        <div class="alert alert-info shadow-sm">
+            <i class="fas fa-info-circle me-2"></i>
+            Este escáner identifica monedas que no tienen una tendencia clara (ADX bajo) y cuya volatilidad está
+            comprimida.
+            <strong>Ideal para estrategias de GRID Trading.</strong>
+        </div>
+
+        <div class="row">
+            {% for res in results %}
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card h-100 hvr-float">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <h5 class="card-title fw-bold mb-0">{{ res.symbol }}</h5>
+                                <small class="text-muted">Rango detectado</small>
+                            </div>
+                            <div
+                                class="score-badge {% if res.score > 70 %}high-range{% elif res.score > 40 %}mid-range{% else %}low-range{% endif %}">
+                                {{ res.score }}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <small>ADX (Fuerza Tendencia)</small>
+                                <small class="fw-bold">{{ res.details.adx }}</small>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar {% if res.details.adx < 25 %}bg-success{% else %}bg-danger{% endif %}"
+                                    role="progressbar"
+                                    style="width: {{ res.details.adx_score|add:res.details.adx_score }}%"></div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <small>Variación Reciente (24h)</small>
+                                <small class="fw-bold">{{ res.details.variation_pct }}%</small>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar bg-info" role="progressbar"
+                                    style="width: {{ res.details.price_score|add:res.details.price_score }}%"></div>
+                            </div>
+                        </div>
+
+                        <div class="mt-3 p-2 bg-light rounded border">
+                            <small class="d-block text-muted fw-bold mb-1"><i class="fas fa-magic me-1"></i> Guía de
+                                GRID sugerida:</small>
+                            <div class="row text-center g-0">
+                                <div class="col-4 border-end">
+                                    <small class="d-block text-xs">Mínimo</small>
+                                    <span class="fw-bold text-danger">{{ res.details.suggested_lower }}</span>
+                                </div>
+                                <div class="col-4 border-end">
+                                    <small class="d-block text-xs">Máximo</small>
+                                    <span class="fw-bold text-success">{{ res.details.suggested_upper }}</span>
+                                </div>
+                                <div class="col-4">
+                                    <small class="d-block text-xs">Escape</small>
+                                    <span class="fw-bold text-dark">{{ res.details.suggested_stop_loss }}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 mt-3">
+                            <a href="{% url 'bot_dashboard' %}?pair={{ res.symbol }}&strategy=GRID&timeframe={{ timeframe }}&lower={{ res.details.suggested_lower }}&upper={{ res.details.suggested_upper }}&stop={{ res.details.suggested_stop_loss }}"
+                                class="btn btn-primary btn-sm">
+                                <i class="fas fa-plus-circle me-1"></i> Lanzar Grid Bot
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12 text-center py-5">
+                <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                <p class="lead">No se encontraron resultados. Intenta refrescar.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
