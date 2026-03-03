@@ -125,6 +125,7 @@ class LiveBot(models.Model):
     STATUS_CHOICES = [
         ('RUNNING', 'Running'),
         ('PAUSED', 'Paused'),
+        ('CLOSE_ONLY', 'Close Only'),
         ('STOPPED', 'Stopped'),
         ('ERROR', 'Error'),
     ]
@@ -156,7 +157,8 @@ class LiveTrade(models.Model):
     ]
     
     STATUS_CHOICES = [
-        ('OPEN', 'Open'),
+        ('WAITING', 'Waiting (Limit Buy)'),
+        ('OPEN', 'Open (Position)'),
         ('CLOSED', 'Closed'),
         ('CANCELED', 'Canceled'),
     ]
@@ -171,7 +173,11 @@ class LiveTrade(models.Model):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OPEN')
     entry_time = models.DateTimeField(auto_now_add=True)
     exit_time = models.DateTimeField(null=True, blank=True)
-    order_id = models.CharField(max_length=100, blank=True, null=True, help_text="ID de orden del exchange")
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    stop_loss = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    take_profit = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    order_id = models.CharField(max_length=100, blank=True, null=True, help_text="ID de orden de entrada (Buy)")
+    exit_order_id = models.CharField(max_length=100, blank=True, null=True, help_text="ID de orden de salida (Sell/TP)")
 
     def __str__(self):
         return f"{self.side} {self.amount} {self.bot.pair.symbol} at {self.entry_price}"

@@ -66,6 +66,8 @@
         <div class="container">
             <a class="navbar-brand font-weight-bold" href="/"><i class="fas fa-robot me-2"></i>CriptoDash Scanner</a>
             <div class="ms-auto">
+                <a href="{% url 'trend_scanner' %}" class="btn btn-outline-light btn-sm me-2"><i
+                        class="fas fa-chart-line me-1"></i>Tendencias</a>
                 <a href="{% url 'bot_dashboard' %}" class="btn btn-outline-light btn-sm me-2"><i
                         class="fas fa-th me-1"></i>Bots</a>
                 <a href="{% url 'dashboard_nuevo' %}" class="btn btn-outline-light btn-sm me-2"><i
@@ -82,10 +84,10 @@
                     <label class="me-2 text-muted fw-bold">Temporalidad:</label>
                     <select name="timeframe" class="form-select form-select-sm shadow-sm" style="width: 100px;"
                         onchange="this.form.submit()">
-                        <option value="15m" {% if timeframe == '15m' %}selected{% endif %}>15m</option>
-                        <option value="1h" {% if timeframe == '1h' %}selected{% endif %}>1h</option>
-                        <option value="4h" {% if timeframe == '4h' %}selected{% endif %}>4h</option>
-                        <option value="1d" {% if timeframe == '1d' %}selected{% endif %}>1d</option>
+                        <option value="15m" {% if timeframe=='15m' %}selected{% endif %}>15m</option>
+                        <option value="1h" {% if timeframe=='1h' %}selected{% endif %}>1h</option>
+                        <option value="4h" {% if timeframe=='4h' %}selected{% endif %}>4h</option>
+                        <option value="1d" {% if timeframe=='1d' %}selected{% endif %}>1d</option>
                     </select>
                 </form>
                 <span class="badge bg-secondary p-2">Analizado: {{ timeframe }}</span>

@@ -10,7 +10,8 @@ from .dashboard_views import (
     index,
     technical_analysis,
     dashboard_mejorado,
-    range_scanner
+    range_scanner,
+    trend_scanner
 )
 
 # Importar vistas de trading
@@ -50,6 +51,7 @@ __all__ = [
     'technical_analysis',
     'dashboard_mejorado',
     'range_scanner',
+    'trend_scanner',
     
     # Trading views
     'ejecutar_analisis_trading',
