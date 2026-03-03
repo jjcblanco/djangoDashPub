@@ -22,6 +22,7 @@ urlpatterns = [
     path('nuevo/', views.dashboard_mejorado, name='dashboard_nuevo'),
     path('backtest/', views.backtest_view, name='backtest'),
     path('range-scanner/', views.range_scanner, name='range_scanner'),
+    path('trend-scanner/', views.trend_scanner, name='trend_scanner'),
     
     # Bot Management URLs
     path('bots/', views.bot_dashboard, name='bot_dashboard'),

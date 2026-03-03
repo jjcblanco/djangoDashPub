@@ -21,14 +21,26 @@ def bot_dashboard(request):
     for bot in bots:
         trades = LiveTrade.objects.filter(bot=bot)
         total_pnl = sum(t.pnl for t in trades)
-        active_trades = trades.filter(status='OPEN').count()
+        active_trades_query = trades.filter(status='OPEN')
+        active_trades_count = active_trades_query.count()
+        
+        # Calcular Break-even (Precio promedio de entrada de lo que está abierto)
+        total_qty = sum(t.amount for t in active_trades_query)
+        total_cost = sum(t.amount * t.entry_price for t in active_trades_query)
+        break_even = float(total_cost / total_qty) if total_qty > 0 else None
         
         bots_data.append({
             'bot': bot,
             'total_pnl': total_pnl,
-            'active_trades': active_trades,
+            'active_trades': active_trades_count,
+            'break_even': break_even,
             'profit_pct': (total_pnl / bot.initial_balance * 100) if bot.initial_balance > 0 else 0
         })
+
+    # Calcular métricas globales
+    global_invested = sum(b.initial_balance for b in bots)
+    global_pnl = sum(d['total_pnl'] for d in bots_data)
+    global_roi = (global_pnl / global_invested * 100) if global_invested > 0 else 0
 
     # Obtener las últimas 50 operaciones globales para el historial
     recent_trades = list(LiveTrade.objects.all().order_by('-entry_time')[:50])
@@ -64,11 +76,29 @@ def bot_dashboard(request):
                 except (ValueError, TypeError):
                     trade.target_price = None
 
+    # Obtener balance real de Binance
+    exchange_balance = None
+    try:
+        bal = exchange.fetch_balance()
+        exchange_balance = {
+            'free': bal['free'].get('USDT', 0),
+            'total': bal['total'].get('USDT', 0),
+            'used': bal['used'].get('USDT', 0)
+        }
+    except Exception as e:
+        print(f"Error fetching balance: {e}")
+
     context = {
         'bots_data': bots_data,
         'recent_trades': recent_trades,
         'available_pairs': available_pairs,
-        'strategy_types': LiveBot.STRATEGY_CHOICES
+        'strategy_types': LiveBot.STRATEGY_CHOICES,
+        'exchange_balance': exchange_balance,
+        'global_metrics': {
+            'invested': global_invested,
+            'pnl': global_pnl,
+            'roi': global_roi
+        }
     }
     return render(request, 'dashboard/bot_dashboard.html', context)
 
@@ -92,6 +122,7 @@ def create_bot(request):
                 'grid_levels': request.POST.get('grid_levels'),
                 'amount_per_level': request.POST.get('amount_per_level'),
                 'global_stop_loss': request.POST.get('global_stop_loss'),
+                'trailing_enabled': request.POST.get('trailing_enabled') == 'on',
             }
         elif strategy_type == 'DAYTRADING':
             params = {
@@ -135,6 +166,10 @@ def bot_action(request, bot_id):
             bot.status = 'STOPPED'
             bot.save()
             messages.success(request, f"Bot '{bot.name}' detenido.")
+        elif action == 'close_only':
+            bot.status = 'CLOSE_ONLY'
+            bot.save()
+            messages.info(request, f"Bot '{bot.name}' en modo SOLO CIERRE (Se venderá lo abierto, no se comprará más).")
         elif action == 'clear_error':
             bot.last_error = None
             bot.status = 'STOPPED'

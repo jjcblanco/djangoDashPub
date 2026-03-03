@@ -8,6 +8,8 @@
     <title>CriptoDash - Gestión de Bots</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- DataTables CSS -->
+    <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <style>
         :root {
             --primary: #4e73df;
@@ -43,7 +45,7 @@
             border-left: 0.25rem solid var(--primary) !important;
         }
 
-        .bot-card-daytraining {
+        .bot-card-daytrading {
             border-left: 0.25rem solid var(--success) !important;
         }
 
@@ -83,14 +85,121 @@
     <div class="container shadow-sm p-4 bg-white rounded-3">
         <div class="d-sm-flex align-items-center justify-content-between mb-4">
             <h1 class="h3 mb-0 text-gray-800">Panel de Control de Bots</h1>
-            <div>
-                <button class="btn btn-sm btn-info shadow-sm me-2" onclick="updateAllBots(event)">
-                    <i class="fas fa-sync-alt fa-sm text-white-50 me-1"></i> Actualizar Bots
-                </button>
-                <button class="btn btn-sm btn-primary shadow-sm" data-bs-toggle="modal"
+            <div class="col-auto">
+                <a href="{% url 'range_scanner' %}" class="btn btn-outline-primary btn-sm me-2">
+                    <i class="fas fa-bullseye me-1"></i> Escáner de Rango
+                </a>
+                <a href="{% url 'trend_scanner' %}" class="btn btn-outline-primary btn-sm me-2">
+                    <i class="fas fa-chart-line me-1"></i> Escáner de Tendencia
+                </a>
+                <a href="{% url 'trigger_bot_update' %}" class="btn btn-primary btn-sm me-2 shadow-sm">
+                    <i class="fas fa-sync-alt me-1"></i> Actualizar Bots
+                </a>
+                <button type="button" class="btn btn-success btn-sm shadow-sm" data-bs-toggle="modal"
                     data-bs-target="#createBotModal">
-                    <i class="fas fa-plus fa-sm text-white-50 me-1"></i> Nuevo Bot
+                    <i class="fas fa-plus me-1"></i> Nuevo Bot
                 </button>
+            </div>
+        </div>
+
+        <!-- Balance real de Binance -->
+        {% if exchange_balance %}
+        <div class="row mb-4">
+            <div class="col-md-4 col-lg-3">
+                <div class="card bg-primary text-white p-3 mb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="rounded-circle bg-white text-primary p-3 me-3">
+                            <i class="fas fa-wallet"></i>
+                        </div>
+                        <div>
+                            <small class="text-white-50">USDT Total (Binance)</small>
+                            <h4 class="mb-0">${{ exchange_balance.total|floatformat:2 }}</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 col-lg-3">
+                <div
+                    class="card {% if exchange_balance.free < 10 %}bg-warning{% else %}bg-success{% endif %} text-white p-3 mb-3">
+                    <div class="d-flex align-items-center">
+                        <div
+                            class="rounded-circle bg-white {% if exchange_balance.free < 10 %}text-warning{% else %}text-success{% endif %} p-3 me-3">
+                            <i class="fas fa-unlock"></i>
+                        </div>
+                        <div>
+                            <small class="text-white-50">USDT Libre (Disponible)</small>
+                            <h4 class="mb-0">${{ exchange_balance.free|floatformat:2 }}</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% if exchange_balance.used > 0 %}
+            <div class="col-md-4 col-lg-3">
+                <div class="card bg-info text-white p-3 mb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="rounded-circle bg-white text-info p-3 me-3">
+                            <i class="fas fa-lock"></i>
+                        </div>
+                        <div>
+                            <small class="text-white-50">USDT Bloqueado</small>
+                            <h4 class="mb-0">${{ exchange_balance.used|floatformat:2 }}</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Resumen de Rendimiento Global -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card bg-white border-start border-primary border-4 p-3 mb-3 h-100">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase fw-bold">Inversión Total</small>
+                            <h4 class="mb-0 text-primary">${{ global_metrics.invested|floatformat:2 }}</h4>
+                        </div>
+                        <div class="text-primary opacity-50">
+                            <i class="fas fa-coins fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div
+                    class="card bg-white border-start {% if global_metrics.pnl >= 0 %}border-success{% else %}border-danger{% endif %} border-4 p-3 mb-3 h-100">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase fw-bold">Ganancia/Pérdida Total</small>
+                            <h4
+                                class="mb-0 {% if global_metrics.pnl >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                ${{ global_metrics.pnl|floatformat:2 }}
+                            </h4>
+                        </div>
+                        <div
+                            class="{% if global_metrics.pnl >= 0 %}text-success{% else %}text-danger{% endif %} opacity-50">
+                            <i class="fas fa-hand-holding-usd fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div
+                    class="card bg-white border-start {% if global_metrics.roi >= 0 %}border-info{% else %}border-warning{% endif %} border-4 p-3 mb-3 h-100">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase fw-bold">ROI Global</small>
+                            <h4 class="mb-0 {% if global_metrics.roi >= 0 %}text-info{% else %}text-warning{% endif %}">
+                                {{ global_metrics.roi|floatformat:2 }}%
+                            </h4>
+                        </div>
+                        <div
+                            class="{% if global_metrics.roi >= 0 %}text-info{% else %}text-warning{% endif %} opacity-50">
+                            <i class="fas fa-percentage fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -107,7 +216,7 @@
             {% for data in bots_data %}
             <div class="col-xl-4 col-md-6 mb-4">
                 <div
-                    class="card h-100 py-2 {% if data.bot.strategy_type == 'GRID' %}bot-card-grid{% else %}bot-card-daytraining{% endif %}">
+                    class="card h-100 py-2 {% if data.bot.strategy_type == 'GRID' %}bot-card-grid{% else %}bot-card-daytrading{% endif %}">
                     <div class="card-body">
                         <div class="row no-gutters align-items-center">
                             <div class="col mr-2">
@@ -137,18 +246,36 @@
                                     <small class="text-muted ms-2">Balance: ${{ data.bot.current_balance|floatformat:2 }}</small>
                                 </div>
                                 <div class="row mt-3">
-                                    <div class="col-6">
+                                    <div class="col-4">
                                         <small class="text-muted d-block">PnL Tot:</small>
                                         <span
-                                            class="{% if data.total_pnl >= 0 %}pnl-positive{% else %}pnl-negative{% endif %}">
-                                            ${{ data.total_pnl|floatformat:2 }} ({{ data.profit_pct|floatformat:2 }}%)
+                                            class="{% if data.total_pnl >= 0 %}pnl-positive{% else %}pnl-negative{% endif %}"
+                                            style="font-size: 0.9rem;">
+                                            ${{ data.total_pnl|floatformat:2 }}
                                         </span>
                                     </div>
-                                    <div class="col-6">
-                                        <small class="text-muted d-block">Trades Act:</small>
-                                        <span class="fw-bold">{{ data.active_trades }}</span>
+                                    <div class="col-4">
+                                        <small class="text-muted d-block">ROI:</small>
+                                        <span class="fw-bold" style="font-size: 0.9rem;">{{ data.profit_pct|floatformat:2 }}%</span>
+                                    </div>
+                                    <div class="col-4">
+                                        <small class="text-muted d-block">Actv:</small>
+                                        <span class="fw-bold" style="font-size: 0.9rem;">{{ data.active_trades }}</span>
                                     </div>
                                 </div>
+                                <div class="mt-2 pt-2 border-top border-light d-flex justify-content-between">
+                                    <small class="text-muted"><i class="fas fa-clock me-1"></i>Corriendo hace:</small>
+                                    <span class="text-dark fw-bold small">{{ data.bot.created_at|timesince }}</span>
+                                </div>
+                                {% if data.break_even %}
+                                <div class="mt-2 pt-2 border-top border-light">
+                                    <small class="text-muted">Break-even:</small>
+                                    <span class="text-primary fw-bold"
+                                        title="Precio promedio de entrada de lo que está abierto">
+                                        ${{ data.break_even|floatformat:4 }}
+                                    </span>
+                                </div>
+                                {% endif %}
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-robot fa-2x text-gray-300"></i>
@@ -159,11 +286,19 @@
                             <form action="{% url 'bot_action' data.bot.id %}" method="POST">
                                 {% csrf_token %}
                                 {% if data.bot.status != 'RUNNING' %}
-                                <button type="submit" name="action" value="start" class="btn btn-sm btn-success">
+                                <button type="submit" name="action" value="start" class="btn btn-sm btn-success"
+                                    title="Iniciar/Reactivar">
                                     <i class="fas fa-play"></i>
                                 </button>
-                                {% else %}
-                                <button type="submit" name="action" value="stop" class="btn btn-sm btn-warning">
+                                {% endif %}
+
+                                {% if data.bot.status == 'RUNNING' %}
+                                <button type="submit" name="action" value="close_only" class="btn btn-sm btn-info"
+                                    title="Solo Cerrar (No comprar más)">
+                                    <i class="fas fa-sign-out-alt"></i>
+                                </button>
+                                <button type="submit" name="action" value="stop" class="btn btn-sm btn-warning"
+                                    title="Pausar Bot">
                                     <i class="fas fa-pause"></i>
                                 </button>
                                 {% endif %}
@@ -198,7 +333,7 @@
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle" style="color: #333;">
+                    <table id="activityTable" class="table table-hover align-middle" style="color: #333;">
                         <thead class="table-light">
                             <tr>
                                 <th>Bot / Par</th>
@@ -212,6 +347,7 @@
                                 <th>PnL Neto (USD)</th>
                                 <th>Estado</th>
                                 <th>Fecha</th>
+                                <th>Actualizado</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -273,13 +409,27 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <span
-                                        class="badge {% if trade.status == 'OPEN' %}bg-success{% elif trade.status == 'CLOSED' %}bg-dark{% else %}bg-warning text-dark{% endif %}">
-                                        {{ trade.status }}
+                                    {% if trade.status == 'WAITING' %}
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="fas fa-clock me-1"></i>WAIT BUY
                                     </span>
+                                    {% elif trade.status == 'OPEN' %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-shopping-cart me-1"></i>WAIT SELL
+                                    </span>
+                                    {% elif trade.status == 'CLOSED' %}
+                                    <span class="badge bg-dark">CLOSED</span>
+                                    {% elif trade.status == 'CANCELED' %}
+                                    <span class="badge bg-danger">CANCELED</span>
+                                    {% else %}
+                                    <span class="badge bg-light text-dark">{{ trade.status }}</span>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     <small class="text-muted">{{ trade.entry_time|date:"d/m H:i" }}</small>
+                                </td>
+                                <td>
+                                    <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i" }}</small>
                                 </td>
                             </tr>
                             {% empty %}
@@ -380,6 +530,18 @@
                                     <label class="form-label">Stop Loss Global (Precio)</label>
                                     <input type="number" name="global_stop_loss" class="form-control" step="0.0001">
                                 </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch mt-2">
+                                        <input class="form-check-input" type="checkbox" name="trailing_enabled"
+                                            id="trailingCheck">
+                                        <label class="form-check-label fw-bold text-primary" for="trailingCheck">
+                                            <i class="fas fa-arrows-up-down-left-right me-1"></i> ACTIVAR TRAILING
+                                            (Seguir Precio)
+                                        </label>
+                                        <div class="form-text">Si se activa, el rango de la malla subirá automáticamente
+                                            si el precio supera el límite superior.</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -408,8 +570,26 @@
         </div>
     </div>
 
+    <!-- jQuery y DataTables JS -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
     <script>
+        // Inicializar DataTables en español
+        $(document).ready(function () {
+            $('#activityTable').DataTable({
+                "order": [[11, "desc"]], // Ordenar por 'Actualizado' por defecto
+                "pageLength": 10,
+                "language": {
+                    "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json"
+                },
+                "columnDefs": [
+                    { "orderable": false, "targets": [1] } // El ID de orden no suele ser útil para ordenar
+                ]
+            });
+        });
         function toggleStrategyFields() {
             const strategy = document.getElementById('strategySelector').value;
             document.getElementById('gridFields').classList.toggle('d-none', strategy !== 'GRID');
@@ -449,7 +629,10 @@
             const upperPrice = urlParams.get('upper');
             const stopPrice = urlParams.get('stop');
 
-            if (pairSymbol || strategy || timeframe || lowerPrice || upperPrice || stopPrice) {
+            const minAdx = urlParams.get('min_adx');
+            const minStrength = urlParams.get('min_strength');
+
+            if (pairSymbol || strategy || timeframe || lowerPrice || upperPrice || stopPrice || minAdx || minStrength) {
                 const modal = new bootstrap.Modal(document.getElementById('createBotModal'));
 
                 if (pairSymbol) {
@@ -474,6 +657,15 @@
                 if (lowerPrice) document.querySelector('input[name="lower_price"]').value = lowerPrice;
                 if (upperPrice) document.querySelector('input[name="upper_price"]').value = upperPrice;
                 if (stopPrice) document.querySelector('input[name="global_stop_loss"]').value = stopPrice;
+
+                if (minAdx) {
+                    const adxInput = document.querySelector('input[name="min_adx"]');
+                    if (adxInput) adxInput.value = minAdx;
+                }
+                if (minStrength) {
+                    const strengthInput = document.querySelector('input[name="min_strength"]');
+                    if (strengthInput) strengthInput.value = minStrength;
+                }
 
                 modal.show();
             }

@@ -70,6 +70,7 @@ class DayTradingStrategy(TradingStrategy):
         df['ema21'] = df['close'].ewm(span=self.parameters['ema_med'], adjust=False).mean()
         df['ema50'] = df['close'].ewm(span=self.parameters['ema_slow'], adjust=False).mean()
         df['ema200'] = df['close'].ewm(span=self.parameters['ema_trend'], adjust=False).mean()
+        df = macd(df) # MACD default (12, 26, 9)
         df['rsi'] = calculate_rsi(df, self.parameters['rsi_period'])
         df['atr'] = atr(df, 14)
         
@@ -97,6 +98,9 @@ class DayTradingStrategy(TradingStrategy):
         df.loc[(df['rsi'] > 55) & (df['rsi'] < 75), 'strength'] += 1
         df.loc[(df['rsi'] < 45) & (df['rsi'] > 25), 'strength'] += 1
         
+        # MACD Confirmation (1 pt)
+        df.loc[df['macd'] > df['signal_macd'], 'strength'] += 1
+        
         # ADX Trend Strength (1 pt)
         df.loc[df['adx'] > 25, 'strength'] += 1
         
@@ -105,17 +109,18 @@ class DayTradingStrategy(TradingStrategy):
             vol_ma = df['volume'].rolling(window=20).mean()
             df.loc[df['volume'] > vol_ma * 1.2, 'strength'] += 0.5
         df.loc[df['obv'] > df['obv'].shift(1), 'strength'] += 0.5
-        df.loc[df['obv'] < df['obv'].shift(1), 'strength'] += 0.5
         
         # Ichimoku confirmation (1 pt)
         df.loc[df['close'] > df[['senkou_a', 'senkou_b']].max(axis=1), 'strength'] += 1
         df.loc[df['close'] < df[['senkou_a', 'senkou_b']].min(axis=1), 'strength'] += 1
 
-        # 4. Generar condiciones base de Compra (Crossover EMA)
+        # 4. Generar condiciones base de Compra (Crossover EMA + Trend + Momentum)
         buy_cond = (
             (df['ema9'] > df['ema21']) & 
             (df['ema9'].shift(1) <= df['ema21'].shift(1)) & 
             (df['close'] > df['ema50']) &
+            (df['close'] > df['ema200']) &  # Filtrar por tendencia alcista larga
+            (df['macd'] > df['signal_macd']) & # Confirmación de momentum
             (df['rsi'] > self.parameters['rsi_buy'])
         )
         
@@ -123,7 +128,6 @@ class DayTradingStrategy(TradingStrategy):
         sell_cond = (
             (df['ema9'] < df['ema21']) & 
             (df['ema9'].shift(1) >= df['ema21'].shift(1)) & 
-            (df['close'] < df['ema50']) &
             (df['rsi'] < self.parameters['rsi_sell'])
         )
         

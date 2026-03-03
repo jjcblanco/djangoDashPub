@@ -249,3 +249,53 @@ def range_scanner(request):
         'page_title': 'Escáner de Rango (Grid Finder)',
     }
     return render(request, 'dashboard/range_scanner.html', context)
+@login_required
+def trend_scanner(request):
+    """Escanea múltiples pares de trading para encontrar tendencias alcistas o bajistas claras."""
+    from ..trend_finder import calculate_trend_score
+    import concurrent.futures
+    import pandas as pd
+    from .. import ccxttest1
+    
+    popular_symbols = [
+        'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'ADA/USDT', 
+        'XRP/USDT', 'DOT/USDT', 'MATIC/USDT', 'LINK/USDT', 'AVAX/USDT',
+        'LTC/USDT', 'BCH/USDT', 'ATOM/USDT', 'ETC/USDT', 'UNI/USDT',
+        'NEAR/USDT', 'OP/USDT', 'ARB/USDT', 'INJ/USDT', 'TIA/USDT'
+    ]
+    
+    timeframe = request.GET.get('timeframe', '1h')
+    results = []
+
+    def scan_symbol(symbol):
+        try:
+            bars = ccxttest1.historical_fetch_ohlcv(symbol, timeframe=timeframe, limit=250)
+            if not bars: return None
+            df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            score, trend_type, details = calculate_trend_score(df)
+            return {
+                'symbol': symbol,
+                'score': score,
+                'trend_type': trend_type,
+                'details': details
+            }
+        except Exception as e:
+            print(f"Error scanning {symbol}: {e}")
+            return None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_symbol = {executor.submit(scan_symbol, s): s for s in popular_symbols}
+        for future in concurrent.futures.as_completed(future_to_symbol):
+            res = future.result()
+            if res:
+                results.append(res)
+    
+    # Ordenar por puntuación descendente
+    results.sort(key=lambda x: x['score'], reverse=True)
+    
+    context = {
+        'results': results,
+        'timeframe': timeframe,
+        'page_title': 'Escáner de Tendencia (Trend Finder)',
+    }
+    return render(request, 'dashboard/trend_scanner.html', context)
