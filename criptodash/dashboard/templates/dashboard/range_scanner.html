@@ -84,10 +84,10 @@
                     <label class="me-2 text-muted fw-bold">Temporalidad:</label>
                     <select name="timeframe" class="form-select form-select-sm shadow-sm" style="width: 100px;"
                         onchange="this.form.submit()">
-                        <option value="15m" {% if timeframe=='15m' %}selected{% endif %}>15m</option>
-                        <option value="1h" {% if timeframe=='1h' %}selected{% endif %}>1h</option>
-                        <option value="4h" {% if timeframe=='4h' %}selected{% endif %}>4h</option>
-                        <option value="1d" {% if timeframe=='1d' %}selected{% endif %}>1d</option>
+                        <option value="15m" {% if timeframe == '15m' %}selected{% endif %}>15m</option>
+                        <option value="1h" {% if timeframe == '1h' %}selected{% endif %}>1h</option>
+                        <option value="4h" {% if timeframe == '4h' %}selected{% endif %}>4h</option>
+                        <option value="1d" {% if timeframe == '1d' %}selected{% endif %}>1d</option>
                     </select>
                 </form>
                 <span class="badge bg-secondary p-2">Analizado: {{ timeframe }}</span>

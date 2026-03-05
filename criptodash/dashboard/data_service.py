@@ -204,12 +204,27 @@ def calcular_estadisticas_desde_señales(señales):
     }
 
 
+from plotly.subplots import make_subplots
+
 def generar_grafico_desde_señales(señales, pair_symbol='ETH/USDT'):
     """Genera y devuelve un plotly.graph_objs.Figure a partir de señales"""
-    if not señales:
+    # Evitar error de ambigüedad con DataFrames
+    is_empty = False
+    try:
+        if señales is None:
+            is_empty = True
+        elif hasattr(señales, 'empty'):
+            is_empty = señales.empty
+        elif not señales:
+            is_empty = True
+    except Exception:
+        # Si hay ambigüedad o error, asumimos que NO está vacío para intentar procesarlo
+        is_empty = False
+        
+    if is_empty:
         # devolver figura vacía
         fig = go.Figure()
-        fig.update_layout(title=f"No hay señales para {pair_symbol}")
+        fig.update_layout(title=f"No hay señales para {pair_symbol}", template='plotly_dark')
         return fig.to_html(full_html=False, include_plotlyjs='cdn')
 
     # si 'señales' es queryset -> convertir a DataFrame
@@ -231,12 +246,32 @@ def generar_grafico_desde_señales(señales, pair_symbol='ETH/USDT'):
     if 'timestamp' in df.columns:
         df['timestamp'] = pd.to_datetime(df['timestamp'])
 
-    fig = go.Figure()
+    # Crear subplots: Fila 1 para precio, Fila 2 para RSI
+    has_rsi = 'rsi' in df.columns and not df['rsi'].isnull().all()
+    
+    if has_rsi:
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
+                            vertical_spacing=0.05, 
+                            row_heights=[0.7, 0.3])
+    else:
+        fig = go.Figure()
+
+    # Trace 1: Candlestick
     if {'open','high','low','close'}.issubset(df.columns):
         fig.add_trace(go.Candlestick(
             x=df['timestamp'], open=df['open'], high=df['high'],
             low=df['low'], close=df['close'], name='Candlestick'
-        ))
+        ), row=1, col=1 if has_rsi else None)
+
+    # Añadir EMAs si existen
+    ema_colors = {'ema9': 'blue', 'ema21': 'orange', 'ema50': 'red', 'ema200': 'purple'}
+    for ema_col, color in ema_colors.items():
+        if ema_col in df.columns:
+            fig.add_trace(go.Scatter(
+                x=df['timestamp'], y=df[ema_col], 
+                mode='lines', name=ema_col.upper(),
+                line=dict(color=color, width=1)
+            ), row=1, col=1 if has_rsi else None)
 
     # añadir señales buy/sell si existen
     if 'signal_type' in df.columns:
@@ -244,12 +279,37 @@ def generar_grafico_desde_señales(señales, pair_symbol='ETH/USDT'):
         sells = df[df['signal_type'].str.lower() == 'sell']
         if not buys.empty:
             fig.add_trace(go.Scatter(x=buys['timestamp'], y=buys.get('price', buys.get('close')), mode='markers',
-                                     marker=dict(color='green', symbol='triangle-up', size=10), name='Buy'))
+                                     marker=dict(color='green', symbol='triangle-up', size=12), name='Buy'),
+                          row=1, col=1 if has_rsi else None)
         if not sells.empty:
             fig.add_trace(go.Scatter(x=sells['timestamp'], y=sells.get('price', sells.get('close')), mode='markers',
-                                     marker=dict(color='red', symbol='triangle-down', size=10), name='Sell'))
+                                     marker=dict(color='red', symbol='triangle-down', size=12), name='Sell'),
+                          row=1, col=1 if has_rsi else None)
 
-    fig.update_layout(title=f"Señales - {pair_symbol}", xaxis_title='timestamp', yaxis_title='price')
+    # Panel RSI
+    if has_rsi:
+        fig.add_trace(go.Scatter(
+            x=df['timestamp'], y=df['rsi'], 
+            mode='lines', name='RSI',
+            line=dict(color='yellow', width=1.5)
+        ), row=2, col=1)
+        
+        # Líneas de sobrecompra/sobreventa
+        fig.add_shape(type="line", x0=df['timestamp'].min(), y0=70, x1=df['timestamp'].max(), y1=70,
+                      line=dict(color="red", width=1, dash="dash"), row=2, col=1)
+        fig.add_shape(type="line", x0=df['timestamp'].min(), y0=30, x1=df['timestamp'].max(), y1=30,
+                      line=dict(color="green", width=1, dash="dash"), row=2, col=1)
+        
+        fig.update_yaxes(title_text="RSI", range=[0, 100], row=2, col=1)
+
+    fig.update_layout(
+        title=f"Gráfico Avanzado - {pair_symbol}",
+        xaxis_title='Fecha/Hora',
+        yaxis_title='Precio',
+        template='plotly_dark',
+        height=800,
+        xaxis_rangeslider_visible=False
+    )
     
     # Convertir a HTML para renderizar en el template
     return fig.to_html(full_html=False, include_plotlyjs='cdn')

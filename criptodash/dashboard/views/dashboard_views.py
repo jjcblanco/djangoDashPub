@@ -144,11 +144,46 @@ def dashboard_mejorado(request):
         print(error_message)
         import traceback
         traceback.print_exc()
-    
     # 6. Calcular estadísticas y gráfico
     try:
         stats = calcular_estadisticas_desde_señales(señales)
-        grafico = generar_grafico_desde_señales(señales, pair_symbol)
+        
+        # 6.5 Obtener datos OHLCV completos para el gráfico continuo
+        from ..data_service import DataManager
+        from ..indicadores import calculate_rsi
+        
+        # Obtener los datos base respetando los filtros de fecha
+        # Si no hay fechas seleccionadas, limitamos a las últimas 300 velas para rendimiento
+        ohlcv_df = DataManager.get_or_fetch(
+            pair_symbol, 
+            timeframe=timeframe, 
+            start=fecha_inicio_dt, 
+            end=fecha_fin_dt, 
+            limit=300 if not (fecha_inicio_dt or fecha_fin_dt) else 2000
+        )
+        
+        if not ohlcv_df.empty:
+            # Calcular indicadores dinámicamente para el gráfico
+            ohlcv_df['ema9'] = ohlcv_df['close'].ewm(span=9, adjust=False).mean()
+            ohlcv_df['ema21'] = ohlcv_df['close'].ewm(span=21, adjust=False).mean()
+            ohlcv_df['ema50'] = ohlcv_df['close'].ewm(span=50, adjust=False).mean()
+            ohlcv_df['ema200'] = ohlcv_df['close'].ewm(span=200, adjust=False).mean()
+            ohlcv_df['rsi'] = calculate_rsi(ohlcv_df, period=14)
+            
+            # Cruzar con las señales para marcarlas en el gráfico
+            # Convertimos señales a DF y hacemos merge por timestamp
+            if señales.exists():
+                sig_df = pd.DataFrame(list(señales.values('timestamp', 'signal_type', 'price', 'strength')))
+                sig_df['timestamp'] = pd.to_datetime(sig_df['timestamp'])
+                # Combinar
+                final_df = pd.merge(ohlcv_df, sig_df, on='timestamp', how='left')
+            else:
+                final_df = ohlcv_df
+                
+            grafico = generar_grafico_desde_señales(final_df, pair_symbol)
+        else:
+            # Fallback a solo señales si no hay OHLCV (raro)
+            grafico = generar_grafico_desde_señales(señales, pair_symbol)
         
         # Verificar si la data está obsoleta (más de 24 horas)
         is_stale = False
@@ -158,6 +193,8 @@ def dashboard_mejorado(request):
                 is_stale = True
     except Exception as e:
         print(f"Error al calcular estadísticas o gráfico: {e}")
+        import traceback
+        traceback.print_exc()
         stats = {
             'total_señales': 0,
             'compras': 0,
@@ -166,6 +203,8 @@ def dashboard_mejorado(request):
             'precio_promedio': 0,
             'fecha_primera_señal': None,
             'fecha_ultima_señal': None,
+            'market_state': "Error",
+            'grid_recommendation': "Error"
         }
         grafico = None
         is_stale = False

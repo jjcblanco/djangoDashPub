@@ -61,17 +61,35 @@ class DayTradingStrategy(TradingStrategy):
             'min_strength': 0,
             'min_adx': 0
         }
-        # Mezclar con los pasados
+        # Mezclar con los pasados y asegurar tipos numéricos
         self.parameters = {**default_params, **(parameters or {})}
+        
+        # Casting explícito para evitar TypeError (str vs int)
+        # Convertimos TODO lo que debería ser numérico
+        if self.parameters:
+            for key in list(self.parameters.keys()):
+                val = self.parameters[key]
+                if isinstance(val, str):
+                    try:
+                        if '.' in val: self.parameters[key] = float(val)
+                        else: self.parameters[key] = int(val)
+                    except (ValueError, TypeError):
+                        pass
 
     def generate_signals(self, df):
         # 1. Calcular indicadores base
-        df['ema9'] = df['close'].ewm(span=self.parameters['ema_fast'], adjust=False).mean()
-        df['ema21'] = df['close'].ewm(span=self.parameters['ema_med'], adjust=False).mean()
-        df['ema50'] = df['close'].ewm(span=self.parameters['ema_slow'], adjust=False).mean()
-        df['ema200'] = df['close'].ewm(span=self.parameters['ema_trend'], adjust=False).mean()
+        # Asegurar que los periodos son int
+        ema_f = int(self.parameters.get('ema_fast', 9))
+        ema_m = int(self.parameters.get('ema_med', 21))
+        ema_s = int(self.parameters.get('ema_slow', 50))
+        ema_t = int(self.parameters.get('ema_trend', 200))
+
+        df['ema9'] = df['close'].ewm(span=ema_f, adjust=False).mean()
+        df['ema21'] = df['close'].ewm(span=ema_m, adjust=False).mean()
+        df['ema50'] = df['close'].ewm(span=ema_s, adjust=False).mean()
+        df['ema200'] = df['close'].ewm(span=ema_t, adjust=False).mean()
         df = macd(df) # MACD default (12, 26, 9)
-        df['rsi'] = calculate_rsi(df, self.parameters['rsi_period'])
+        df['rsi'] = calculate_rsi(df, int(self.parameters.get('rsi_period', 14)))
         df['atr'] = atr(df, 14)
         
         if 'adx' not in df.columns:
@@ -115,34 +133,53 @@ class DayTradingStrategy(TradingStrategy):
         df.loc[df['close'] < df[['senkou_a', 'senkou_b']].min(axis=1), 'strength'] += 1
 
         # 4. Generar condiciones base de Compra (Crossover EMA + Trend + Momentum)
+        allow_late = self.parameters.get('allow_late_entry', False)
+        if isinstance(allow_late, str): allow_late = allow_late.lower() == 'true'
+        
+        ema_crossover = (df['ema9'] > df['ema21']) & (df['ema9'].shift(1) <= df['ema21'].shift(1))
+        ema_aligned = (df['ema9'] > df['ema21'])
+        
+        # Si permitimos entrada tardía, basta con que estén alineadas. Si no, necesitamos el cruce.
+        entry_condition = ema_aligned if allow_late else ema_crossover
+
         buy_cond = (
-            (df['ema9'] > df['ema21']) & 
-            (df['ema9'].shift(1) <= df['ema21'].shift(1)) & 
+            entry_condition & 
             (df['close'] > df['ema50']) &
             (df['close'] > df['ema200']) &  # Filtrar por tendencia alcista larga
-            (df['macd'] > df['signal_macd']) & # Confirmación de momentum
-            (df['rsi'] > self.parameters['rsi_buy'])
+            (df['rsi'] > float(self.parameters.get('rsi_buy', 55)))
         )
+        
+        # Si no es entrada tardía, exigimos MACD positivo para mayor seguridad en el cruce inicial
+        if not allow_late:
+            buy_cond = buy_cond & (df['macd'] > df['signal_macd'])
         
         # 5. Generar condiciones base de Venta
         sell_cond = (
             (df['ema9'] < df['ema21']) & 
             (df['ema9'].shift(1) >= df['ema21'].shift(1)) & 
-            (df['rsi'] < self.parameters['rsi_sell'])
+            (df['rsi'] < float(self.parameters.get('rsi_sell', 45)))
         )
         
         # 6. Aplicar filtros de Usuario
-        if self.parameters.get('min_adx', 0) > 0:
-            buy_cond = buy_cond & (df['adx'] >= self.parameters['min_adx'])
-            sell_cond = sell_cond & (df['adx'] >= self.parameters['min_adx'])
+        min_adx = float(self.parameters.get('min_adx', 0))
+        if min_adx > 0:
+            buy_cond = buy_cond & (df['adx'] >= min_adx)
+            sell_cond = sell_cond & (df['adx'] >= min_adx)
             
-        if self.parameters.get('min_strength', 0) > 0:
-            buy_cond = buy_cond & (df['strength'] >= self.parameters['min_strength'])
-            sell_cond = sell_cond & (df['strength'] >= self.parameters['min_strength'])
+        min_strength = float(self.parameters.get('min_strength', 0))
+        if min_strength > 0:
+            buy_cond = buy_cond & (df['strength'] >= min_strength)
+            sell_cond = sell_cond & (df['strength'] >= min_strength)
 
         # 7. Aplicar filtro de Velas (si está activado)
         if self.parameters.get('use_candles', False):
-            bullish_pattern = (df['is_bullish_engulfing'] | df['is_hammer'] | df['is_bullish_engulfing'].shift(1) | df['is_hammer'].shift(1))
+            # Si permitimos entrada tardía, no forzamos patrón de velas para la COMPRA 
+            # (porque los patrones suelen estar al inicio de la tendencia)
+            if allow_late:
+                bullish_pattern = True
+            else:
+                bullish_pattern = (df['is_bullish_engulfing'] | df['is_hammer'] | df['is_bullish_engulfing'].shift(1) | df['is_hammer'].shift(1))
+            
             buy_cond = buy_cond & bullish_pattern
             
             bearish_pattern = (df['is_bearish_engulfing'] | df['is_shooting_star'] | df['is_bearish_engulfing'].shift(1) | df['is_shooting_star'].shift(1))
@@ -194,6 +231,17 @@ class SupertrendStrategy(TradingStrategy):
     """Estrategia basada en Supertrend"""
     def __init__(self, parameters=None):
         super().__init__("Supertrend", parameters)
+        # Casting defensivo
+        if self.parameters:
+            for key in self.parameters:
+                try:
+                    if isinstance(self.parameters[key], str):
+                        if '.' in self.parameters[key]:
+                            self.parameters[key] = float(self.parameters[key])
+                        else:
+                            self.parameters[key] = int(self.parameters[key])
+                except:
+                    pass
 
     def generate_signals(self, df):
         # Aplicar indicadores necesarios para el scoring de Supertrend

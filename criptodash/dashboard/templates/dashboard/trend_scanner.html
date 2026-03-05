@@ -88,10 +88,10 @@
                     <label class="me-2 text-muted fw-bold">Temporalidad:</label>
                     <select name="timeframe" class="form-select form-select-sm shadow-sm" style="width: 100px;"
                         onchange="this.form.submit()">
-                        <option value="15m" {% if timeframe=='15m' %}selected{% endif %}>15m</option>
-                        <option value="1h" {% if timeframe=='1h' %}selected{% endif %}>1h</option>
-                        <option value="4h" {% if timeframe=='4h' %}selected{% endif %}>4h</option>
-                        <option value="1d" {% if timeframe=='1d' %}selected{% endif %}>1d</option>
+                        <option value="15m" {% if timeframe == '15m' %}selected{% endif %}>15m</option>
+                        <option value="1h" {% if timeframe == '1h' %}selected{% endif %}>1h</option>
+                        <option value="4h" {% if timeframe == '4h' %}selected{% endif %}>4h</option>
+                        <option value="1d" {% if timeframe == '1d' %}selected{% endif %}>1d</option>
                     </select>
                 </form>
                 <span class="badge bg-secondary p-2">Analizado: {{ timeframe }}</span>
@@ -147,11 +147,22 @@
                                 <li><strong>EMA 50:</strong> ${{ res.details.e50 }}</li>
                                 <li><strong>EMA 200:</strong> ${{ res.details.e200 }}</li>
                                 <li><strong>Distancia EMA 200:</strong> {{ res.details.dist_ema }}%</li>
+                                <li><strong>Duración Tendencia:</strong>
+                                    <span class="badge 
+                                        {% if res.details.trend_duration <= 10 %}bg-success
+                                        {% elif res.details.trend_duration <= 25 %}bg-warning text-dark
+                                        {% else %}bg-danger{% endif %}"
+                                        title="{% if res.details.trend_duration > 25 %}Riesgo alto de retroceso (Pullback){% endif %}">
+                                        {{ res.details.trend_duration }} velas
+                                        {% if res.details.trend_duration > 25 %} <i
+                                            class="fas fa-exclamation-triangle ms-1"></i>{% endif %}
+                                    </span>
+                                </li>
                             </ul>
                         </div>
 
                         <div class="d-grid gap-2 mt-3">
-                            <a href="{% url 'bot_dashboard' %}?pair={{ res.symbol }}&strategy=DAYTRADING&timeframe={{ timeframe }}&min_adx={{ res.details.adx|floatformat:0 }}"
+                            <a href="{% url 'bot_dashboard' %}?pair={{ res.symbol }}&strategy=DAYTRADING&timeframe={{ timeframe }}&min_adx={{ res.details.adx|floatformat:0 }}&allow_late=true"
                                 class="btn btn-primary btn-sm">
                                 <i class="fas fa-plus-circle me-1"></i> Lanzar Day Trading Bot
                             </a>
