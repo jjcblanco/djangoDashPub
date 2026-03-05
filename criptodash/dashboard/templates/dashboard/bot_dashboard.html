@@ -95,11 +95,35 @@
                 <a href="{% url 'trigger_bot_update' %}" class="btn btn-primary btn-sm me-2 shadow-sm">
                     <i class="fas fa-sync-alt me-1"></i> Actualizar Bots
                 </a>
+                <a href="{% url 'trigger_balance_sync' %}" class="btn btn-outline-info btn-sm me-2 shadow-sm"
+                    title="Ajusta balances locales al saldo real de Binance">
+                    <i class="fas fa-balance-scale me-1"></i> Sincronizar Balance
+                </a>
                 <button type="button" class="btn btn-success btn-sm shadow-sm" data-bs-toggle="modal"
                     data-bs-target="#createBotModal">
                     <i class="fas fa-plus me-1"></i> Nuevo Bot
                 </button>
             </div>
+
+            {% if over_allocated %}
+            <div class="alert alert-warning border-left-warning shadow animated--grow-in mb-4" role="alert">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-exclamation-triangle fa-2x me-3 text-warning"></i>
+                    <div>
+                        <h5 class="alert-heading mb-1">¡Sobre-asignación Detectada!</h5>
+                        Los bots están gestionando virtualmente <strong>${{ global_assigned|floatformat:2 }}
+                            USDT</strong>,
+                        pero en Binance solo hay <strong>${{ real_total|floatformat:2 }} USDT</strong> reales.
+                        Para evitar errores de compra, te recomendamos sincronizar los balances.
+                    </div>
+                    <div class="ms-auto">
+                        <a href="{% url 'trigger_balance_sync' %}" class="btn btn-warning btn-sm fw-bold">
+                            <i class="fas fa-balance-scale me-1"></i> Sincronizar Ahora
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- Balance real de Binance -->
@@ -129,6 +153,43 @@
                         <div>
                             <small class="text-white-50">USDT Libre (Disponible)</small>
                             <h4 class="mb-0">${{ exchange_balance.free|floatformat:2 }}</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 col-lg-3">
+                <div class="card bg-info text-white p-3 mb-3" style="cursor: pointer;" data-bs-toggle="modal"
+                    data-bs-target="#addFundingModal">
+                    <div class="d-flex align-items-center">
+                        <div class="rounded-circle bg-white text-info p-3 me-3">
+                            <i class="fas fa-hand-holding-usd"></i>
+                        </div>
+                        <div>
+                            <small class="text-white-50">Inversión Histórica <i
+                                    class="fas fa-plus-circle ms-1"></i></small>
+                            <h4 class="mb-0">${{ total_injected_capital|floatformat:2 }}</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 col-lg-3">
+                <div
+                    class="card {% if real_net_profit > 0 %}bg-success{% elif real_net_profit < 0 %}bg-danger{% else %}bg-dark{% endif %} text-white p-3 mb-3">
+                    <div class="d-flex align-items-center">
+                        <div
+                            class="rounded-circle bg-white {% if real_net_profit > 0 %}text-success{% elif real_net_profit < 0 %}text-danger{% else %}text-dark{% endif %} p-3 me-3">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div>
+                            <small class="text-white-50">Beneficio Real Total</small>
+                            <h4 class="mb-0">
+                                {% if exchange_balance %}
+                                {% if real_net_profit > 0 %}+{% endif %}${{ real_net_profit|floatformat:2 }}
+                                {% else %}
+                                ---
+                                {% endif %}
+                            </h4>
+                            <small class="text-white-50">Saldo vs Inyectado</small>
                         </div>
                     </div>
                 </div>
@@ -274,6 +335,32 @@
                                         title="Precio promedio de entrada de lo que está abierto">
                                         ${{ data.break_even|floatformat:4 }}
                                     </span>
+                                </div>
+                                {% endif %}
+
+                                {% if data.bot.strategy_type == 'GRID' %}
+                                <div class="mt-2 pt-2 border-top border-light">
+                                    <div class="row g-1">
+                                        <div class="col-4">
+                                            <small class="text-muted d-block text-truncate" title="Mínimo">Mín:</small>
+                                            <span class="fw-bold" style="font-size: 0.75rem;">${{ data.bot.parameters.lower_price|floatformat:4 }}</span>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted d-block text-truncate" title="Máximo">Máx:</small>
+                                            <span class="fw-bold" style="font-size: 0.75rem;">${{ data.bot.parameters.upper_price|floatformat:4 }}</span>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted d-block text-truncate"
+                                                title="Punto de Escape (Stop Loss)">Esc:</small>
+                                            <span class="text-danger fw-bold" style="font-size: 0.75rem;">
+                                                {% if data.bot.parameters.global_stop_loss %}
+                                                ${{ data.bot.parameters.global_stop_loss|floatformat:4 }}
+                                                {% else %}
+                                                ---
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                                 {% endif %}
                             </div>
@@ -429,7 +516,8 @@
                                     <small class="text-muted">{{ trade.entry_time|date:"d/m H:i" }}</small>
                                 </td>
                                 <td>
-                                    <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i" }}</small>
+                                    <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i"
+                                        }}</small>
                                 </td>
                             </tr>
                             {% empty %}
@@ -446,129 +534,6 @@
         </div>
     </div>
 
-    <!-- Modal Crear Bot -->
-    <div class="modal fade" id="createBotModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <form action="{% url 'create_bot' %}" method="POST">
-                    {% csrf_token %}
-                    <div class="modal-header">
-                        <h5 class="modal-title">Lanzar Nuevo Bot de Estrategia</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Nombre del Bot</label>
-                                <input type="text" name="name" class="form-control" required placeholder="Mi Super Bot">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Par</label>
-                                <select name="pair" class="form-select">
-                                    {% for p in available_pairs %}
-                                    <option value="{{ p.id }}">{{ p.symbol }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Temporalidad</label>
-                                <select name="timeframe" id="timeframeSelector" class="form-select">
-                                    <option value="15m">15m</option>
-                                    <option value="1h" selected>1h</option>
-                                    <option value="4h">4h</option>
-                                    <option value="1d">1d</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Balance (USD)</label>
-                                <input type="number" name="balance" class="form-control" required step="0.01"
-                                    value="1000">
-                            </div>
-                            <div class="col-md-12">
-                                <label class="form-label">Estrategia</label>
-                                <select name="strategy_type" id="strategySelector" class="form-select"
-                                    onchange="toggleStrategyFields()">
-                                    <option value="GRID">Grid Trading (Malla)</option>
-                                    <option value="DAYTRADING">Day Trading EMA/RSI</option>
-                                </select>
-                            </div>
-                            <div class="col-md-12">
-                                <div class="form-check form-switch p-3 bg-light border rounded">
-                                    <input class="form-check-input ms-0 me-2" type="checkbox" name="is_live"
-                                        id="isLiveSwitch">
-                                    <label class="form-check-label fw-bold text-danger" for="isLiveSwitch">
-                                        <i class="fas fa-exclamation-triangle me-1"></i> ¿EJECUTAR EN REAL? (Dinero
-                                        Real)
-                                    </label>
-                                    <div class="form-text mt-1">Si se activa, el bot enviará órdenes reales a Binance.
-                                        Si se deja desactivado, funcionará como simulación.</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Campos específicos para Grid -->
-                        <div id="gridFields" class="mt-4 p-3 bg-light rounded shadow-sm">
-                            <h6>Parámetros de Malla (Grid)</h6>
-                            <div class="row g-3">
-                                <div class="col-md-4">
-                                    <label class="form-label">Precio Superior</label>
-                                    <input type="number" name="upper_price" class="form-control" step="0.0001">
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Precio Inferior</label>
-                                    <input type="number" name="lower_price" class="form-control" step="0.0001">
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Niveles</label>
-                                    <input type="number" name="grid_levels" class="form-control" value="10">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Monto por Nivel (USD)</label>
-                                    <input type="number" name="amount_per_level" class="form-control" value="100">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Stop Loss Global (Precio)</label>
-                                    <input type="number" name="global_stop_loss" class="form-control" step="0.0001">
-                                </div>
-                                <div class="col-12">
-                                    <div class="form-check form-switch mt-2">
-                                        <input class="form-check-input" type="checkbox" name="trailing_enabled"
-                                            id="trailingCheck">
-                                        <label class="form-check-label fw-bold text-primary" for="trailingCheck">
-                                            <i class="fas fa-arrows-up-down-left-right me-1"></i> ACTIVAR TRAILING
-                                            (Seguir Precio)
-                                        </label>
-                                        <div class="form-text">Si se activa, el rango de la malla subirá automáticamente
-                                            si el precio supera el límite superior.</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Campos específicos para Day Trading -->
-                        <div id="daytradingFields" class="mt-4 p-3 bg-light rounded shadow-sm d-none">
-                            <h6>Parámetros Day Trading</h6>
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label class="form-label">Fuerza Mínima (1-5)</label>
-                                    <input type="number" name="min_strength" class="form-control" value="3" min="1"
-                                        max="5">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">ADX Mínimo</label>
-                                    <input type="number" name="min_adx" class="form-control" value="20">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary">Lanzar Bot</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
 
     <!-- jQuery y DataTables JS -->
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
@@ -631,8 +596,9 @@
 
             const minAdx = urlParams.get('min_adx');
             const minStrength = urlParams.get('min_strength');
+            const allowLate = urlParams.get('allow_late');
 
-            if (pairSymbol || strategy || timeframe || lowerPrice || upperPrice || stopPrice || minAdx || minStrength) {
+            if (pairSymbol || strategy || timeframe || lowerPrice || upperPrice || stopPrice || minAdx || minStrength || allowLate) {
                 const modal = new bootstrap.Modal(document.getElementById('createBotModal'));
 
                 if (pairSymbol) {
@@ -667,10 +633,229 @@
                     if (strengthInput) strengthInput.value = minStrength;
                 }
 
+                if (allowLate === 'true') {
+                    const allowLateCheck = document.getElementById('allowLateEntryCheck');
+                    if (allowLateCheck) allowLateCheck.checked = true;
+                }
+
                 modal.show();
             }
         });
     </script>
+    <!-- Modal Crear Bot -->
+    <div class="modal fade" id="createBotModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <form action="{% url 'create_bot' %}" method="POST">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title">Lanzar Nuevo Bot de Estrategia</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Nombre del Bot</label>
+                                <input type="text" name="name" class="form-control" required placeholder="Mi Super Bot">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Par</label>
+                                <select name="pair" class="form-select">
+                                    {% for p in available_pairs %}
+                                    <option value="{{ p.id }}">{{ p.symbol }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Temporalidad</label>
+                                <select name="timeframe" id="timeframeSelector" class="form-select">
+                                    <option value="15m">15m</option>
+                                    <option value="1h" selected>1h</option>
+                                    <option value="4h">4h</option>
+                                    <option value="1d">1d</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Balance (USD)</label>
+                                <input type="number" name="balance" class="form-control" required step="0.01"
+                                    value="1000">
+                                {% if exchange_balance %}
+                                <div class="form-text text-info">
+                                    <i class="fas fa-wallet me-1"></i> Libre en Binance: <strong>${{
+                                        exchange_balance.free|floatformat:2 }}</strong>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">Estrategia</label>
+                                <select name="strategy_type" id="strategySelector" class="form-select"
+                                    onchange="toggleStrategyFields()">
+                                    <option value="GRID">Grid Trading (Malla)</option>
+                                    <option value="DAYTRADING">Day Trading EMA/RSI</option>
+                                </select>
+                            </div>
+                            <div class="col-md-12">
+                                <div class="form-check form-switch p-3 bg-light border rounded">
+                                    <input class="form-check-input ms-0 me-2" type="checkbox" name="is_live"
+                                        id="isLiveSwitch">
+                                    <label class="form-check-label fw-bold text-danger" for="isLiveSwitch">
+                                        <i class="fas fa-exclamation-triangle me-1"></i> ¿EJECUTAR EN REAL? (Dinero
+                                        Real)
+                                    </label>
+                                    <div class="form-text mt-1">Si se activa, el bot enviará órdenes reales a Binance.
+                                        Si se deja desactivado, funcionará como simulación.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Campos específicos para Grid -->
+                        <div id="gridFields" class="mt-4 p-3 bg-light rounded shadow-sm">
+                            <h6>Parámetros de Malla (Grid)</h6>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Precio Superior</label>
+                                    <input type="number" name="upper_price" class="form-control" step="0.0001">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Precio Inferior</label>
+                                    <input type="number" name="lower_price" class="form-control" step="0.0001">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Niveles</label>
+                                    <input type="number" name="grid_levels" class="form-control" value="10">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Monto por Nivel (USD)</label>
+                                    <input type="number" name="amount_per_level" class="form-control" value="100">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Stop Loss Global (Precio)</label>
+                                    <input type="number" name="global_stop_loss" class="form-control" step="0.0001">
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch mt-2">
+                                        <input class="form-check-input" type="checkbox" name="trailing_enabled"
+                                            id="trailingCheck">
+                                        <label class="form-check-label fw-bold text-primary" for="trailingCheck">
+                                            <i class="fas fa-arrow-up me-1"></i> TRAILING ALCISTA
+                                        </label>
+                                        <div class="form-text">El rango sube automáticamente si el precio supera el
+                                            límite superior.</div>
+                                    </div>
+                                    <div class="form-check form-switch mt-3">
+                                        <input class="form-check-input" type="checkbox" name="trailing_down"
+                                            id="trailingDownCheck">
+                                        <label class="form-check-label fw-bold text-warning" for="trailingDownCheck">
+                                            <i class="fas fa-arrow-down me-1"></i> TRAILING DESCENDENTE
+                                        </label>
+                                        <div class="form-text">
+                                            Si el precio cae, el rango baja automáticamente.
+                                            <span class="text-danger fw-bold">Atención:</span> Puede vender niveles
+                                            superiores con pérdidas para reponer capital abajo.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Campos específicos para Day Trading -->
+                        <div id="daytradingFields" class="mt-4 p-3 bg-light rounded shadow-sm d-none">
+                            <h6>Parámetros Day Trading</h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Fuerza Mínima (1-5)</label>
+                                    <input type="number" name="min_strength" class="form-control" value="3" min="1"
+                                        max="5">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">ADX Mínimo</label>
+                                    <input type="number" name="min_adx" class="form-control" value="20">
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch mt-2">
+                                        <input class="form-check-input" type="checkbox" name="allow_late_entry"
+                                            id="allowLateEntryCheck">
+                                        <label class="form-check-label fw-bold text-success" for="allowLateEntryCheck">
+                                            <i class="fas fa-sign-in-alt me-1"></i> ENTRADA EN TENDENCIA
+                                        </label>
+                                        <div class="form-text">Si se activa, el bot podrá abrir posiciones incluso si la
+                                            tendencia ya ha comenzado (no requiere cruce EMA exacto en la vela actual).
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Lanzar Bot</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Registrar Inversión (Funding) -->
+    <div class="modal fade" id="addFundingModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title"><i class="fas fa-hand-holding-usd me-2"></i>Registrar Nueva Inyección de
+                        Capital</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <form action="{% url 'add_funding' %}" method="POST">
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Monto (USDT)</label>
+                            <input type="number" name="amount" class="form-control" required step="0.01"
+                                placeholder="Ej: 50.00">
+                            <div class="form-text">Esto sumará al Capital Inyectado total.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Descripción / Origen</label>
+                            <input type="text" name="description" class="form-control"
+                                placeholder="Ej: Transferencia Binance Earn, Depósito Tarjeta...">
+                        </div>
+                        <hr>
+                        <h6>Historial Reciente</h6>
+                        <div class="table-responsive" style="max-height: 200px;">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Monto</th>
+                                        <th>Origen</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for f in funding_history %}
+                                    <tr>
+                                        <td><small>{{ f.funding_date|date:"d/m/y" }}</small></td>
+                                        <td><strong>${{ f.amount|floatformat:2 }}</strong></td>
+                                        <td><small class="text-muted">{{ f.description|default:"---" }}</small></td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="3" class="text-center text-muted"><small>No hay registros
+                                                aún</small></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        <button type="submit" class="btn btn-info text-white">Registrar Inversión</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
 </body>
 
 </html>

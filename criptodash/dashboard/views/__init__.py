@@ -28,7 +28,9 @@ from .bot_views import (
     bot_dashboard,
     create_bot,
     bot_action,
-    trigger_bot_update
+    trigger_bot_update,
+    trigger_balance_sync,
+    add_funding
 )
 
 # Importar vistas de datos
@@ -75,6 +77,8 @@ __all__ = [
     'create_bot',
     'bot_action',
     'trigger_bot_update',
+    'trigger_balance_sync',
+    'add_funding',
 
     # Dash app
     'app',

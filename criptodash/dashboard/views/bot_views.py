@@ -1,9 +1,10 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.db import models
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
-from ..models import LiveBot, LiveTrade, TradingPair
+from ..models import LiveBot, LiveTrade, TradingPair, CapitalFunding
 from ..bot_manager import BotManager
 import json
 from decimal import Decimal
@@ -39,6 +40,7 @@ def bot_dashboard(request):
 
     # Calcular métricas globales
     global_invested = sum(b.initial_balance for b in bots)
+    global_assigned = sum(b.current_balance for b in bots)
     global_pnl = sum(d['total_pnl'] for d in bots_data)
     global_roi = (global_pnl / global_invested * 100) if global_invested > 0 else 0
 
@@ -78,15 +80,30 @@ def bot_dashboard(request):
 
     # Obtener balance real de Binance
     exchange_balance = None
+    over_allocated = False
+    real_total = Decimal("0")
     try:
         bal = exchange.fetch_balance()
+        real_total = Decimal(str(bal['total'].get('USDT', 0)))
         exchange_balance = {
             'free': bal['free'].get('USDT', 0),
-            'total': bal['total'].get('USDT', 0),
+            'total': float(real_total),
             'used': bal['used'].get('USDT', 0)
         }
+        # Si lo que los bots "creen" que tienen supera lo que hay en Binance por más de 1 USDT
+        if global_assigned > real_total + Decimal("1.0"):
+            over_allocated = True
     except Exception as e:
         print(f"Error fetching balance: {e}")
+
+    # Calcular capital total inyectado (histórico)
+    total_injected_capital = CapitalFunding.objects.aggregate(total=models.Sum('amount'))['total'] or Decimal("0")
+    funding_history = CapitalFunding.objects.all().order_by('-funding_date')[:10]
+    
+    # Calcular Beneficio Real Absoluto (Saldo Actual - Capital Inyectado)
+    real_net_profit = Decimal("0")
+    if exchange_balance:
+        real_net_profit = real_total - total_injected_capital
 
     context = {
         'bots_data': bots_data,
@@ -94,6 +111,12 @@ def bot_dashboard(request):
         'available_pairs': available_pairs,
         'strategy_types': LiveBot.STRATEGY_CHOICES,
         'exchange_balance': exchange_balance,
+        'over_allocated': over_allocated,
+        'real_total': real_total,
+        'global_assigned': global_assigned,
+        'total_injected_capital': total_injected_capital,
+        'real_net_profit': real_net_profit,
+        'funding_history': funding_history,
         'global_metrics': {
             'invested': global_invested,
             'pnl': global_pnl,
@@ -101,6 +124,24 @@ def bot_dashboard(request):
         }
     }
     return render(request, 'dashboard/bot_dashboard.html', context)
+
+@login_required
+@require_POST
+def add_funding(request):
+    """Registra una nueva inyección de capital (transferencia, depósito, etc.)."""
+    try:
+        amount = request.POST.get('amount')
+        description = request.POST.get('description')
+        if amount:
+            CapitalFunding.objects.create(
+                amount=Decimal(amount),
+                description=description
+            )
+            messages.success(request, f"Inyección de ${amount} USDT registrada con éxito.")
+    except Exception as e:
+        messages.error(request, f"Error al registrar inversión: {e}")
+    
+    return redirect('bot_dashboard')
 
 @login_required
 @require_POST
@@ -123,11 +164,13 @@ def create_bot(request):
                 'amount_per_level': request.POST.get('amount_per_level'),
                 'global_stop_loss': request.POST.get('global_stop_loss'),
                 'trailing_enabled': request.POST.get('trailing_enabled') == 'on',
+                'trailing_down': request.POST.get('trailing_down') == 'on',
             }
         elif strategy_type == 'DAYTRADING':
             params = {
                 'min_strength': request.POST.get('min_strength', 3),
                 'min_adx': request.POST.get('min_adx', 20),
+                'allow_late_entry': request.POST.get('allow_late_entry') == 'on',
             }
 
         pair = TradingPair.objects.get(id=pair_id)
@@ -201,3 +244,43 @@ def trigger_bot_update(request):
         import traceback
         traceback.print_exc()
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+@login_required
+def trigger_balance_sync(request):
+    """
+    Sincroniza los balances de los bots con el saldo real de Binance
+    proporcionalmente, para evitar sobre-asignación.
+    """
+    from ..ccxttest1 import binance as exchange
+    
+    try:
+        # 1. Obtener balance real
+        bal = exchange.fetch_balance()
+        real_total = Decimal(str(bal['total'].get('USDT', 0)))
+        
+        if real_total <= 0:
+            messages.error(request, "No se encontraron fondos reales en Binance para sincronizar.")
+            return redirect('bot_dashboard')
+            
+        # 2. Calcular total local
+        bots = LiveBot.objects.all()
+        total_local_assigned = sum(b.current_balance for b in bots)
+        
+        if total_local_assigned <= 0:
+            messages.warning(request, "No hay saldo local asignado a ningún bot para sincronizar.")
+            return redirect('bot_dashboard')
+            
+        # 3. Aplicar ratio
+        ratio = real_total / total_local_assigned
+        
+        for bot in bots:
+            bot.current_balance = (bot.current_balance * ratio).quantize(Decimal("1.00000000"))
+            bot.initial_balance = (bot.initial_balance * ratio).quantize(Decimal("1.00000000"))
+            bot.save()
+            
+        messages.success(request, f"¡Sincronización exitosa! Balances ajustados proporcionalmente al saldo real (${real_total:.2f} USDT).")
+        
+    except Exception as e:
+        messages.error(request, f"Error durante la sincronización: {e}")
+        
+    return redirect('bot_dashboard')

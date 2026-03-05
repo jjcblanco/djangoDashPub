@@ -29,9 +29,12 @@ class BotManager:
                 result = BotManager.update_bot(bot)
                 results.append(result)
             except Exception as e:
-                logger.error(f"Error actualizando bot {bot.id}: {e}")
+                import traceback
+                error_trace = traceback.format_exc()
+                logger.error(f"Error actualizando bot {bot.id}: {e}\n{error_trace}")
                 bot.status = 'ERROR'
-                bot.last_error = str(e)
+                # Guardamos el error y una pista del traceback para depuración
+                bot.last_error = f"{str(e)} | Trace: {error_trace.splitlines()[-2] if len(error_trace.splitlines()) > 1 else 'no-trace'}"
                 bot.save()
         return results
 
@@ -142,6 +145,10 @@ class BotManager:
         # 3. Verificar Grid Trailing (Si el precio supera el rango superior y está activo)
         if bot.parameters.get('trailing_enabled') and current_price > float(upper):
             BotManager._handle_grid_trailing(bot, current_price, grid_step, upper)
+        
+        # 4. Verificar Grid Trailing DOWN (NUEVO)
+        if bot.parameters.get('trailing_down') and current_price < float(lower):
+            BotManager._handle_grid_trailing_down(bot, current_price, grid_step, lower)
 
         return {'bot_id': bot.id, 'status': 'synced'}
 
@@ -199,33 +206,58 @@ class BotManager:
     @staticmethod
     def _handle_grid_trailing(bot, current_price, grid_step, old_upper):
         """Desplaza el rango de la malla hacia arriba siguiendo el precio."""
-        logger.info(f"GRID TRAILING: El precio {current_price} superó el límite {old_upper}. Desplazando malla.")
+        logger.info(f"GRID TRAILING UP: El precio {current_price} superó el límite {old_upper}. Desplazando malla hacia arriba.")
         
         # Desplazar parámetros
         bot.parameters['upper_price'] = str(float(bot.parameters['upper_price']) + grid_step)
         bot.parameters['lower_price'] = str(float(bot.parameters['lower_price']) + grid_step)
         
         # 1. Localizar el trade con el precio de entrada más bajo que esté WAITING
-        # (Si está OPEN, no lo tocamos para no cerrar posiciones a la fuerza, 
-        # pero la malla se desplaza igualmente)
         bottom_trade = LiveTrade.objects.filter(bot=bot, status='WAITING').order_by('entry_price').first()
         
         if bottom_trade:
-            logger.info(f"GRID TRAILING: Cancelando orden inferior {bottom_trade.entry_price}")
+            logger.info(f"GRID TRAILING UP: Cancelando orden inferior {bottom_trade.entry_price}")
             if bot.is_live and bottom_trade.order_id:
-                try:
-                    exchange.cancel_order(bottom_trade.order_id, bot.pair.symbol)
-                except Exception as e:
-                    logger.error(f"Error cancelando orden inferior en Trailing: {e}")
+                try: exchange.cancel_order(bottom_trade.order_id, bot.pair.symbol)
+                except Exception as e: logger.error(f"Error cancelando orden inferior en Trailing: {e}")
             
             bottom_trade.status = 'CANCELED'
             bottom_trade.save()
-
             # 2. Añadir nueva orden de compra en el nivel superior (el que era old_upper)
-            # Esto mantiene el número de niveles de compra.
-            logger.info(f"GRID TRAILING: Añadiendo nueva orden de compra en {old_upper}")
             BotManager._repose_limit_buy(bot, old_upper)
         
+        bot.save()
+
+    @staticmethod
+    def _handle_grid_trailing_down(bot, current_price, grid_step, old_lower):
+        """Desplaza el rango de la malla hacia abajo siguiendo el precio."""
+        logger.info(f"GRID TRAILING DOWN: El precio {current_price} cayó bajo el límite {old_lower}. Desplazando malla hacia abajo.")
+        
+        # Desplazar parámetros
+        bot.parameters['upper_price'] = str(float(bot.parameters['upper_price']) - grid_step)
+        bot.parameters['lower_price'] = str(float(bot.parameters['lower_price']) - grid_step)
+        
+        # 1. Localizar el trade con el precio de entrada más ALTO (el nivel superior)
+        top_trade = LiveTrade.objects.filter(bot=bot).exclude(status__in=['CLOSED', 'CANCELED']).order_by('-entry_price').first()
+        
+        if top_trade:
+            if top_trade.status == 'WAITING':
+                logger.info(f"GRID TRAILING DOWN: Cancelando nivel superior WAITING en {top_trade.entry_price}")
+                if bot.is_live and top_trade.order_id:
+                    try: exchange.cancel_order(top_trade.order_id, bot.pair.symbol)
+                    except Exception as e: logger.error(f"Error cancelando orden superior: {e}")
+                top_trade.status = 'CANCELED'
+                top_trade.save()
+            elif top_trade.status == 'OPEN':
+                logger.info(f"GRID TRAILING DOWN: Vendiendo nivel superior OPEN en {top_trade.entry_price} (STOP LOSS INDIVIDUAL)")
+                # Cerramos la operación (vender a precio actual para recuperar capital)
+                BotManager._close_trade(top_trade, current_price, "GRID_TRAILING_DOWN_LOSS")
+            
+            # 2. Añadir nueva orden de compra en el fondo (el nuevo lower_price)
+            new_lower = float(bot.parameters['lower_price'])
+            logger.info(f"GRID TRAILING DOWN: Añadiendo nueva orden de compra en el fondo {new_lower}")
+            BotManager._repose_limit_buy(bot, new_lower)
+            
         bot.save()
 
     @staticmethod
@@ -341,7 +373,19 @@ class BotManager:
     @staticmethod
     def _manage_daytrading_bot(bot, df):
         """Lógica para bots de Day Trading en tiempo real."""
-        strategy = DayTradingStrategy(parameters=bot.parameters)
+        # Casting preventivo de parámetros para evitar TypeError
+        clean_params = {}
+        for k, v in bot.parameters.items():
+            try:
+                if isinstance(v, str):
+                    if '.' in v: clean_params[k] = float(v)
+                    else: clean_params[k] = int(v)
+                else:
+                    clean_params[k] = v
+            except:
+                clean_params[k] = v
+        
+        strategy = DayTradingStrategy(parameters=clean_params)
         df_with_signals = strategy.generate_signals(df)
         last_row = df_with_signals.iloc[-1]
         signal = last_row.get('signal')
@@ -377,6 +421,23 @@ class BotManager:
 
         # 2. Lógica de Señales
         if signal == 'BUY' and not open_trade:
+            # --- NUEVO: Verificación de Saldo Real ---
+            if bot.is_live:
+                try:
+                    balance = exchange.fetch_balance()
+                    free_usdt = float(balance['free'].get('USDT', 0))
+                    if free_usdt < float(bot.current_balance):
+                        msg = f"Saldo insuficiente en Exchange: Necesitas {bot.current_balance:.2f} USDT, tienes {free_usdt:.2f} USDT libres."
+                        bot.last_error = msg
+                        bot.status = 'ERROR'
+                        bot.save()
+                        logger.warning(f"Bot {bot.id}: {msg}")
+                        return {'bot_id': bot.id, 'error': 'insufficient_funds'}
+                except Exception as e:
+                    logger.error(f"Error verificando balance para bot {bot.id}: {e}")
+                    # Si falla la API, mejor no intentar la compra
+                    return {'bot_id': bot.id, 'error': 'api_error'}
+
             # Abrir posición con todo el balance del bot
             balance = float(bot.current_balance)
             amount = balance / current_price

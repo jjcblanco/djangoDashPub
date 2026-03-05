@@ -67,7 +67,33 @@ def calculate_trend_score(df, period=14):
         'dist_ema': round(dist_ema, 2),
         'alignment_score': alignment_score,
         'dist_score': dist_score,
-        'adx_score': adx_score
+        'adx_score': adx_score,
+        'trend_duration': calculate_trend_duration(df, trend_type)
     }
     
     return round(total_score, 1), trend_type, details
+
+def calculate_trend_duration(df, trend_type):
+    """
+    Calcula cuántas velas han pasado desde el inicio de la tendencia actual.
+    El inicio se define por el cruce de EMA9 y EMA21.
+    """
+    if df is None or len(df) < 5 or trend_type == 'NEUTRAL':
+        return 0
+        
+    ema9 = df['ema9']
+    ema21 = df['ema21']
+    
+    count = 0
+    for i in range(len(df) - 1, 0, -1):
+        if trend_type == 'BULLISH':
+            if ema9.iloc[i] > ema21.iloc[i]:
+                count += 1
+            else:
+                break
+        elif trend_type == 'BEARISH':
+            if ema9.iloc[i] < ema21.iloc[i]:
+                count += 1
+            else:
+                break
+    return count

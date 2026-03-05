@@ -181,3 +181,11 @@ class LiveTrade(models.Model):
 
     def __str__(self):
         return f"{self.side} {self.amount} {self.bot.pair.symbol} at {self.entry_price}"
+
+class CapitalFunding(models.Model):
+    amount = models.DecimalField(max_digits=20, decimal_places=8)
+    funding_date = models.DateTimeField(auto_now_add=True)
+    description = models.CharField(max_length=200, blank=True, null=True, help_text="Ej: Transferencia desde Binance Earn")
+    
+    def __str__(self):
+        return f"{self.amount} USDT en {self.funding_date}"

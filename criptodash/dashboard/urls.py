@@ -29,6 +29,8 @@ urlpatterns = [
     path('bots/create/', views.create_bot, name='create_bot'),
     path('bots/action/<int:bot_id>/', views.bot_action, name='bot_action'),
     path('bots/update/', views.trigger_bot_update, name='trigger_bot_update'),
+    path('bots/sync-balance/', views.trigger_balance_sync, name='trigger_balance_sync'),
+    path('bots/add-funding/', views.add_funding, name='add_funding'),
 
     # REST API V1
     path('api/v1/', include(router.urls)),
