@@ -206,8 +206,11 @@ def calcular_estadisticas_desde_señales(señales):
 
 from plotly.subplots import make_subplots
 
-def generar_grafico_desde_señales(señales, pair_symbol='ETH/USDT'):
+def generar_grafico_desde_señales(señales, pair_symbol='ETH/USDT', viz_options=None):
     """Genera y devuelve un plotly.graph_objs.Figure a partir de señales"""
+    if viz_options is None:
+        viz_options = {'show_ema': True, 'show_rsi': True, 'show_ichimoku': False}
+        
     # Evitar error de ambigüedad con DataFrames
     is_empty = False
     try:
@@ -247,9 +250,9 @@ def generar_grafico_desde_señales(señales, pair_symbol='ETH/USDT'):
         df['timestamp'] = pd.to_datetime(df['timestamp'])
 
     # Crear subplots: Fila 1 para precio, Fila 2 para RSI
-    has_rsi = 'rsi' in df.columns and not df['rsi'].isnull().all()
+    show_rsi = viz_options.get('show_rsi', True) and 'rsi' in df.columns and not df['rsi'].isnull().all()
     
-    if has_rsi:
+    if show_rsi:
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
                             vertical_spacing=0.05, 
                             row_heights=[0.7, 0.3])
@@ -261,17 +264,40 @@ def generar_grafico_desde_señales(señales, pair_symbol='ETH/USDT'):
         fig.add_trace(go.Candlestick(
             x=df['timestamp'], open=df['open'], high=df['high'],
             low=df['low'], close=df['close'], name='Candlestick'
-        ), row=1, col=1 if has_rsi else None)
+        ), row=1, col=1 if show_rsi else None)
 
-    # Añadir EMAs si existen
-    ema_colors = {'ema9': 'blue', 'ema21': 'orange', 'ema50': 'red', 'ema200': 'purple'}
-    for ema_col, color in ema_colors.items():
-        if ema_col in df.columns:
-            fig.add_trace(go.Scatter(
-                x=df['timestamp'], y=df[ema_col], 
-                mode='lines', name=ema_col.upper(),
-                line=dict(color=color, width=1)
-            ), row=1, col=1 if has_rsi else None)
+    # Añadir EMAs si existen y están activas
+    if viz_options.get('show_ema', True):
+        ema_colors = {'ema9': 'blue', 'ema21': 'orange', 'ema50': 'red', 'ema200': 'purple'}
+        for ema_col, color in ema_colors.items():
+            if ema_col in df.columns:
+                fig.add_trace(go.Scatter(
+                    x=df['timestamp'], y=df[ema_col], 
+                    mode='lines', name=ema_col.upper(),
+                    line=dict(color=color, width=1)
+                ), row=1, col=1 if show_rsi else None)
+
+    # Añadir Ichimoku si existe y está activo
+    if viz_options.get('show_ichimoku', False) and 'senkou_a' in df.columns:
+        # Nube (Kumo)
+        fig.add_trace(go.Scatter(
+            x=df['timestamp'], y=df['senkou_a'],
+            mode='lines', line=dict(width=0),
+            showlegend=False, name='Senkou A'
+        ), row=1, col=1 if show_rsi else None)
+        
+        fig.add_trace(go.Scatter(
+            x=df['timestamp'], y=df['senkou_b'],
+            mode='lines', line=dict(width=0),
+            fill='tonexty', fillcolor='rgba(0, 255, 0, 0.1)',
+            name='Ichimoku Cloud'
+        ), row=1, col=1 if show_rsi else None)
+        
+        # Tenkan y Kijun
+        if 'tenkan' in df.columns:
+            fig.add_trace(go.Scatter(x=df['timestamp'], y=df['tenkan'], mode='lines', name='Tenkan', line=dict(color='cyan', width=1)), row=1, col=1 if show_rsi else None)
+        if 'kijun' in df.columns:
+            fig.add_trace(go.Scatter(x=df['timestamp'], y=df['kijun'], mode='lines', name='Kijun', line=dict(color='yellow', width=1)), row=1, col=1 if show_rsi else None)
 
     # añadir señales buy/sell si existen
     if 'signal_type' in df.columns:
@@ -280,14 +306,14 @@ def generar_grafico_desde_señales(señales, pair_symbol='ETH/USDT'):
         if not buys.empty:
             fig.add_trace(go.Scatter(x=buys['timestamp'], y=buys.get('price', buys.get('close')), mode='markers',
                                      marker=dict(color='green', symbol='triangle-up', size=12), name='Buy'),
-                          row=1, col=1 if has_rsi else None)
+                          row=1, col=1 if show_rsi else None)
         if not sells.empty:
             fig.add_trace(go.Scatter(x=sells['timestamp'], y=sells.get('price', sells.get('close')), mode='markers',
                                      marker=dict(color='red', symbol='triangle-down', size=12), name='Sell'),
-                          row=1, col=1 if has_rsi else None)
+                          row=1, col=1 if show_rsi else None)
 
     # Panel RSI
-    if has_rsi:
+    if show_rsi:
         fig.add_trace(go.Scatter(
             x=df['timestamp'], y=df['rsi'], 
             mode='lines', name='RSI',
