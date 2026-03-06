@@ -150,10 +150,16 @@ def dashboard_mejorado(request):
         
         # 6.5 Obtener datos OHLCV completos para el gráfico continuo
         from ..data_service import DataManager
-        from ..indicadores import calculate_rsi
+        from ..indicadores import calculate_rsi, ichimoku_cloud
+        
+        # Parámetros de visualización (por defecto EMAs y RSI activos)
+        viz_params = {
+            'show_ema': request.GET.get('show_ema') == '1' if 'show_ema' in request.GET else True,
+            'show_rsi': request.GET.get('show_rsi') == '1' if 'show_rsi' in request.GET else True,
+            'show_ichimoku': request.GET.get('show_ichimoku') == '1'
+        }
         
         # Obtener los datos base respetando los filtros de fecha
-        # Si no hay fechas seleccionadas, limitamos a las últimas 300 velas para rendimiento
         ohlcv_df = DataManager.get_or_fetch(
             pair_symbol, 
             timeframe=timeframe, 
@@ -170,20 +176,21 @@ def dashboard_mejorado(request):
             ohlcv_df['ema200'] = ohlcv_df['close'].ewm(span=200, adjust=False).mean()
             ohlcv_df['rsi'] = calculate_rsi(ohlcv_df, period=14)
             
+            # Calcular Ichimoku solo si se solicita o si es necesario para el merge
+            if viz_params['show_ichimoku']:
+                ohlcv_df = ichimoku_cloud(ohlcv_df)
+            
             # Cruzar con las señales para marcarlas en el gráfico
-            # Convertimos señales a DF y hacemos merge por timestamp
             if señales.exists():
                 sig_df = pd.DataFrame(list(señales.values('timestamp', 'signal_type', 'price', 'strength')))
                 sig_df['timestamp'] = pd.to_datetime(sig_df['timestamp'])
-                # Combinar
                 final_df = pd.merge(ohlcv_df, sig_df, on='timestamp', how='left')
             else:
                 final_df = ohlcv_df
                 
-            grafico = generar_grafico_desde_señales(final_df, pair_symbol)
+            grafico = generar_grafico_desde_señales(final_df, pair_symbol, viz_options=viz_params)
         else:
-            # Fallback a solo señales si no hay OHLCV (raro)
-            grafico = generar_grafico_desde_señales(señales, pair_symbol)
+            grafico = generar_grafico_desde_señales(señales, pair_symbol, viz_options=viz_params)
         
         # Verificar si la data está obsoleta (más de 24 horas)
         is_stale = False
@@ -236,6 +243,9 @@ def dashboard_mejorado(request):
         'is_stale': is_stale,
         'fuente_datos': fuente_datos,
         'error_message': error_message,
+        'show_ema': viz_params['show_ema'],
+        'show_rsi': viz_params['show_rsi'],
+        'show_ichimoku': viz_params['show_ichimoku'],
     }
     
     return render(request, 'dashboard/dashboard_mejorado.html', context)

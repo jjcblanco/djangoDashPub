@@ -33,16 +33,19 @@ binance = ccxt.binance({
     'options': {
         'recvWindow': 60000,  # Aumentar ventana de recepción a 60 segundos
         'adjustForTimeDifference': True,  # Ajustar automáticamente por diferencia de tiempo
-    }
+    },
+    'apiKey': config('BINANCE_APIKEY', default=None),
+    'secret': config('BINANCE_SECRET', default=None),
 })
 exchange = binance
-binance.load_markets()
-print("Markets loaded:", len(binance.markets))
-# For historical data, we don't need API keys
-binance.apiKey=config('BINANCE_APIKEY', default=None)
-binance.secret=config('BINANCE_SECRET', default=None)
-# binance.secret=config.BINANCE_SECRET
-print(binance.check_required_credentials())
+_binance_initialized = False
+
+def _ensure_binance_initialized():
+    global _binance_initialized
+    if not _binance_initialized:
+        binance.load_markets()
+        print("Markets loaded:", len(binance.markets))
+        _binance_initialized = True
 # balance =binance.fetch_balance()
 #print(type(balance))
 
@@ -255,8 +258,10 @@ def table_insert(df):
    cnx.close()
 
 def historical_fetch_ohlcv(pair, date_from=None, timeframe='1h', since=None, limit=None):
+    _ensure_binance_initialized()
     # Support both date_from (positional/keyword) and since (keyword)
     actual_since = since if since is not None else date_from
+
     
     if actual_since is None:
         # Por defecto los últimos 1000 bars

@@ -71,8 +71,11 @@ class BotManager:
         grid_levels = [lower + i * grid_step for i in range(levels_count)]
         
         # 0. Verificar Inicialización (Bootstrap)
-        open_trades = LiveTrade.objects.filter(bot=bot).exclude(status='CANCELED')
-        if not open_trades.exists() and bot.status == 'RUNNING':
+        # Solo inicializamos si no hay operaciones ACTIVAS (OPEN o WAITING)
+        active_trades_exist = LiveTrade.objects.filter(bot=bot, status__in=['OPEN', 'WAITING']).exists()
+        
+        if not active_trades_exist and bot.status == 'RUNNING':
+            logger.info(f"Bot {bot.id} ({bot.name}) no tiene operaciones activas. Iniciando Bootstrap...")
             return BotManager._grid_bootstrap(bot, current_price, grid_levels)
 
         # Obtener posiciones abiertas del bot

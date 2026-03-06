@@ -185,6 +185,24 @@
                     <button type="submit" name="refresh" value="1" class="btn btn-success">
                         <i class="fas fa-sync-alt"></i> Generar Nuevas Señales
                     </button>
+
+                    <!-- Selectores de Indicadores -->
+                    <div class="ms-3 p-2 border rounded bg-light d-flex gap-3 align-items-center">
+                        <small class="fw-bold text-muted">Visualizar:</small>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input" type="checkbox" name="show_ema" id="show_ema" value="1" {% if show_ema %}checked{% endif %}>
+                            <label class="form-check-label" for="show_ema">EMAs</label>
+                        </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input" type="checkbox" name="show_rsi" id="show_rsi" value="1" {% if show_rsi %}checked{% endif %}>
+                            <label class="form-check-label" for="show_rsi">RSI</label>
+                        </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input" type="checkbox" name="show_ichimoku" id="show_ichimoku"
+                                value="1" {% if show_ichimoku %}checked{% endif %}>
+                            <label class="form-check-label" for="show_ichimoku">Ichimoku</label>
+                        </div>
+                    </div>
                 </form>
 
                 {% if is_stale %}
@@ -412,13 +430,14 @@
 
     <!-- Custom JavaScript -->
     <script>
-        // Auto-submit form when pair or timeframe selection changes
-        document.getElementById('pair').addEventListener('change', function () {
-            this.form.submit();
-        });
-
-        document.getElementById('timeframe').addEventListener('change', function () {
-            this.form.submit();
+        // Auto-submit form when pair, timeframe, or indicator selection changes
+        ['pair', 'timeframe', 'show_ema', 'show_rsi', 'show_ichimoku'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', function () {
+                    this.form.submit();
+                });
+            }
         });
 
         // Add loading state to form submission
