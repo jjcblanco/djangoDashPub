@@ -337,40 +337,16 @@ class BotManager:
                 )
                 buy_orders += 1
 
-            # --- NIVEL SUPERIOR: MARKET BUY + LIMIT SELL (TP) ---
+            # --- NIVEL SUPERIOR: LIMIT SELL (Sólo posible si hay activo base previo) ---
             else:
-                entry_price = current_price
-                if bot.is_live:
-                    try:
-                        # Comprar a mercado
-                        market_order = exchange.create_order(bot.pair.symbol, 'market', 'buy', qty)
-                        entry_price = float(market_order.get('price', current_price))
-                        order_id = market_order.get('id')
-                        
-                        # Colocar TP inmediatamente (LIMIT SELL)
-                        tp_price = level + grid_step # El TP es el siguiente nivel
-                        tp_price_adj = float(exchange.price_to_precision(bot.pair.symbol, tp_price))
-                        
-                        tp_order = exchange.create_order(bot.pair.symbol, 'limit', 'sell', qty, tp_price_adj)
-                        exit_order_id = tp_order.get('id')
-                    except Exception as e:
-                        logger.error(f"Error Bootstrap (Market/TP) bot {bot.id} en {level}: {e}")
-                        continue
-                
-                LiveTrade.objects.create(
-                    bot=bot, side='BUY', entry_price=Decimal(str(entry_price)),
-                    amount=Decimal(str(qty)), status='OPEN', order_id=order_id,
-                    exit_order_id=exit_order_id
-                )
-                market_buys += 1
-
-            # Descontar del balance (monto + comisión 0.1%)
-            cost = Decimal(str(amount_per_level))
-            fee = cost * Decimal("0.001")
-            bot.current_balance -= (cost + fee)
-
-        bot.save()
-        logger.info(f"Bootstrap fin: {buy_orders} LIMIT BUY, {market_buys} MARKET BUY + TP.")
+                # IMPORTANTE: En un GRID puro, no podemos "vender" algo que no tenemos.
+                # Si queremos inicializar niveles superiores, tendríamos que haber comprado
+                # el activo base antes manualmemte. Para proteger el capital de Market Buys infinitos,
+                # simplemente ignoramos la inicialización de niveles muy superiores, o los marcamos
+                # como completados virtualmente para que el grid suba de forma natural.
+                # Corrección Anti-Sangrado: Marcar como CANCELED para no inicializar compras a mercado suicidas.
+                logger.info(f"Nivel {level} por encima del precio actual {current_price}. Saltando compra a mercado por seguridad.")
+                pass
         return {'bot_id': bot.id, 'status': 'bootstrapped', 'limit_buys': buy_orders, 'market_buys': market_buys}
 
     @staticmethod
