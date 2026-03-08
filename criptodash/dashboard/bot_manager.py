@@ -85,8 +85,11 @@ class BotManager:
         for trade in open_trades:
             if bot.is_live and trade.order_id:
                 try:
-                    # Verificar estado de la orden en Binance
-                    order = exchange.fetch_order(trade.order_id, bot.pair.symbol)
+                    # Determinar qué orden queremos monitorear: Si está OPEN esperando venta, miramos el exit_order_id.
+                    order_to_track = trade.exit_order_id if (trade.status == 'OPEN' and trade.exit_order_id) else trade.order_id
+                    
+                    # Verificar estado de la orden activa en Binance
+                    order = exchange.fetch_order(order_to_track, bot.pair.symbol)
                     status = order.get('status') # 'open', 'closed', 'canceled'
                     
                     if status == 'closed':
