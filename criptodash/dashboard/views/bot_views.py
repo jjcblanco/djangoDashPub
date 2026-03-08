@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db import models
+from django.db.models import Sum
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
@@ -43,6 +44,7 @@ def bot_dashboard(request):
     global_assigned = sum(b.current_balance for b in bots)
     global_pnl = sum(d['total_pnl'] for d in bots_data)
     global_roi = (global_pnl / global_invested * 100) if global_invested > 0 else 0
+    global_commission = LiveTrade.objects.aggregate(total=Sum('commission'))['total'] or Decimal("0")
 
     # Obtener las últimas 50 operaciones globales para el historial
     recent_trades = list(LiveTrade.objects.all().order_by('-entry_time')[:50])
@@ -120,7 +122,8 @@ def bot_dashboard(request):
         'global_metrics': {
             'invested': global_invested,
             'pnl': global_pnl,
-            'roi': global_roi
+            'roi': global_roi,
+            'commission': float(global_commission)
         }
     }
     return render(request, 'dashboard/bot_dashboard.html', context)
