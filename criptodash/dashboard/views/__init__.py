@@ -30,7 +30,8 @@ from .bot_views import (
     bot_action,
     trigger_bot_update,
     trigger_balance_sync,
-    add_funding
+    add_funding,
+    analyze_volatility_api
 )
 
 # Importar vistas de datos
@@ -79,6 +80,7 @@ __all__ = [
     'trigger_bot_update',
     'trigger_balance_sync',
     'add_funding',
+    'analyze_volatility_api',
 
     # Dash app
     'app',
