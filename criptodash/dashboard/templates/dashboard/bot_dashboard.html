@@ -103,6 +103,17 @@
                     data-bs-target="#createBotModal">
                     <i class="fas fa-plus me-1"></i> Nuevo Bot
                 </button>
+                <button type="button" class="btn btn-outline-danger btn-sm shadow-sm ms-2" data-bs-toggle="modal"
+                    data-bs-target="#riskSettingsModal" title="Configuración de Riesgo Global">
+                    <i class="fas fa-cog"></i>
+                </button>
+                <form action="{% url 'trigger_kill_switch' %}" method="POST" class="d-inline ms-2"
+                    onsubmit="return confirm('¿ESTÁS SEGURO? Esto detendrá todos los bots y VENDERÁ todo el inventario a USDT de forma inmediata.');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger btn-sm shadow-sm fw-bold">
+                        <i class="fas fa-skull-crossbones me-1"></i> KILL-SWITCH
+                    </button>
+                </form>
             </div>
 
             {% if over_allocated %}
@@ -901,6 +912,59 @@
         </div>
     </div>
 
+    <!-- Modal Configuración de Riesgo Global -->
+    <div class="modal fade" id="riskSettingsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title"><i class="fas fa-shield-alt me-2"></i>Gestión de Riesgo Global</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <form action="{% url 'update_risk_settings' %}" method="POST">
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Max Drawdown Global (%)</label>
+                            <div class="input-group">
+                                <input type="number" name="max_drawdown_pct" class="form-control" step="0.1"
+                                    value="{{ global_settings.max_drawdown_pct|stringformat:" .2f" }}" required>
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <div class="form-text">Si la pérdida total acumulada de la cuenta supera este porcentaje, se
+                                activará el Kill-Switch automáticamente.</div>
+                        </div>
+
+                        {% if global_settings.kill_switch_active %}
+                        <div class="card border-danger bg-light-danger mb-3">
+                            <div class="card-body py-2">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="reset_kill_switch"
+                                        id="resetKSSwitch">
+                                    <label class="form-check-label fw-bold text-danger" for="resetKSSwitch">
+                                        DESACTIVAR KILL-SWITCH Y VOLVER A OPERAR
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="alert alert-warning small py-1 px-2">
+                            <i class="fas fa-info-circle me-1"></i> Al desactivar, deberás reiniciar los bots
+                            manualmente desde el panel.
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info small py-2">
+                            <i class="fas fa-check-circle me-1"></i> El sistema está operando normalmente.
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-dark">Guardar Configuración</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

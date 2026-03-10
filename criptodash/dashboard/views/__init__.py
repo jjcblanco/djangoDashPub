@@ -31,7 +31,9 @@ from .bot_views import (
     trigger_bot_update,
     trigger_balance_sync,
     add_funding,
-    analyze_volatility_api
+    analyze_volatility_api,
+    trigger_kill_switch,
+    update_risk_settings
 )
 
 # Importar vistas de datos
@@ -81,6 +83,8 @@ __all__ = [
     'trigger_balance_sync',
     'add_funding',
     'analyze_volatility_api',
+    'trigger_kill_switch',
+    'update_risk_settings',
 
     # Dash app
     'app',

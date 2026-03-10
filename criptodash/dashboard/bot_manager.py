@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 from decimal import Decimal
 from django.utils import timezone
-from .models import LiveBot, LiveTrade, TradingPair
+from .models import LiveBot, LiveTrade, TradingPair, GlobalSettings
 from .backtester import GridStrategy, DayTradingStrategy
 from .ccxttest1 import historical_fetch_ohlcv, binance as exchange
 
@@ -17,6 +17,11 @@ class BotManager:
     @staticmethod
     def update_all_active_bots():
         """Ciclo principal de actualización para todos los bots activos."""
+        # 0. Verificar Kill-Switch y Riesgo Global
+        if not BotManager.check_global_risk():
+            logger.warning("Ciclo de trading cancelado: Kill-Switch activo o riesgo excedido.")
+            return []
+
         active_bots = LiveBot.objects.filter(status__in=['RUNNING', 'CLOSE_ONLY'])
         results = []
         for bot in active_bots:
@@ -504,3 +509,141 @@ class BotManager:
         except Exception as e:
             print(f"Error _get_live_df for {symbol} ({timeframe}): {e}")
             return None
+
+    @staticmethod
+    def check_global_risk():
+        """
+        Verifica el estado del Kill-Switch y calcula el Drawdown Global.
+        Retorna True si es seguro operar, False si se activó la emergencia.
+        """
+        try:
+            settings, _ = GlobalSettings.objects.get_or_create(id=1)
+            
+            # 1. Si ya está activo, no operar
+            if settings.kill_switch_active:
+                return False
+            
+            # 2. Calcular Drawdown Global
+            bots = LiveBot.objects.all()
+            total_invested = sum(b.initial_balance for b in bots)
+            
+            if total_invested <= 0:
+                return True # Nada invertido, no hay riesgo
+            
+            # Calculamos PnL total (Cerrados + Abiertos)
+            from .models import LiveTrade
+            from django.db.models import Sum
+            
+            pnl_cerrado = LiveTrade.objects.exclude(status='OPEN').aggregate(total=Sum('pnl'))['total'] or Decimal("0")
+            
+            # Para PnL abierto, simplificamos usando la diferencia entre initial y current global
+            # O mejor, sumamos el PnL calculado en trades (aunque el PnL de OPEN es 0 hasta que cierra)
+            # Una forma rápida es ver el capital total actual vs el invertido:
+            total_current = sum(b.current_balance for b in bots)
+            # Sumamos valor de posiciones abiertas estimado (amount * entry_price como base conservadora, 
+            # o idealmente precio actual, pero para riesgo usamos el balance asignado).
+            # En nuestro sistema, cuando un trade se abre, el 'bot.current_balance' baja. 
+            # El valor real de la cuenta es: Sum(bot.current_balance) + Sum(open_trades_value).
+            
+            # Para simplificar y ser seguros:
+            global_pnl = pnl_cerrado # Por ahora solo realizados, para drawdown de flotante se requiere ticker real de todo.
+            
+            # Si queremos drawdown de flotante REAL:
+            drawdown_pct = 0
+            if total_invested > 0:
+                # Si pnl_cerrado es muy negativo:
+                drawdown_pct = (abs(pnl_cerrado) / total_invested) * 100 if pnl_cerrado < 0 else 0
+            
+            if drawdown_pct >= settings.max_drawdown_pct:
+                logger.error(f"RISK TRIGGER: Drawdown Global ({drawdown_pct:.2f}%) excede límite ({settings.max_drawdown_pct}%).")
+                BotManager.emergency_stop_all(reason=f"AUTO_MAX_DRAWDOWN_{drawdown_pct:.1f}%")
+                return False
+                
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error en check_global_risk: {e}")
+            return True # Por seguridad, si falla el check seguimos (o podrías elegir False)
+
+    @staticmethod
+    def emergency_stop_all(reason="MANUAL"):
+        """
+        Activa el Kill-Switch Global.
+        1. Marca kill_switch_active=True en GlobalSettings.
+        2. Frena todos los bots en RUNNING.
+        3. Para los bots reales, cancela órdenes y vende posiciones a mercado.
+        4. Actualiza los DB LiveTrades como CLOSED_EMERGENCY.
+        """
+        logger.warning(f"!!! EMERGENCY STOP DISPARADO: {reason} !!!")
+        
+        # 1. Activar Kill-Switch global
+        settings, _ = GlobalSettings.objects.get_or_create(id=1)
+        settings.kill_switch_active = True
+        settings.save()
+        
+        # 2. Obtener bots activos (incluyendo CLOSE_ONLY)
+        active_bots = LiveBot.objects.filter(status__in=['RUNNING', 'CLOSE_ONLY'])
+        
+        for bot in active_bots:
+            bot.status = 'STOPPED'
+            bot.last_error = f"Detenido por Emergency Stop Global. Razón: {reason}"
+            bot.save()
+            
+            # Buscar operaciones abiertas
+            open_trades = LiveTrade.objects.filter(bot=bot, status__in=['OPEN', 'WAITING'])
+            
+            # 3. Interacción con Binance si es LIVE
+            if bot.is_live:
+                try:
+                    symbol = bot.pair.symbol
+                    # Cancelar toda orden pendiente en este par
+                    exchange.cancel_all_orders(symbol)
+                    logger.info(f"EMERGENCY: Órdenes canceladas para {symbol}.")
+                    
+                    # Intentar cerrar las posiciones abiertas (Market Sell)
+                    for trade in open_trades:
+                        if trade.status == 'OPEN':
+                            # Vender a mercado
+                            current_price_info = exchange.fetch_ticker(symbol)
+                            exit_price = current_price_info['last']
+                            
+                            exchange.create_order(
+                                symbol=symbol,
+                                type='market',
+                                side='sell',
+                                amount=float(trade.amount)
+                            )
+                            logger.info(f"EMERGENCY: Venta de Pánico ejecutada: {trade.amount} {symbol}")
+                            
+                            # Actualizar BD (usamos la logica de cierre pero forzada)
+                            trade.exit_price = Decimal(str(exit_price))
+                            trade.exit_time = timezone.now()
+                            trade.status = 'CLOSED_EMERGENCY'
+                            trade.save()
+                            # Ya bot._close_trade descuenta el saldo, pero hagámoslo simple:
+                            revenue = trade.amount * trade.exit_price
+                            bot.current_balance += revenue
+                            bot.save()
+                        elif trade.status == 'WAITING':
+                            # Si solo esperaba (compra limit) y la cancelamos arriba, la pasamos a CANCELED_EMERGENCY
+                            trade.status = 'CLOSED_EMERGENCY'
+                            trade.save()
+                            # Devolver el dinero asignado a limit wait
+                            # El costo de la compra era el amout * price que dejamos retenido?
+                            # En el Grid normal el balance se descuenta al momento del limit post.
+                            # Para simplificar, le sumamos el trade value
+                            if trade.entry_price and trade.amount:
+                                bot.current_balance += trade.entry_price * trade.amount
+                                bot.save()
+
+                except Exception as e:
+                    logger.error(f"EMERGENCY ERROR interactuando con Binance para bot {bot.id}: {e}")
+            else:
+                # Simulación (Paper trading)
+                for trade in open_trades:
+                    trade.status = 'CLOSED_EMERGENCY'
+                    trade.exit_time = timezone.now()
+                    trade.save()
+
+        logger.warning("Emergency Stop completado. Sistema bloqueado.")
+        return True

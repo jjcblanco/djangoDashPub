@@ -17,6 +17,7 @@ def bot_dashboard(request):
     
     bots = LiveBot.objects.all().order_by('-created_at')
     available_pairs = TradingPair.objects.filter(is_active=True)
+    global_settings, _ = GlobalSettings.objects.get_or_create(id=1)
     
     # Calcular stats rápidas para cada bot
     bots_data = []
@@ -124,7 +125,8 @@ def bot_dashboard(request):
             'pnl': global_pnl,
             'roi': global_roi,
             'commission': float(global_commission)
-        }
+        },
+        'global_settings': global_settings
     }
     return render(request, 'dashboard/bot_dashboard.html', context)
 
@@ -343,4 +345,38 @@ def analyze_volatility_api(request):
         
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+@login_required
+@require_POST
+def trigger_kill_switch(request):
+    """Activa manualmente la parada de emergencia global."""
+    try:
+        from ..bot_manager import BotManager
+        BotManager.emergency_stop_all(reason=f"MANUAL by {request.user.username}")
+        messages.success(request, "¡KILL-SWITCH ACTIVADO! Todos los bots detenidos y posiciones liquidadas.")
+    except Exception as e:
+        messages.error(request, f"Error al activar Kill-Switch: {e}")
+    return redirect('bot_dashboard')
+
+@login_required
+@require_POST
+def update_risk_settings(request):
+    """Actualiza los parámetros de riesgo global y permite resetear el Kill-Switch."""
+    try:
+        max_dd = request.POST.get('max_drawdown_pct')
+        reset_ks = request.POST.get('reset_kill_switch') == 'on'
+        
+        settings, _ = GlobalSettings.objects.get_or_create(id=1)
+        if max_dd:
+            settings.max_drawdown_pct = Decimal(max_dd)
+        
+        if reset_ks:
+            settings.kill_switch_active = False
+            messages.success(request, "Kill-Switch desactivado. El sistema vuelve a operar.")
+        
+        settings.save()
+        messages.success(request, "Configuración de riesgo actualizada.")
+    except Exception as e:
+        messages.error(request, f"Error al actualizar riesgo: {e}")
+    return redirect('bot_dashboard')
 

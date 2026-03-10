@@ -161,6 +161,7 @@ class LiveTrade(models.Model):
         ('OPEN', 'Open (Position)'),
         ('CLOSED', 'Closed'),
         ('CANCELED', 'Canceled'),
+        ('CLOSED_EMERGENCY', 'Closed by Emergency'),
     ]
 
     bot = models.ForeignKey(LiveBot, on_delete=models.CASCADE, related_name='trades')
@@ -170,7 +171,7 @@ class LiveTrade(models.Model):
     amount = models.DecimalField(max_digits=20, decimal_places=8)
     commission = models.DecimalField(max_digits=20, decimal_places=8, default=0, help_text="Comisión total pagada (entrada + salida)")
     pnl = models.DecimalField(max_digits=20, decimal_places=8, default=0, help_text="Beneficio NETO (después de comisiones)")
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OPEN')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='OPEN')
     entry_time = models.DateTimeField(auto_now_add=True)
     exit_time = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
@@ -189,3 +190,14 @@ class CapitalFunding(models.Model):
     
     def __str__(self):
         return f"{self.amount} USDT en {self.funding_date}"
+
+class GlobalSettings(models.Model):
+    max_drawdown_pct = models.DecimalField(max_digits=5, decimal_places=2, default=10.00, help_text="Porcentaje de pérdida máxima global antes de activar el Kill-Switch")
+    kill_switch_active = models.BooleanField(default=False, help_text="Si es True, ningún bot operará y todas las posiciones se cerrarán.")
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name_plural = "Global Settings"
+        
+    def __str__(self):
+        return f"Configuración Global (Kill-Switch: {self.kill_switch_active})"
