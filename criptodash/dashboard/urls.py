@@ -32,6 +32,8 @@ urlpatterns = [
     path('bots/sync-balance/', views.trigger_balance_sync, name='trigger_balance_sync'),
     path('bots/add-funding/', views.add_funding, name='add_funding'),
     path('api/volatility/', views.analyze_volatility_api, name='api_volatility'),
+    path('bots/kill-switch/', views.trigger_kill_switch, name='trigger_kill_switch'),
+    path('bots/risk-settings/', views.update_risk_settings, name='update_risk_settings'),
 
     # REST API V1
     path('api/v1/', include(router.urls)),
