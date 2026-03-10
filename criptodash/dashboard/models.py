@@ -194,6 +194,12 @@ class CapitalFunding(models.Model):
 class GlobalSettings(models.Model):
     max_drawdown_pct = models.DecimalField(max_digits=5, decimal_places=2, default=10.00, help_text="Porcentaje de pérdida máxima global antes de activar el Kill-Switch")
     kill_switch_active = models.BooleanField(default=False, help_text="Si es True, ningún bot operará y todas las posiciones se cerrarán.")
+    
+    # Telegram settings
+    telegram_token = models.CharField(max_length=200, blank=True, null=True, help_text="Token del Bot de Telegram")
+    telegram_chat_id = models.CharField(max_length=100, blank=True, null=True, help_text="ID del Chat de Telegram")
+    notifications_enabled = models.BooleanField(default=False, help_text="Activar/Desactivar notificaciones por Telegram")
+    
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:

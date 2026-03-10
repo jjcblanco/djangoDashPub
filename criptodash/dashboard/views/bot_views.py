@@ -361,10 +361,15 @@ def trigger_kill_switch(request):
 @login_required
 @require_POST
 def update_risk_settings(request):
-    """Actualiza los parámetros de riesgo global y permite resetear el Kill-Switch."""
+    """Actualiza los parámetros de riesgo global y Telegram."""
     try:
         max_dd = request.POST.get('max_drawdown_pct')
         reset_ks = request.POST.get('reset_kill_switch') == 'on'
+        
+        # Telegram fields
+        telegram_token = request.POST.get('telegram_token')
+        telegram_chat_id = request.POST.get('telegram_chat_id')
+        notifications_enabled = request.POST.get('notifications_enabled') == 'on'
         
         settings, _ = GlobalSettings.objects.get_or_create(id=1)
         if max_dd:
@@ -374,9 +379,26 @@ def update_risk_settings(request):
             settings.kill_switch_active = False
             messages.success(request, "Kill-Switch desactivado. El sistema vuelve a operar.")
         
+        # Update Telegram settings
+        settings.telegram_token = telegram_token
+        settings.telegram_chat_id = telegram_chat_id
+        settings.notifications_enabled = notifications_enabled
+        
         settings.save()
-        messages.success(request, "Configuración de riesgo actualizada.")
+        messages.success(request, "Configuración guardada exitosamente.")
     except Exception as e:
-        messages.error(request, f"Error al actualizar riesgo: {e}")
+        messages.error(request, f"Error al actualizar configuración: {e}")
+    return redirect('bot_dashboard')
+
+@login_required
+@require_POST
+def test_telegram_view(request):
+    """Envía un mensaje de prueba a Telegram."""
+    from ..utils.notifications import send_telegram_message
+    success = send_telegram_message("🤖 <b>¡Conexión Exitosa!</b>\nTu bot de trading ahora está vinculado con esta cuenta de Telegram.")
+    if success:
+        messages.success(request, "Mensaje de prueba enviado. Revisa tu Telegram.")
+    else:
+        messages.error(request, "Error enviando mensaje. Verifica el Token y Chat ID.")
     return redirect('bot_dashboard')
 

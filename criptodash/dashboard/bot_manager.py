@@ -6,6 +6,7 @@ from django.utils import timezone
 from .models import LiveBot, LiveTrade, TradingPair, GlobalSettings
 from .backtester import GridStrategy, DayTradingStrategy
 from .ccxttest1 import historical_fetch_ohlcv, binance as exchange
+from .utils.notifications import send_telegram_message
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,9 @@ class BotManager:
                 # Guardamos el error y una pista del traceback para depuración
                 bot.last_error = f"{str(e)} | Trace: {error_trace.splitlines()[-2] if len(error_trace.splitlines()) > 1 else 'no-trace'}"
                 bot.save()
+                
+                # Notificar Error Crítico
+                send_telegram_message(f"⚠️ <b>Error en Bot {bot.id} ({bot.name})</b>\nEstado: ERROR\nMensaje: {str(e)[:100]}...")
         return results
 
     @staticmethod
@@ -497,6 +501,17 @@ class BotManager:
         bot.current_balance = Decimal(str(float(bot.current_balance) + float(revenue)))
         bot.save()
 
+        # Notificar Cierre de Trade
+        emoji = "🟢" if net_pnl > 0 else "🔴"
+        msg = (
+            f"{emoji} <b>Trade Cerrado: {bot.pair.symbol}</b>\n"
+            f"Bot: {bot.name}\n"
+            f"Resultado: <b>{net_pnl:.4f} USDT</b>\n"
+            f"Precio: {exit_price}\n"
+            f"Razón: {reason}"
+        )
+        send_telegram_message(msg)
+
     @staticmethod
     def _get_live_df(symbol, timeframe='1h'):
         """Obtiene las últimas velas para análisis en vivo."""
@@ -645,5 +660,6 @@ class BotManager:
                     trade.exit_time = timezone.now()
                     trade.save()
 
+        send_telegram_message(f"🚨 <b>¡KILL-SWITCH ACTIVADO!</b>\nRazón: {reason}\nTodos los bots han sido detenidos y liquidados.")
         logger.warning("Emergency Stop completado. Sistema bloqueado.")
         return True
