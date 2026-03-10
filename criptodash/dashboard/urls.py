@@ -34,6 +34,7 @@ urlpatterns = [
     path('api/volatility/', views.analyze_volatility_api, name='api_volatility'),
     path('bots/kill-switch/', views.trigger_kill_switch, name='trigger_kill_switch'),
     path('bots/risk-settings/', views.update_risk_settings, name='update_risk_settings'),
+    path('bots/test-telegram/', views.test_telegram_view, name='test_telegram_view'),
 
     # REST API V1
     path('api/v1/', include(router.urls)),

@@ -936,31 +936,66 @@
                         </div>
 
                         {% if global_settings.kill_switch_active %}
-                        <div class="card border-danger bg-light-danger mb-3">
+                        <div class="card border-danger bg-light-danger mb-3 shadow-sm">
                             <div class="card-body py-2">
                                 <div class="form-check form-switch">
                                     <input class="form-check-input" type="checkbox" name="reset_kill_switch"
                                         id="resetKSSwitch">
                                     <label class="form-check-label fw-bold text-danger" for="resetKSSwitch">
-                                        DESACTIVAR KILL-SWITCH Y VOLVER A OPERAR
+                                        DESACTIVAR KILL-SWITCH Y REANUDAR
                                     </label>
                                 </div>
                             </div>
                         </div>
-                        <div class="alert alert-warning small py-1 px-2">
-                            <i class="fas fa-info-circle me-1"></i> Al desactivar, deberás reiniciar los bots
-                            manualmente desde el panel.
-                        </div>
                         {% else %}
-                        <div class="alert alert-info small py-2">
+                        <div class="alert alert-info small py-2 mb-3">
                             <i class="fas fa-check-circle me-1"></i> El sistema está operando normalmente.
                         </div>
                         {% endif %}
+
+                        <hr>
+                        <h6 class="fw-bold mb-3"><i class="fab fa-telegram me-2 text-info"></i>Notificaciones por
+                            Telegram</h6>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Telegram Bot Token</label>
+                            <input type="password" name="telegram_token" class="form-control form-control-sm"
+                                value="{{ global_settings.telegram_token|default:'' }}"
+                                placeholder="Ej: 123456789:ABCDefgh...">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Telegram Chat ID</label>
+                            <input type="text" name="telegram_chat_id" class="form-control form-control-sm"
+                                value="{{ global_settings.telegram_chat_id|default:'' }}" placeholder="Ej: 987654321">
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" name="notifications_enabled"
+                                id="notifEnabledSwitch" {% if global_settings.notifications_enabled %}checked{% endif
+                                %}>
+                            <label class="form-check-label fw-bold" for="notifEnabledSwitch">
+                                Activar Notificaciones en Tiempo Real
+                            </label>
+                        </div>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-dark">Guardar Configuración</button>
+                    <div class="modal-footer d-flex justify-content-between">
+                        <div>
+                            <button type="submit" form="testTelegramForm" class="btn btn-outline-info btn-sm">
+                                <i class="fas fa-paper-plane me-1"></i> Probar Conexión
+                            </button>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-secondary btn-sm"
+                                data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-dark btn-sm">Guardar Configuración</button>
+                        </div>
                     </div>
+                </form>
+
+                <!-- Formulario invisible para el test de Telegram -->
+                <form id="testTelegramForm" action="{% url 'test_telegram_view' %}" method="POST" style="display:none;">
+                    {% csrf_token %}
                 </form>
             </div>
         </div>
