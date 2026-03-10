@@ -1,7 +1,7 @@
 import pandas as pd
 from datetime import datetime, timedelta
 import time
-
+ 
 def run_bot():
     print(f"Fetching new bars for {datetime.now().isoformat()}") 
     # Opción 1: Datos en tiempo real (comenta/descomenta según necesites)
