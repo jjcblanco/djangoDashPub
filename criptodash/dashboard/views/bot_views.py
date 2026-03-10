@@ -287,3 +287,60 @@ def trigger_balance_sync(request):
         messages.error(request, f"Error durante la sincronización: {e}")
         
     return redirect('bot_dashboard')
+
+@login_required
+def analyze_volatility_api(request):
+    """API para obtener rangos sugeridos basados en volatilidad (ATR/BB)"""
+    symbol = request.GET.get('symbol')
+    if not symbol:
+        return JsonResponse({'status': 'error', 'message': 'Missing symbol'}, status=400)
+    
+    from ..ccxttest1 import binance as exchange
+    from ..indicadores import atr, bollinger_bands
+    import pandas as pd
+    
+    try:
+        # Fetch 1D para ATR
+        ohlcv_1d = exchange.fetch_ohlcv(symbol, '1d', limit=20)
+        df_1d = pd.DataFrame(ohlcv_1d, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        df_1d['atr'] = atr(df_1d, 14)
+        current_atr = float(df_1d['atr'].dropna().iloc[-1])
+        
+        # Fetch 4H para Bollinger
+        ohlcv_4h = exchange.fetch_ohlcv(symbol, '4h', limit=30)
+        df_4h = pd.DataFrame(ohlcv_4h, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        df_4h = bollinger_bands(df_4h, window=20, num_std=2, generate_signals=False)
+        current_upper = float(df_4h['bb_upper'].dropna().iloc[-1])
+        current_lower = float(df_4h['bb_lower'].dropna().iloc[-1])
+        current_close = float(df_4h['close'].iloc[-1])
+        
+        # Matemática automática para sugerir grid
+        suggested_upper = current_upper * 1.01
+        suggested_lower = current_lower * 0.99
+        
+        # Rango total
+        grid_range = suggested_upper - suggested_lower
+        
+        # Distancia sugerida aprox 40% del ATR diario
+        target_step = current_atr * 0.40
+        if target_step <= 0: target_step = current_close * 0.01  # fallback 1%
+        
+        suggested_levels = int(grid_range / target_step)
+        if suggested_levels < 3: suggested_levels = 3
+        if suggested_levels > 50: suggested_levels = 50
+        
+        return JsonResponse({
+            'status': 'success',
+            'symbol': symbol,
+            'current_price': round(current_close, 4),
+            'atr_1d': round(current_atr, 4),
+            'bb_upper_4h': round(current_upper, 4),
+            'bb_lower_4h': round(current_lower, 4),
+            'suggested_upper': round(suggested_upper, 4),
+            'suggested_lower': round(suggested_lower, 4),
+            'suggested_levels': suggested_levels
+        })
+        
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+

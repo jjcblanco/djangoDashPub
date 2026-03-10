@@ -302,7 +302,8 @@
                                         <strong>Error:</strong> {{ data.bot.last_error }}
                                     </div>
                                     {% endif %}
-                                    <small class="text-muted ms-2">Balance: ${{ data.bot.current_balance|floatformat:2 }}</small>
+                                    <small class="text-muted ms-2">Balance: ${{ data.bot.current_balance|floatformat:2
+                                        }}</small>
                                 </div>
                                 <div class="row mt-3">
                                     <div class="col-4">
@@ -315,7 +316,8 @@
                                     </div>
                                     <div class="col-4">
                                         <small class="text-muted d-block">ROI:</small>
-                                        <span class="fw-bold" style="font-size: 0.9rem;">{{ data.profit_pct|floatformat:2 }}%</span>
+                                        <span class="fw-bold" style="font-size: 0.9rem;">{{
+                                            data.profit_pct|floatformat:2 }}%</span>
                                     </div>
                                     <div class="col-4">
                                         <small class="text-muted d-block">Actv:</small>
@@ -341,11 +343,13 @@
                                     <div class="row g-1">
                                         <div class="col-4">
                                             <small class="text-muted d-block text-truncate" title="Mínimo">Mín:</small>
-                                            <span class="fw-bold" style="font-size: 0.75rem;">${{ data.bot.parameters.lower_price|floatformat:4 }}</span>
+                                            <span class="fw-bold" style="font-size: 0.75rem;">${{
+                                                data.bot.parameters.lower_price|floatformat:4 }}</span>
                                         </div>
                                         <div class="col-4">
                                             <small class="text-muted d-block text-truncate" title="Máximo">Máx:</small>
-                                            <span class="fw-bold" style="font-size: 0.75rem;">${{ data.bot.parameters.upper_price|floatformat:4 }}</span>
+                                            <span class="fw-bold" style="font-size: 0.75rem;">${{
+                                                data.bot.parameters.upper_price|floatformat:4 }}</span>
                                         </div>
                                         <div class="col-4">
                                             <small class="text-muted d-block text-truncate"
@@ -514,7 +518,8 @@
                                     <small class="text-muted">{{ trade.entry_time|date:"d/m H:i" }}</small>
                                 </td>
                                 <td>
-                                    <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i" }}</small>
+                                    <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i"
+                                        }}</small>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -632,6 +637,43 @@
                 modal.show();
             }
         });
+
+        async function suggestGridByVolatility() {
+            const pairSelect = document.querySelector('select[name="pair"]');
+            const symbol = pairSelect.options[pairSelect.selectedIndex].text;
+
+            const loader = document.getElementById('volatilityLoader');
+            const results = document.getElementById('volatilityResults');
+
+            loader.classList.remove('d-none');
+            results.classList.add('d-none');
+
+            try {
+                const response = await fetch(`/api/volatility/?symbol=${encodeURIComponent(symbol)}`);
+                const data = await response.json();
+
+                loader.classList.add('d-none');
+
+                if (data.status === 'success') {
+                    document.querySelector('input[name="upper_price"]').value = data.suggested_upper;
+                    document.querySelector('input[name="lower_price"]').value = data.suggested_lower;
+                    document.querySelector('input[name="grid_levels"]').value = data.suggested_levels;
+
+                    results.innerHTML = `
+                        <i class="fas fa-info-circle me-1"></i> <strong>Autoconfiguración exitosa:</strong><br>
+                        Volatilidad diaria: <strong>$${data.atr_1d}</strong>. 
+                        BB 4H: [${data.bb_lower_4h} a ${data.bb_upper_4h}].<br>
+                        Precio actual: $${data.current_price}.
+                    `;
+                    results.classList.remove('d-none');
+                } else {
+                    alert('Error al calcular volatilidad: ' + data.message);
+                }
+            } catch (error) {
+                loader.classList.add('d-none');
+                alert('Error de conexión al analizar volatilidad.');
+            }
+        }
     </script>
     <!-- Modal Crear Bot -->
     <div class="modal fade" id="createBotModal" tabindex="-1">
@@ -701,7 +743,19 @@
 
                         <!-- Campos específicos para Grid -->
                         <div id="gridFields" class="mt-4 p-3 bg-light rounded shadow-sm">
-                            <h6>Parámetros de Malla (Grid)</h6>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="mb-0">Parámetros de Malla (Grid)</h6>
+                                <button type="button" class="btn btn-sm btn-outline-info"
+                                    onclick="suggestGridByVolatility()">
+                                    <i class="fas fa-magic"></i> Sugerir por Volatilidad
+                                </button>
+                            </div>
+                            <div id="volatilityLoader" class="d-none text-info small mb-2">
+                                <i class="fas fa-spinner fa-spin"></i> Analizando Velas 1D y 4H en Binance...
+                            </div>
+                            <div id="volatilityResults" class="d-none alert alert-info small py-2 mb-3">
+                                <!-- Resultados aquí -->
+                            </div>
                             <div class="row g-3">
                                 <div class="col-md-4">
                                     <label class="form-label">Precio Superior</label>
