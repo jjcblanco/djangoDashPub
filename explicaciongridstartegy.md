@@ -1,9 +1,6 @@
-El código actual utiliza el escaner de rango (
+El código actual utiliza el escaner de rango (range_scanner) para sugerir automáticamente los máximos y mínimos de la grilla. 
 
-range_scanner
-) para sugerir automáticamente los máximos y mínimos de la grilla. El criterio principal se encuentra en el archivo 
-
-dashboard/range_finder.py
+El criterio principal se encuentra en el archivo dashboard/range_finder.py
 , específicamente en la función 
 
 calculate_range_score
@@ -12,24 +9,15 @@ calculate_range_score
 Aquí te detallo cómo lo hace y qué criterios usa:
 
 1. ¿Qué lugar del código lo hace?
-El archivo principal responsable es 
-
-criptodash/dashboard/range_finder.py
- dentro de la función 
-
-calculate_range_score(df, period=14)
+El archivo principal responsable es criptodash/dashboard/range_finder.py
+ 
+ Funcion  calculate_range_score(df, period=14)   
  (específicamente entre las líneas 33 y 57).
 
 Estos valores sugeridos luego son tomados por la vista 
 
 range_scanner
- (en 
-
-dashboard_views.py
-) y enviados a la interfaz (
-
-bot_dashboard.html
-), donde se auto-completan en el formulario de creación del bot Grid.
+ (en dashboard_views.py) y enviados a la interfaz (bot_dashboard.html), donde se auto-completan en el formulario de creación del bot Grid.
 
 2. ¿Cuáles son los criterios exactos?
 El cálculo se basa en el comportamiento de las últimas 24 velas (dependiendo del timeframe que estés usando, por ejemplo, las últimas 24 horas si el timeframe es de 1h).
