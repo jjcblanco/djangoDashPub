@@ -372,8 +372,11 @@
                                 </td>
                                 <td>
                                     <div class="progress" style="height: 20px; width: 80px;">
-                                        <div class="progress-bar {% if señal.strength >= 4 %}bg-success{% elif señal.strength >= 3 %}bg-warning{% else %}bg-info{% endif %}"
-                                            style="width: {% if señal.strength %}{% widthratio señal.strength 5 100 %}{% else %}0{% endif %}%;">
+                                        <div class="progress-bar
+                                        {% if señal.strength >= 4 %}bg-success
+                                        {% elif señal.strength >= 3 %}bg-warning
+                                        {% else %}bg-info{% endif %}"
+                                            style="width: {% widthratio señal.strength 5 100 %}%">
                                             {{ señal.strength|floatformat:0 }}/5
                                         </div>
                                     </div>
