@@ -5,7 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
-from ..models import LiveBot, LiveTrade, TradingPair, CapitalFunding, GlobalSettings
+from ..models import LiveBot, LiveTrade, TradingPair, CapitalFunding, GlobalSettings, DailyMetric
 from ..bot_manager import BotManager
 import json
 from decimal import Decimal
@@ -115,6 +115,53 @@ def bot_dashboard(request):
         if exchange_balance:
             real_net_profit = real_total - total_injected_capital
 
+        # 7. Gráfico de Equidad (Equity Curve)
+        metrics = DailyMetric.objects.all().order_by('date')
+        equity_chart = None
+        if metrics.exists():
+            try:
+                import plotly.graph_objs as go
+                from plotly.offline import plot
+                
+                # Tomar los últimos 30 días para no saturar
+                recent_metrics = list(metrics)[-30:]
+                dates = [m.date for m in recent_metrics]
+                balances = [float(m.total_balance) for m in recent_metrics]
+                
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=dates, 
+                    y=balances, 
+                    mode='lines+markers', 
+                    name='Balance Total (USDT)',
+                    line=dict(color='#4e73df', width=3),
+                    marker=dict(size=8, color='#ffffff', line=dict(color='#4e73df', width=2)),
+                    hovertemplate='<b>%{x}</b><br>Saldo: $%{y:,.2f}<extra></extra>'
+                ))
+                
+                fig.update_layout(
+                    title={
+                        'text': 'Evolución del Capital (Equity Curve)',
+                        'y':0.9,
+                        'x':0.5,
+                        'xanchor': 'center',
+                        'yanchor': 'top',
+                        'font': {'size': 18, 'color': '#5a5c69'}
+                    },
+                    xaxis_title=None,
+                    yaxis_title='USDT',
+                    template='plotly_white',
+                    height=350,
+                    margin=dict(l=40, r=40, t=60, b=40),
+                    hovermode='x unified',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    yaxis=dict(gridcolor='#f0f0f0', zerolinecolor='#f0f0f0')
+                )
+                equity_chart = plot(fig, output_type='div', include_plotlyjs=False)
+            except Exception as e:
+                print(f"Error generando gráfico de equidad: {e}")
+
         context = {
             'bots_data': bots_data,
             'recent_trades': recent_trades,
@@ -133,7 +180,8 @@ def bot_dashboard(request):
                 'roi': global_roi,
                 'commission': float(global_commission)
             },
-            'global_settings': global_settings
+            'global_settings': global_settings,
+            'equity_chart': equity_chart
         }
         return render(request, 'dashboard/bot_dashboard.html', context)
     except Exception as e:

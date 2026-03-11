@@ -45,6 +45,14 @@ class BotManager:
                 
                 # Notificar Error Crítico
                 send_telegram_message(f"⚠️ <b>Error en Bot {bot.id} ({bot.name})</b>\nEstado: ERROR\nMensaje: {str(e)[:100]}...")
+        
+        # Registrar métrica diaria de performance ( Equity Curve )
+        try:
+            from .utils.performance import snapshot_daily_metrics
+            snapshot_daily_metrics()
+        except Exception as e:
+            logger.error(f"Error registrando snapshot diario en manager: {e}")
+            
         return results
 
     @staticmethod
