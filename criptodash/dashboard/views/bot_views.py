@@ -125,13 +125,13 @@ def bot_dashboard(request):
             logger.info("No existen métricas de rendimiento. Intentando generar snapshot inicial...")
             try:
                 from ..utils.performance import snapshot_daily_metrics
-                success = snapshot_daily_metrics()
+                success, error_msg = snapshot_daily_metrics()
                 if success:
                     metrics = DailyMetric.objects.all().order_by('date')
                     logger.info("Snapshot inicial generado con éxito.")
                 else:
-                    logger.error("Fallo al generar snapshot inicial de métricas.")
-                    messages.warning(request, "Aviso: No se pudo obtener el saldo de Binance para el gráfico de hoy. Verifica tus API Keys.")
+                    logger.error(f"Fallo al generar snapshot inicial de métricas: {error_msg}")
+                    messages.warning(request, f"Aviso: No se pudo obtener el saldo de Binance para el gráfico de hoy. (Error: {error_msg})")
             except Exception as e:
                 logger.error(f"Error forzando snapshot inicial: {e}")
 
