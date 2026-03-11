@@ -117,6 +117,16 @@ def bot_dashboard(request):
 
         # 7. Gráfico de Equidad (Equity Curve)
         metrics = DailyMetric.objects.all().order_by('date')
+        
+        # Si no hay métricas, forzar un snapshot inicial para que aparezca algo
+        if not metrics.exists():
+            try:
+                from ..utils.performance import snapshot_daily_metrics
+                snapshot_daily_metrics()
+                metrics = DailyMetric.objects.all().order_by('date')
+            except Exception as e:
+                print(f"Error forzando snapshot inicial: {e}")
+
         equity_chart = None
         if metrics.exists():
             try:
@@ -158,7 +168,7 @@ def bot_dashboard(request):
                     plot_bgcolor='rgba(0,0,0,0)',
                     yaxis=dict(gridcolor='#f0f0f0', zerolinecolor='#f0f0f0')
                 )
-                equity_chart = plot(fig, output_type='div', include_plotlyjs=False)
+                equity_chart = plot(fig, output_type='div', include_plotlyjs='cdn')
             except Exception as e:
                 print(f"Error generando gráfico de equidad: {e}")
 
