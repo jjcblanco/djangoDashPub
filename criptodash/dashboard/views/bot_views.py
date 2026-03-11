@@ -3,7 +3,7 @@ from django.db import models
 from django.db.models import Sum
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
 from ..models import LiveBot, LiveTrade, TradingPair, CapitalFunding, GlobalSettings
 from ..bot_manager import BotManager
@@ -12,123 +12,127 @@ from decimal import Decimal
 
 @login_required
 def bot_dashboard(request):
-    """Vista principal para gestionar bots."""
-    from ..ccxttest1 import binance as exchange
-    
-    bots = LiveBot.objects.all().order_by('-created_at')
-    available_pairs = TradingPair.objects.filter(is_active=True)
-    global_settings, _ = GlobalSettings.objects.get_or_create(id=1)
-    
-    # Calcular stats rápidas para cada bot
-    bots_data = []
-    for bot in bots:
-        trades = LiveTrade.objects.filter(bot=bot)
-        total_pnl = sum(t.pnl for t in trades)
-        active_trades_query = trades.filter(status='OPEN')
-        active_trades_count = active_trades_query.count()
-        
-        # Calcular Break-even (Precio promedio de entrada de lo que está abierto)
-        total_qty = sum(t.amount for t in active_trades_query)
-        total_cost = sum(t.amount * t.entry_price for t in active_trades_query)
-        break_even = float(total_cost / total_qty) if total_qty > 0 else None
-        
-        bots_data.append({
-            'bot': bot,
-            'total_pnl': total_pnl,
-            'active_trades': active_trades_count,
-            'break_even': break_even,
-            'profit_pct': (total_pnl / bot.initial_balance * 100) if bot.initial_balance > 0 else 0
-        })
-
-    # Calcular métricas globales
-    global_invested = sum(b.initial_balance for b in bots)
-    global_assigned = sum(b.current_balance for b in bots)
-    global_pnl = sum(d['total_pnl'] for d in bots_data)
-    global_roi = (global_pnl / global_invested * 100) if global_invested > 0 else 0
-    global_commission = LiveTrade.objects.aggregate(total=Sum('commission'))['total'] or Decimal("0")
-
-    # Obtener las últimas 50 operaciones globales para el historial
-    recent_trades = list(LiveTrade.objects.all().order_by('-entry_time')[:50])
-    
-    # Obtener precios actuales para los símbolos involucrados
-    symbols = list(set([t.bot.pair.symbol for t in recent_trades if t.status == 'OPEN']))
-    current_prices = {}
-    if symbols:
-        try:
-            # Añadir un timeout corto para no colgar la vista principal
-            exchange.timeout = 5000  # 5 segundos
-            tickers = exchange.fetch_tickers(symbols)
-            current_prices = {s: tickers[s]['last'] for s in symbols if s in tickers}
-        except Exception as e:
-            print(f"Error fetching tickers in dashboard: {e}")
-
-    # Enriquecer trades para la vista
-    for trade in recent_trades:
-        if trade.status == 'OPEN':
-            symbol = trade.bot.pair.symbol
-            trade.current_price = current_prices.get(symbol)
-            
-            # Calcular precio objetivo para Grid
-            if trade.bot.strategy_type == 'GRID':
-                params = trade.bot.parameters
-                try:
-                    upper = float(params.get('upper_price', 0))
-                    lower = float(params.get('lower_price', 0))
-                    levels = int(params.get('grid_levels', 2))
-                    if levels > 1:
-                        grid_step = (upper - lower) / (levels - 1)
-                        trade.target_price = float(trade.entry_price) + grid_step
-                except (ValueError, TypeError):
-                    trade.target_price = None
-
-    # Obtener balance real de Binance
-    exchange_balance = None
-    over_allocated = False
-    real_total = Decimal("0")
+    """Vista principal para gestionar bots con diagnóstico."""
     try:
-        bal = exchange.fetch_balance()
-        real_total = Decimal(str(bal['total'].get('USDT', 0)))
-        exchange_balance = {
-            'free': bal['free'].get('USDT', 0),
-            'total': float(real_total),
-            'used': bal['used'].get('USDT', 0)
+        from ..ccxttest1 import binance as exchange
+        
+        bots = LiveBot.objects.all().order_by('-created_at')
+        available_pairs = TradingPair.objects.filter(is_active=True)
+        global_settings, _ = GlobalSettings.objects.get_or_create(id=1)
+        
+        # Calcular stats rápidas para cada bot
+        bots_data = []
+        for bot in bots:
+            trades = LiveTrade.objects.filter(bot=bot)
+            total_pnl = sum(t.pnl for t in trades)
+            active_trades_query = trades.filter(status='OPEN')
+            active_trades_count = active_trades_query.count()
+            
+            # Calcular Break-even (Precio promedio de entrada de lo que está abierto)
+            total_qty = sum(t.amount for t in active_trades_query)
+            total_cost = sum(t.amount * t.entry_price for t in active_trades_query)
+            break_even = float(total_cost / total_qty) if total_qty > 0 else None
+            
+            bots_data.append({
+                'bot': bot,
+                'total_pnl': total_pnl,
+                'active_trades': active_trades_count,
+                'break_even': break_even,
+                'profit_pct': (total_pnl / bot.initial_balance * 100) if bot.initial_balance > 0 else 0
+            })
+
+        # Calcular métricas globales
+        global_invested = sum(b.initial_balance for b in bots)
+        global_assigned = sum(b.current_balance for b in bots)
+        global_pnl = sum(d['total_pnl'] for d in bots_data)
+        global_roi = (global_pnl / global_invested * 100) if global_invested > 0 else 0
+        global_commission = LiveTrade.objects.aggregate(total=Sum('commission'))['total'] or Decimal("0")
+
+        # Obtener las últimas 50 operaciones globales para el historial
+        recent_trades = list(LiveTrade.objects.all().order_by('-entry_time')[:50])
+        
+        # Obtener precios actuales para los símbolos involucrados
+        symbols = list(set([t.bot.pair.symbol for t in recent_trades if t.status == 'OPEN']))
+        current_prices = {}
+        if symbols:
+            try:
+                # Añadir un timeout corto para no colgar la vista principal
+                exchange.timeout = 5000  # 5 segundos
+                tickers = exchange.fetch_tickers(symbols)
+                current_prices = {s: tickers[s]['last'] for s in symbols if s in tickers}
+            except Exception as e:
+                print(f"Error fetching tickers in dashboard: {e}")
+
+        # Enriquecer trades para la vista
+        for trade in recent_trades:
+            if trade.status == 'OPEN':
+                symbol = trade.bot.pair.symbol
+                trade.current_price = current_prices.get(symbol)
+                
+                # Calcular precio objetivo para Grid
+                if trade.bot.strategy_type == 'GRID':
+                    params = trade.bot.parameters
+                    try:
+                        upper = float(params.get('upper_price', 0))
+                        lower = float(params.get('lower_price', 0))
+                        levels = int(params.get('grid_levels', 2))
+                        if levels > 1:
+                            grid_step = (upper - lower) / (levels - 1)
+                            trade.target_price = float(trade.entry_price) + grid_step
+                    except (ValueError, TypeError):
+                        trade.target_price = None
+
+        # Obtener balance real de Binance
+        exchange_balance = None
+        over_allocated = False
+        real_total = Decimal("0")
+        try:
+            bal = exchange.fetch_balance()
+            real_total = Decimal(str(bal['total'].get('USDT', 0)))
+            exchange_balance = {
+                'free': bal['free'].get('USDT', 0),
+                'total': float(real_total),
+                'used': bal['used'].get('USDT', 0)
+            }
+            # Si lo que los bots "creen" que tienen supera lo que hay en Binance por más de 1 USDT
+            if global_assigned > real_total + Decimal("1.0"):
+                over_allocated = True
+        except Exception as e:
+            print(f"Error fetching balance: {e}")
+
+        # Calcular capital total inyectado (histórico)
+        total_injected_capital = CapitalFunding.objects.aggregate(total=models.Sum('amount'))['total'] or Decimal("0")
+        funding_history = CapitalFunding.objects.all().order_by('-funding_date')[:10]
+        
+        # Calcular Beneficio Real Absoluto (Saldo Actual - Capital Inyectado)
+        real_net_profit = Decimal("0")
+        if exchange_balance:
+            real_net_profit = real_total - total_injected_capital
+
+        context = {
+            'bots_data': bots_data,
+            'recent_trades': recent_trades,
+            'available_pairs': available_pairs,
+            'strategy_types': LiveBot.STRATEGY_CHOICES,
+            'exchange_balance': exchange_balance,
+            'over_allocated': over_allocated,
+            'real_total': real_total,
+            'global_assigned': global_assigned,
+            'total_injected_capital': total_injected_capital,
+            'real_net_profit': real_net_profit,
+            'funding_history': funding_history,
+            'global_metrics': {
+                'invested': global_invested,
+                'pnl': global_pnl,
+                'roi': global_roi,
+                'commission': float(global_commission)
+            },
+            'global_settings': global_settings
         }
-        # Si lo que los bots "creen" que tienen supera lo que hay en Binance por más de 1 USDT
-        if global_assigned > real_total + Decimal("1.0"):
-            over_allocated = True
+        return render(request, 'dashboard/bot_dashboard.html', context)
     except Exception as e:
-        print(f"Error fetching balance: {e}")
-
-    # Calcular capital total inyectado (histórico)
-    total_injected_capital = CapitalFunding.objects.aggregate(total=models.Sum('amount'))['total'] or Decimal("0")
-    funding_history = CapitalFunding.objects.all().order_by('-funding_date')[:10]
-    
-    # Calcular Beneficio Real Absoluto (Saldo Actual - Capital Inyectado)
-    real_net_profit = Decimal("0")
-    if exchange_balance:
-        real_net_profit = real_total - total_injected_capital
-
-    context = {
-        'bots_data': bots_data,
-        'recent_trades': recent_trades,
-        'available_pairs': available_pairs,
-        'strategy_types': LiveBot.STRATEGY_CHOICES,
-        'exchange_balance': exchange_balance,
-        'over_allocated': over_allocated,
-        'real_total': real_total,
-        'global_assigned': global_assigned,
-        'total_injected_capital': total_injected_capital,
-        'real_net_profit': real_net_profit,
-        'funding_history': funding_history,
-        'global_metrics': {
-            'invested': global_invested,
-            'pnl': global_pnl,
-            'roi': global_roi,
-            'commission': float(global_commission)
-        },
-        'global_settings': global_settings
-    }
-    return render(request, 'dashboard/bot_dashboard.html', context)
+        import traceback
+        return HttpResponse(f"<h3>Error 500 en Dashboard</h3><pre>{traceback.format_exc()}</pre>", status=500)
 
 @login_required
 @require_POST
