@@ -204,6 +204,17 @@ def create_bot(request):
         )
         
         messages.success(request, f"Bot '{name}' creado exitosamente.")
+        
+        # Notificación Telegram
+        from ..utils.notifications import send_telegram_message
+        msg = (
+            f"🆕 <b>Bot Creado</b>\n"
+            f"Nombre: <code>{name}</code>\n"
+            f"Par: {pair.symbol}\n"
+            f"Estrategia: {strategy_type}\n"
+            f"Capital: ${balance}"
+        )
+        send_telegram_message(msg)
     except Exception as e:
         messages.error(request, f"Error al crear bot: {e}")
     
@@ -216,27 +227,38 @@ def bot_action(request, bot_id):
     action = request.POST.get('action')
     try:
         bot = LiveBot.objects.get(id=bot_id)
+        from ..utils.notifications import send_telegram_message
         
         if action == 'start':
             bot.status = 'RUNNING'
             bot.save()
             messages.success(request, f"Bot '{bot.name}' iniciado.")
+            send_telegram_message(f"▶️ <b>Bot Iniciado</b>\nEl bot <code>{bot.name}</code> ({bot.pair.symbol}) ha comenzado a operar.")
+            
         elif action == 'stop':
             bot.status = 'STOPPED'
             bot.save()
             messages.success(request, f"Bot '{bot.name}' detenido.")
+            send_telegram_message(f"⏹️ <b>Bot Detenido</b>\nEl bot <code>{bot.name}</code> ({bot.pair.symbol}) se ha detenido manualmente.")
+            
         elif action == 'close_only':
             bot.status = 'CLOSE_ONLY'
             bot.save()
             messages.info(request, f"Bot '{bot.name}' en modo SOLO CIERRE (Se venderá lo abierto, no se comprará más).")
+            send_telegram_message(f"⚠️ <b>Modo Solo Cierre</b>\nEl bot <code>{bot.name}</code> ha sido puesto en modo de reducción.")
+            
         elif action == 'clear_error':
             bot.last_error = None
             bot.status = 'STOPPED'
             bot.save()
             messages.success(request, f"Error de '{bot.name}' limpiado. Estado reseteado a STOPPED.")
+            
         elif action == 'delete':
+            bot_name = bot.name
+            bot_pair = bot.pair.symbol
             bot.delete()
             messages.success(request, "Bot eliminado.")
+            send_telegram_message(f"🗑️ <b>Bot Eliminado</b>\nEl bot <code>{bot_name}</code> ({bot_pair}) ha sido removido del sistema.")
             
     except Exception as e:
         messages.error(request, f"Error: {e}")
