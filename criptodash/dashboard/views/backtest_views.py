@@ -46,6 +46,8 @@ def backtest_view(request):
             atr_mult_tp = float(request.POST.get('atr_mult_tp', 3.0))
             trailing_stop = request.POST.get('trailing_stop') == 'on'
             use_candles = request.POST.get('use_candles') == 'on'
+            strategy_mode = request.POST.get('strategy_mode', 'balanced')
+            use_bollinger_filter = request.POST.get('use_bollinger_filter') == 'on'
 
             strategy_type = request.POST.get('strategy', 'signal-based')  # 'signal-based', 'supertrend', 'day-trading', 'grid'
             timeframe = request.POST.get('timeframe', '1h')
@@ -103,7 +105,9 @@ def backtest_view(request):
                     'min_adx': min_adx,
                     'atr_sl': atr_mult_sl,
                     'atr_tp': atr_mult_tp,
-                    'use_candles': use_candles
+                    'use_candles': use_candles,
+                    'strategy_mode': strategy_mode,
+                    'use_bollinger_filter': use_bollinger_filter
                 }
                 strategy = DayTradingStrategy(parameters=strategy_params)
                 results = backtester.run_backtest(
@@ -219,6 +223,8 @@ def backtest_view(request):
                 'atr_mult_tp': atr_mult_tp,
                 'trailing_stop': trailing_stop,
                 'use_candles': use_candles,
+                'strategy_mode': strategy_mode,
+                'use_bollinger_filter': use_bollinger_filter,
                 'strategy': strategy_type,
                 'timeframe': timeframe,
                 'pairs': pairs,

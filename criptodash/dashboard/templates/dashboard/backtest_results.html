@@ -303,6 +303,24 @@
                         </strong>
                     </div>
                 </div>
+                <div class="col-md-3">
+                    <div class="summary-item">
+                        <span>Strategy Mode:</span>
+                        <strong class="text-info">{{ strategy_mode|title }}</strong>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="summary-item">
+                        <span>Bollinger Filter:</span>
+                        <strong>
+                            {% if use_bollinger_filter %}
+                            <span class="text-success">Active</span>
+                            {% else %}
+                            Inactive
+                            {% endif %}
+                        </strong>
+                    </div>
+                </div>
             </div>
         </div>
 
