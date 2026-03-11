@@ -159,18 +159,18 @@
                     <label for="pair">Par:</label>
                     <select id="pair" name="pair" class="form-control" style="width:160px;">
                         {% for p in available_pairs %}
-                        <option value="{{ p }}" {% if pair_selected == p %}selected{% endif %}>{{ p }}</option>
+                        <option value="{{ p }}" {% if pair_selected==p %}selected{% endif %}>{{ p }}</option>
                         {% endfor %}
                     </select>
 
                     <label for="timeframe">Intervalo:</label>
                     <select id="timeframe" name="timeframe" class="form-control" style="width:120px;">
-                        <option value="1m" {% if timeframe == '1m' %}selected{% endif %}>1m</option>
-                        <option value="5m" {% if timeframe == '5m' %}selected{% endif %}>5m</option>
-                        <option value="15m" {% if timeframe == '15m' %}selected{% endif %}>15m</option>
-                        <option value="1h" {% if timeframe == '1h' %}selected{% endif %}>1h</option>
-                        <option value="4h" {% if timeframe == '4h' %}selected{% endif %}>4h</option>
-                        <option value="1d" {% if timeframe == '1d' %}selected{% endif %}>1d</option>
+                        <option value="1m" {% if timeframe=='1m' %}selected{% endif %}>1m</option>
+                        <option value="5m" {% if timeframe=='5m' %}selected{% endif %}>5m</option>
+                        <option value="15m" {% if timeframe=='15m' %}selected{% endif %}>15m</option>
+                        <option value="1h" {% if timeframe=='1h' %}selected{% endif %}>1h</option>
+                        <option value="4h" {% if timeframe=='4h' %}selected{% endif %}>4h</option>
+                        <option value="1d" {% if timeframe=='1d' %}selected{% endif %}>1d</option>
                     </select>
 
                     <label for="fecha_inicio">Desde:</label>
@@ -190,11 +190,13 @@
                     <div class="ms-3 p-2 border rounded bg-light d-flex gap-3 align-items-center">
                         <small class="fw-bold text-muted">Visualizar:</small>
                         <div class="form-check form-check-inline mb-0">
-                            <input class="form-check-input" type="checkbox" name="show_ema" id="show_ema" value="1" {% if show_ema %}checked{% endif %}>
+                            <input class="form-check-input" type="checkbox" name="show_ema" id="show_ema" value="1" {%
+                                if show_ema %}checked{% endif %}>
                             <label class="form-check-label" for="show_ema">EMAs</label>
                         </div>
                         <div class="form-check form-check-inline mb-0">
-                            <input class="form-check-input" type="checkbox" name="show_rsi" id="show_rsi" value="1" {% if show_rsi %}checked{% endif %}>
+                            <input class="form-check-input" type="checkbox" name="show_rsi" id="show_rsi" value="1" {%
+                                if show_rsi %}checked{% endif %}>
                             <label class="form-check-label" for="show_rsi">RSI</label>
                         </div>
                         <div class="form-check form-check-inline mb-0">
@@ -370,11 +372,8 @@
                                 </td>
                                 <td>
                                     <div class="progress" style="height: 20px; width: 80px;">
-                                        <div class="progress-bar
-                                        {% if señal.strength >= 4 %}bg-success
-                                        {% elif señal.strength >= 3 %}bg-warning
-                                        {% else %}bg-info{% endif %}"
-                                            style="width: {% widthratio señal.strength 5 100 %}%">
+                                        <div class="progress-bar {% if señal.strength >= 4 %}bg-success{% elif señal.strength >= 3 %}bg-warning{% else %}bg-info{% endif %}"
+                                            style="width: {% if señal.strength %}{% widthratio señal.strength 5 100 %}{% else %}0{% endif %}%;">
                                             {{ señal.strength|floatformat:0 }}/5
                                         </div>
                                     </div>
