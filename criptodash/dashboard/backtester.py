@@ -58,8 +58,10 @@ class DayTradingStrategy(TradingStrategy):
             'atr_sl': 3.0,
             'atr_tp': 2.0,
             'use_candles': True,
-            'min_strength': 0,
-            'min_adx': 0
+            'min_strength': 4, # Subimos el requerimiento base para modo Balanceado
+            'min_adx': 20,     # Mínimo de tendencia para operar
+            'strategy_mode': 'balanced', # opciones: conservative, balanced, aggressive
+            'use_bollinger_filter': True
         }
         # Mezclar con los pasados y asegurar tipos numéricos
         self.parameters = {**default_params, **(parameters or {})}
@@ -129,24 +131,51 @@ class DayTradingStrategy(TradingStrategy):
         df.loc[df['obv'] > df['obv'].shift(1), 'strength'] += 0.5
         
         # Ichimoku confirmation (1 pt)
-        df.loc[df['close'] > df[['senkou_a', 'senkou_b']].max(axis=1), 'strength'] += 1
-        df.loc[df['close'] < df[['senkou_a', 'senkou_b']].min(axis=1), 'strength'] += 1
+        df.loc[df['close'] > df[['senkou_a', 'senkou_b']].max(axis=1), 'strength'] += 2
+        df.loc[df['close'] < df[['senkou_a', 'senkou_b']].min(axis=1), 'strength'] += 2
 
+        # Divergencias RSI (2 pts - Señal muy fuerte de reversión/continuación)
+        # Solo calculamos para las últimas filas para ahorrar tiempo o usamos una ventana
+        for i in range(len(df)-1, max(30, len(df)-20), -1):
+            if detect_bullish_divergence(df, i):
+                df.at[df.index[i], 'strength'] += 2
+                break # Solo sumamos a la más reciente
+            if detect_bearish_divergence(df, i):
+                df.at[df.index[i], 'strength'] += 2
+                break
+        
         # 4. Generar condiciones base de Compra (Crossover EMA + Trend + Momentum)
         allow_late = self.parameters.get('allow_late_entry', False)
         if isinstance(allow_late, str): allow_late = allow_late.lower() == 'true'
         
+        mode = self.parameters.get('strategy_mode', 'balanced').lower()
+        
         ema_crossover = (df['ema9'] > df['ema21']) & (df['ema9'].shift(1) <= df['ema21'].shift(1))
         ema_aligned = (df['ema9'] > df['ema21'])
         
+        # Filtro de tendencia mandatorio (EMA 200)
+        trend_up = (df['close'] > df['ema200'])
+        trend_down = (df['close'] < df['ema200'])
+        
         # Si permitimos entrada tardía, basta con que estén alineadas. Si no, necesitamos el cruce.
-        entry_condition = ema_aligned if allow_late else ema_crossover
+        entry_condition_buy = ema_aligned if allow_late else ema_crossover
+        
+        # FILTRO DE VOLATILIDAD (Bollinger Squeeze)
+        # Queremos comprar cuando NO estamos en un squeeze profundo (queremos expansión)
+        # O cuando el precio rompe una zona de squeeze
+        vol_filter_buy = True
+        if self.parameters.get('use_bollinger_filter', True):
+            df = bollinger_bands(df, window=20, num_std=2, generate_signals=False)
+            # Evitar comprar si estamos comprimidos (bajo volumen/volatilidad)
+            # Comprar solo si hay expansión o no hay squeeze activo
+            vol_filter_buy = ~df['bb_squeezing'] | (df['close'] > df['bb_upper'])
 
         buy_cond = (
-            entry_condition & 
+            entry_condition_buy & 
             (df['close'] > df['ema50']) &
-            (df['close'] > df['ema200']) &  # Filtrar por tendencia alcista larga
-            (df['rsi'] > float(self.parameters.get('rsi_buy', 55)))
+            trend_up & # FILTRO MANDATORIO EMA 200
+            (df['rsi'] > float(self.parameters.get('rsi_buy', 55))) &
+            vol_filter_buy
         )
         
         # Si no es entrada tardía, exigimos MACD positivo para mayor seguridad en el cruce inicial
@@ -154,22 +183,33 @@ class DayTradingStrategy(TradingStrategy):
             buy_cond = buy_cond & (df['macd'] > df['signal_macd'])
         
         # 5. Generar condiciones base de Venta
+        entry_condition_sell = (df['ema9'] < df['ema21']) & (df['ema9'].shift(1) >= df['ema21'].shift(1))
+        
+        vol_filter_sell = True
+        if self.parameters.get('use_bollinger_filter', True):
+            vol_filter_sell = ~df['bb_squeezing'] | (df['close'] < df['bb_lower'])
+
         sell_cond = (
-            (df['ema9'] < df['ema21']) & 
-            (df['ema9'].shift(1) >= df['ema21'].shift(1)) & 
-            (df['rsi'] < float(self.parameters.get('rsi_sell', 45)))
+            entry_condition_sell & 
+            (df['close'] < df['ema50']) &
+            trend_down & # FILTRO MANDATORIO EMA 200
+            (df['rsi'] < float(self.parameters.get('rsi_sell', 45))) &
+            vol_filter_sell
         )
         
-        # 6. Aplicar filtros de Usuario
-        min_adx = float(self.parameters.get('min_adx', 0))
-        if min_adx > 0:
-            buy_cond = buy_cond & (df['adx'] >= min_adx)
-            sell_cond = sell_cond & (df['adx'] >= min_adx)
-            
-        min_strength = float(self.parameters.get('min_strength', 0))
-        if min_strength > 0:
-            buy_cond = buy_cond & (df['strength'] >= min_strength)
-            sell_cond = sell_cond & (df['strength'] >= min_strength)
+        # 6. Aplicar filtros según Modo de Estrategia
+        if mode == 'conservative':
+            min_strength = 6.0
+            min_adx = 25.0
+        elif mode == 'aggressive':
+            min_strength = 2.0
+            min_adx = 15.0
+        else: # balanced
+            min_strength = 4.0
+            min_adx = 20.0
+
+        buy_cond = buy_cond & (df['adx'] >= min_adx) & (df['strength'] >= min_strength)
+        sell_cond = sell_cond & (df['adx'] >= min_adx) & (df['strength'] >= min_strength)
 
         # 7. Aplicar filtro de Velas (si está activado)
         if self.parameters.get('use_candles', False):
