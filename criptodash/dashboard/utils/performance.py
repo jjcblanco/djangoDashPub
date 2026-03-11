@@ -25,21 +25,35 @@ def snapshot_daily_metrics():
         
         # 2. Balance Total Real de Binance (USDT)
         binance_total = Decimal("0")
+        api_key = None
         try:
-            # --- CORRECCIÓN DE AUTENTICACIÓN DEFINITIVA ---
-            # Usar las llaves centralizadas en Django Settings
-            if not getattr(exchange, 'apiKey', None) or not exchange.apiKey:
-                exchange.apiKey = settings.BINANCE_APIKEY
-                exchange.secret = settings.BINANCE_SECRET
+            import ccxt
+            # --- BLINDAJE DE AUTENTICACIÓN ---
+            api_key = getattr(settings, 'BINANCE_APIKEY', None)
+            api_secret = getattr(settings, 'BINANCE_SECRET', None)
             
-            # Asegurarse de que los mercados estén cargados
-            if hasattr(exchange, 'load_markets'):
-                exchange.load_markets()
-                
-            bal = exchange.fetch_balance()
+            if not api_key:
+                err_msg = "API Key no encontrada en settings. Revisa el archivo .env en el VPS."
+                logger.error(err_msg)
+                return None, err_msg
+            
+            # Instancia local para evitar problemas con el objeto global
+            local_exchange = ccxt.binance({
+                'apiKey': api_key,
+                'secret': api_secret,
+                'enableRateLimit': True,
+                'options': {
+                    'recvWindow': 60000,
+                    'adjustForTimeDifference': True,
+                }
+            })
+            
+            bal = local_exchange.fetch_balance()
             binance_total = Decimal(str(bal['total'].get('USDT', 0)))
         except Exception as e:
-            err_msg = f"{type(e).__name__}: {str(e)}"
+            # Reportar el tipo de error y un fragmento de la llave para diagnóstico
+            key_hint = f"llave detectada termina en ...{api_key[-4:]}" if api_key else "sin llave detectada"
+            err_msg = f"{type(e).__name__}: {str(e)} ({key_hint})"
             logger.error(f"Error fetching binance balance for snapshot: {err_msg}")
             return None, err_msg
 
