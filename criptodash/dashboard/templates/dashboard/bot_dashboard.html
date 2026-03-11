@@ -327,9 +327,7 @@
                                         <strong>Error:</strong> {{ data.bot.last_error }}
                                     </div>
                                     {% endif %}
-                                    <small class="text-muted ms-2">Balance: ${{
-                                        data.bot.current_balance|floatformat:2
-                                        }}</small>
+                                    <small class="text-muted ms-2">Balance: ${{ data.bot.current_balance|floatformat:2 }}</small>
                                 </div>
                                 <div class="row mt-3">
                                     <div class="col-4">
@@ -342,20 +340,17 @@
                                     </div>
                                     <div class="col-4">
                                         <small class="text-muted d-block">ROI:</small>
-                                        <span class="fw-bold" style="font-size: 0.9rem;">{{
-                                            data.profit_pct|floatformat:2 }}%</span>
+                                        <span class="fw-bold" style="font-size: 0.9rem;">{{ data.profit_pct|floatformat:2 }}%</span>
                                     </div>
                                     <div class="col-4">
                                         <small class="text-muted d-block">Actv:</small>
-                                        <span class="fw-bold" style="font-size: 0.9rem;">{{ data.active_trades
-                                            }}</span>
+                                        <span class="fw-bold" style="font-size: 0.9rem;">{{ data.active_trades }}</span>
                                     </div>
                                 </div>
                                 <div class="mt-2 pt-2 border-top border-light d-flex justify-content-between">
                                     <small class="text-muted"><i class="fas fa-clock me-1"></i>Corriendo
                                         hace:</small>
-                                    <span class="text-dark fw-bold small">{{ data.bot.created_at|timesince
-                                        }}</span>
+                                    <span class="text-dark fw-bold small">{{ data.bot.created_at|timesince }}</span>
                                 </div>
                                 {% if data.break_even %}
                                 <div class="mt-2 pt-2 border-top border-light">
@@ -477,8 +472,7 @@
                                     <small class="text-muted">{{ trade.bot.pair.symbol }}</small>
                                 </td>
                                 <td>
-                                    <small class="text-muted font-monospace">{{ trade.order_id|default:"-"
-                                        }}</small>
+                                    <small class="text-muted font-monospace">{{ trade.order_id|default:"-" }}</small>
                                 </td>
                                 <td>
                                     <span
@@ -549,10 +543,7 @@
                                     <small class="text-muted">{{ trade.entry_time|date:"d/m H:i" }}</small>
                                 </td>
                                 <td>
-                                    <small class="text-info">{{
-                                        trade.updated_at|default:trade.entry_time|date:"d/m
-                                        H:i"
-                                        }}</small>
+                                    <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i" }}</small>
                                 </td>
                             </tr>
                             {% endfor %}
