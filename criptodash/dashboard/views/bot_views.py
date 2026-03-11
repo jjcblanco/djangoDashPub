@@ -393,23 +393,29 @@ def update_risk_settings(request):
 @login_required
 @require_POST
 def test_telegram_view(request):
-    """Envía un mensaje de prueba a Telegram usando credenciales capturadas o guardadas."""
-    from ..utils.notifications import send_telegram_message
-    
-    # Intentar obtener del POST (para probar antes de guardar) o de la DB
-    token = request.POST.get('telegram_token')
-    chat_id = request.POST.get('telegram_chat_id')
-    
-    success = send_telegram_message(
-        "🤖 <b>¡Conexión Exitosa!</b>\nTu bot de trading ahora está vinculado con esta cuenta de Telegram.",
-        token_override=token,
-        chat_id_override=chat_id,
-        force=True
-    )
-    
-    if success:
-        messages.success(request, "Mensaje de prueba enviado. Revisa tu Telegram.")
-    else:
-        messages.error(request, "Error enviando mensaje. Verifica el Token y Chat ID.")
-    return redirect('bot_dashboard')
+    """Envía un mensaje de prueba a Telegram usando credenciales capturadas o guardadas con diagnóstico."""
+    try:
+        from ..utils.notifications import send_telegram_message
+        
+        # Intentar obtener del POST (para probar antes de guardar) o de la DB
+        token = request.POST.get('telegram_token')
+        chat_id = request.POST.get('telegram_chat_id')
+        
+        success = send_telegram_message(
+            "🤖 <b>¡Conexión Exitosa!</b>\nTu bot de trading ahora está vinculado con esta cuenta de Telegram.",
+            token_override=token,
+            chat_id_override=chat_id,
+            force=True
+        )
+        
+        if success:
+            messages.success(request, "Mensaje de prueba enviado. Revisa tu Telegram.")
+        else:
+            messages.error(request, "Error enviando mensaje. Verifica el Token y Chat ID.")
+        return redirect('bot_dashboard')
+    except Exception as e:
+        import traceback
+        error_msg = f"<h3>Error 500 en Test Telegram</h3><p><b>{str(e)}</b></p><pre>{traceback.format_exc()}</pre>"
+        from django.http import HttpResponse
+        return HttpResponse(error_msg, status=500)
 
