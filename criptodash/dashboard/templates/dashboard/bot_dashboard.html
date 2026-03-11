@@ -972,7 +972,8 @@
 
                         <div class="form-check form-switch mb-3">
                             <input class="form-check-input" type="checkbox" name="notifications_enabled"
-                                id="notifEnabledSwitch" {% if global_settings.notifications_enabled %}checked{% endif %}>
+                                id="notifEnabledSwitch" {% if global_settings.notifications_enabled %}checked{% endif
+                                %}>
                             <label class="form-check-label fw-bold" for="notifEnabledSwitch">
                                 Activar Notificaciones en Tiempo Real
                             </label>
@@ -995,7 +996,16 @@
                 <!-- Formulario invisible para el test de Telegram -->
                 <form id="testTelegramForm" action="{% url 'test_telegram_view' %}" method="POST" style="display:none;">
                     {% csrf_token %}
+                    <input type="hidden" name="telegram_token" id="test_token">
+                    <input type="hidden" name="telegram_chat_id" id="test_chat_id">
                 </form>
+
+                <script>
+                    document.getElementById('testTelegramForm').onsubmit = function () {
+                        document.getElementById('test_token').value = document.querySelector('input[name="telegram_token"]').value;
+                        document.getElementById('test_chat_id').value = document.querySelector('input[name="telegram_chat_id"]').value;
+                    };
+                </script>
             </div>
         </div>
     </div>
