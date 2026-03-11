@@ -393,9 +393,20 @@ def update_risk_settings(request):
 @login_required
 @require_POST
 def test_telegram_view(request):
-    """Envía un mensaje de prueba a Telegram."""
+    """Envía un mensaje de prueba a Telegram usando credenciales capturadas o guardadas."""
     from ..utils.notifications import send_telegram_message
-    success = send_telegram_message("🤖 <b>¡Conexión Exitosa!</b>\nTu bot de trading ahora está vinculado con esta cuenta de Telegram.")
+    
+    # Intentar obtener del POST (para probar antes de guardar) o de la DB
+    token = request.POST.get('telegram_token')
+    chat_id = request.POST.get('telegram_chat_id')
+    
+    success = send_telegram_message(
+        "🤖 <b>¡Conexión Exitosa!</b>\nTu bot de trading ahora está vinculado con esta cuenta de Telegram.",
+        token_override=token,
+        chat_id_override=chat_id,
+        force=True
+    )
+    
     if success:
         messages.success(request, "Mensaje de prueba enviado. Revisa tu Telegram.")
     else:
