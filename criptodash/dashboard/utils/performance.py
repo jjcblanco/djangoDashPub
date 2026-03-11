@@ -10,13 +10,12 @@ logger = logging.getLogger(__name__)
 def snapshot_daily_metrics():
     """
     Registra una captura de las métricas de capital del día.
-    Esta función calcula el valor real de la cuenta en Binance y lo compara 
-    con el capital inyectado para determinar el desempeño histórico.
+    Retorna: (DailyMetric object o None, error_string o None)
     """
     try:
         today = timezone.now().date()
         
-        # 1. Capital Inyectado Total (Suma de todas las fundings)
+        # 1. Capital Inyectado Total
         try:
             total_invested = CapitalFunding.objects.aggregate(total=Sum('amount'))['total'] or Decimal("0")
         except Exception as e:
@@ -24,18 +23,20 @@ def snapshot_daily_metrics():
             total_invested = Decimal("0")
         
         # 2. Balance Total Real de Binance (USDT)
-        # Obtenemos el balance real directamente del exchange
         binance_total = Decimal("0")
         try:
+            # Asegurarse de que los mercados estén cargados si es necesario
+            if hasattr(exchange, 'load_markets'):
+                exchange.load_markets()
+                
             bal = exchange.fetch_balance()
             binance_total = Decimal(str(bal['total'].get('USDT', 0)))
         except Exception as e:
-            logger.error(f"Error fetching binance balance for snapshot: {e}")
-            # Si falla el exchange, no podemos registrar una métrica precisa.
-            return None
+            err_msg = f"{type(e).__name__}: {str(e)}"
+            logger.error(f"Error fetching binance balance for snapshot: {err_msg}")
+            return None, err_msg
 
-        # 3. PnL Real Acumulado (Saldo Actual - Capital Inyectado)
-        # Este valor representa el crecimiento (o decrecimiento) neto de la cuenta.
+        # 3. PnL Real Acumulado
         total_pnl = binance_total - total_invested
         
         # 4. Guardar o actualizar la entrada para hoy
@@ -48,13 +49,9 @@ def snapshot_daily_metrics():
             }
         )
         
-        if created:
-            logger.info(f"Snapshot diario creado: Date={today}, Balance={binance_total}, PnL={total_pnl}")
-        else:
-            logger.info(f"Snapshot diario actualizado: Date={today}, Balance={binance_total}, PnL={total_pnl}")
-            
-        return metric
+        return metric, None
         
     except Exception as e:
-        logger.error(f"Error crítico en snapshot_daily_metrics: {e}")
-        return None
+        err_msg = f"Critical error: {str(e)}"
+        logger.error(err_msg)
+        return None, err_msg
