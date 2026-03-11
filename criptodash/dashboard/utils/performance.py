@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.db.models import Sum
 from ..models import LiveBot, CapitalFunding, DailyMetric
 from ..ccxttest1 import binance as exchange
-from decouple import config
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +26,11 @@ def snapshot_daily_metrics():
         # 2. Balance Total Real de Binance (USDT)
         binance_total = Decimal("0")
         try:
-            # --- CORRECCIÓN DE AUTENTICACIÓN ---
-            # Asegurarse de que las credenciales estén cargadas
-            if not exchange.apiKey or not exchange.secret:
-                exchange.apiKey = config('BINANCE_APIKEY', default=None)
-                exchange.secret = config('BINANCE_SECRET', default=None)
+            # --- CORRECCIÓN DE AUTENTICACIÓN DEFINITIVA ---
+            # Usar las llaves centralizadas en Django Settings
+            if not getattr(exchange, 'apiKey', None) or not exchange.apiKey:
+                exchange.apiKey = settings.BINANCE_APIKEY
+                exchange.secret = settings.BINANCE_SECRET
             
             # Asegurarse de que los mercados estén cargados
             if hasattr(exchange, 'load_markets'):

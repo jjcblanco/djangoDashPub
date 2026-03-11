@@ -7,7 +7,7 @@ import json
 import math
 
 # mis libs
-from decouple import config
+from django.conf import settings
 from . import estilos
 from .indicadores import *
 
@@ -34,8 +34,8 @@ binance = ccxt.binance({
         'recvWindow': 60000,  # Aumentar ventana de recepción a 60 segundos
         'adjustForTimeDifference': True,  # Ajustar automáticamente por diferencia de tiempo
     },
-    'apiKey': config('BINANCE_APIKEY', default=None),
-    'secret': config('BINANCE_SECRET', default=None),
+    'apiKey': getattr(settings, 'BINANCE_APIKEY', None),
+    'secret': getattr(settings, 'BINANCE_SECRET', None),
 })
 exchange = binance
 _binance_initialized = False
