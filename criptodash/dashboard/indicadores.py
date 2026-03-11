@@ -270,8 +270,13 @@ def bollinger_bands(data, window=20, num_std=2, generate_signals=True):
     # Bandwidth (ancho normalizado)
     data['bb_bandwidth'] = (data['bb_upper'] - data['bb_lower']) / data['bb_middle']
     
-    # Generar señales si se solicita
+    # Squeeze Indicator (Banda moviéndose en el 20% inferior de su ancho histórico reciente)
+    # Indica que el mercado está en calma y se prepara para un movimiento explosivo
+    bandwidth_min = data['bb_bandwidth'].rolling(window=100).min()
+    bandwidth_max = data['bb_bandwidth'].rolling(window=100).max()
+    data['bb_squeezing'] = data['bb_bandwidth'] < (bandwidth_min + (bandwidth_max - bandwidth_min) * 0.2)
     
+    # Generar señales si se solicita
     if generate_signals:
         data = generate_bb_signals(data, window)
     
