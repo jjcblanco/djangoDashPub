@@ -51,9 +51,10 @@ def snapshot_daily_metrics():
             bal = local_exchange.fetch_balance()
             binance_total = Decimal(str(bal['total'].get('USDT', 0)))
         except Exception as e:
-            # Reportar el tipo de error y un fragmento de la llave para diagnóstico
-            key_hint = f"llave detectada termina en ...{api_key[-4:]}" if api_key else "sin llave detectada"
-            err_msg = f"{type(e).__name__}: {str(e)} ({key_hint})"
+            # Reportar el tipo de error y fragmentos de las llaves para diagnóstico
+            key_hint = f"key:...{api_key[-4:] if api_key else 'None'}"
+            secret_hint = f"secret:...{api_secret[-4:] if api_secret else 'None'}"
+            err_msg = f"{type(e).__name__}: {str(e)} ({key_hint}, {secret_hint})"
             logger.error(f"Error fetching binance balance for snapshot: {err_msg}")
             return None, err_msg
 

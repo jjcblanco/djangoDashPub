@@ -107,8 +107,11 @@ TEMPLATES = [
 # ======================================
 # CONFIGURACION BINANCE
 # ======================================
+# Buscamos la API Key con varios nombres comunes
 BINANCE_APIKEY = config('BINANCE_APIKEY', default=config('BINANCE_API_KEY', default=None))
-BINANCE_SECRET = config('BINANCE_SECRET', default=config('BINANCE_API_SECRET', default=None))
+
+# Buscamos el Secret con varios nombres comunes (Secret, API_Secret, Secret_Key)
+BINANCE_SECRET = config('BINANCE_SECRET', default=config('BINANCE_API_SECRET', default=config('BINANCE_API_SECRET_KEY', default=config('BINANCE_SECRET_KEY', default=None))))
 
 WSGI_APPLICATION = 'criptodash.wsgi.application'
 
