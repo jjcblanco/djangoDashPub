@@ -13,6 +13,9 @@ from decimal import Decimal
 @login_required
 def bot_dashboard(request):
     """Vista principal para gestionar bots con diagnóstico."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         from ..ccxttest1 import binance as exchange
         
@@ -118,17 +121,23 @@ def bot_dashboard(request):
         # 7. Gráfico de Equidad (Equity Curve)
         metrics = DailyMetric.objects.all().order_by('date')
         
-        # Si no hay métricas, forzar un snapshot inicial para que aparezca algo
         if not metrics.exists():
+            logger.info("No existen métricas de rendimiento. Intentando generar snapshot inicial...")
             try:
                 from ..utils.performance import snapshot_daily_metrics
-                snapshot_daily_metrics()
-                metrics = DailyMetric.objects.all().order_by('date')
+                success = snapshot_daily_metrics()
+                if success:
+                    metrics = DailyMetric.objects.all().order_by('date')
+                    logger.info("Snapshot inicial generado con éxito.")
+                else:
+                    logger.error("Fallo al generar snapshot inicial de métricas.")
+                    messages.warning(request, "Aviso: No se pudo obtener el saldo de Binance para el gráfico de hoy. Verifica tus API Keys.")
             except Exception as e:
-                print(f"Error forzando snapshot inicial: {e}")
+                logger.error(f"Error forzando snapshot inicial: {e}")
 
         equity_chart = None
         if metrics.exists():
+            logger.info(f"Generando gráfico con {metrics.count()} puntos de datos.")
             try:
                 import plotly.graph_objs as go
                 from plotly.offline import plot
@@ -169,8 +178,12 @@ def bot_dashboard(request):
                     yaxis=dict(gridcolor='#f0f0f0', zerolinecolor='#f0f0f0')
                 )
                 equity_chart = plot(fig, output_type='div', include_plotlyjs='cdn')
+                logger.info("Gráfico generado correctamente y enviado al contexto.")
             except Exception as e:
-                print(f"Error generando gráfico de equidad: {e}")
+                logger.error(f"Error generando gráfico de equidad: {e}")
+                messages.error(request, f"Error técnico generando gráfico: {str(e)[:50]}")
+        else:
+            logger.warning("No hay datos suficientes para mostrar el gráfico de equidad.")
 
         context = {
             'bots_data': bots_data,
