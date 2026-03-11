@@ -363,25 +363,42 @@
                             <!-- Standard Filters Section -->
                             <div id="standard-filters">
                                 <div class="row">
-                                    <div class="col-md-4 mb-3">
+                                    <div class="col-md-3 mb-3">
                                         <label for="min_strength" class="form-label">
                                             <i class="fas fa-signal"></i> Min Signal Strength
                                         </label>
                                         <input type="number" class="form-control" id="min_strength" name="min_strength"
                                             value="0" step="1" min="0">
                                     </div>
-                                    <div class="col-md-4 mb-3">
+                                    <div class="col-md-3 mb-3">
                                         <label for="min_adx" class="form-label">
                                             <i class="fas fa-chart-bar"></i> Min ADX Threshold
                                         </label>
                                         <input type="number" class="form-control" id="min_adx" name="min_adx" value="0"
                                             step="1" min="0" max="100">
                                     </div>
-                                    <div class="col-md-4 mb-3 d-flex align-items-end pb-4">
-                                        <div class="form-check form-switch">
+                                    <div class="col-md-3 mb-3">
+                                        <label for="strategy_mode" class="form-label">
+                                            <i class="fas fa-shield-alt"></i> Strategy Mode
+                                        </label>
+                                        <select class="form-select" id="strategy_mode" name="strategy_mode">
+                                            <option value="conservative">Conservative (Strong Confluence)</option>
+                                            <option value="balanced" selected>Balanced (Standard)</option>
+                                            <option value="aggressive">Aggressive (Faster Entries)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3 mb-3 d-flex flex-column justify-content-end pb-2">
+                                        <div class="form-check form-switch mb-2">
                                             <input class="form-check-input" type="checkbox" id="use_candles"
                                                 name="use_candles" checked>
                                             <label class="form-check-label" for="use_candles">Candle Filters</label>
+                                        </div>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="use_bollinger_filter"
+                                                name="use_bollinger_filter" checked>
+                                            <label class="form-check-label" for="use_bollinger_filter"
+                                                title="Evita operar en mercados laterales (squeeze)">Bollinger
+                                                Filter</label>
                                         </div>
                                     </div>
                                 </div>
