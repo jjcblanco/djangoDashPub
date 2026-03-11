@@ -207,3 +207,17 @@ class GlobalSettings(models.Model):
         
     def __str__(self):
         return f"Configuración Global (Kill-Switch: {self.kill_switch_active})"
+
+class DailyMetric(models.Model):
+    date = models.DateField(unique=True)
+    total_balance = models.DecimalField(max_digits=20, decimal_places=8)
+    total_pnl = models.DecimalField(max_digits=20, decimal_places=8)
+    total_invested = models.DecimalField(max_digits=20, decimal_places=8)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name_plural = "Daily Metrics"
+        ordering = ['-date']
+        
+    def __str__(self):
+        return f"Metrics for {self.date} (Balance: {self.total_balance})"

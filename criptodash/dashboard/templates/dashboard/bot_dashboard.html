@@ -271,743 +271,768 @@
                     </div>
                 </div>
             </div>
-        </div>
-
-        {% if messages %}
-        {% for message in messages %}
-        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-        {% endfor %}
-        {% endif %}
-
-        <div class="row">
-            {% for data in bots_data %}
-            <div class="col-xl-4 col-md-6 mb-4">
-                <div
-                    class="card h-100 py-2 {% if data.bot.strategy_type == 'GRID' %}bot-card-grid{% else %}bot-card-daytrading{% endif %}">
-                    <div class="card-body">
-                        <div class="row no-gutters align-items-center">
-                            <div class="col mr-2">
-                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                    {{ data.bot.pair.symbol }} | {{ data.bot.get_strategy_type_display }}
-                                </div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ data.bot.name }}</div>
-                                <div class="mt-2">
-                                    <span
-                                        class="badge {% if data.bot.status == 'RUNNING' %}bg-success{% elif data.bot.status == 'STOPPED' %}bg-warning{% else %}bg-danger{% endif %}">
-                                        {{ data.bot.status }}
-                                    </span>
-                                    <span
-                                        class="badge {% if data.bot.is_live %}bg-danger{% else %}bg-info text-dark{% endif %} ms-1">
-                                        {% if data.bot.is_live %}
-                                        <i class="fas fa-satellite-dish me-1"></i>LIVE
-                                        {% else %}
-                                        <i class="fas fa-vial me-1"></i>PAPER
-                                        {% endif %}
-                                    </span>
-                                    {% if data.bot.last_error %}
-                                    <div class="alert alert-danger p-2 mt-2 small" style="font-size: 0.75rem;">
-                                        <i class="fas fa-exclamation-circle me-1"></i>
-                                        <strong>Error:</strong> {{ data.bot.last_error }}
-                                    </div>
-                                    {% endif %}
-                                    <small class="text-muted ms-2">Balance: ${{ data.bot.current_balance|floatformat:2
-                                        }}</small>
-                                </div>
-                                <div class="row mt-3">
-                                    <div class="col-4">
-                                        <small class="text-muted d-block">PnL Tot:</small>
-                                        <span
-                                            class="{% if data.total_pnl >= 0 %}pnl-positive{% else %}pnl-negative{% endif %}"
-                                            style="font-size: 0.9rem;">
-                                            ${{ data.total_pnl|floatformat:2 }}
-                                        </span>
-                                    </div>
-                                    <div class="col-4">
-                                        <small class="text-muted d-block">ROI:</small>
-                                        <span class="fw-bold" style="font-size: 0.9rem;">{{
-                                            data.profit_pct|floatformat:2 }}%</span>
-                                    </div>
-                                    <div class="col-4">
-                                        <small class="text-muted d-block">Actv:</small>
-                                        <span class="fw-bold" style="font-size: 0.9rem;">{{ data.active_trades }}</span>
-                                    </div>
-                                </div>
-                                <div class="mt-2 pt-2 border-top border-light d-flex justify-content-between">
-                                    <small class="text-muted"><i class="fas fa-clock me-1"></i>Corriendo hace:</small>
-                                    <span class="text-dark fw-bold small">{{ data.bot.created_at|timesince }}</span>
-                                </div>
-                                {% if data.break_even %}
-                                <div class="mt-2 pt-2 border-top border-light">
-                                    <small class="text-muted">Break-even:</small>
-                                    <span class="text-primary fw-bold"
-                                        title="Precio promedio de entrada de lo que está abierto">
-                                        ${{ data.break_even|floatformat:4 }}
-                                    </span>
-                                </div>
-                                {% endif %}
-
-                                {% if data.bot.strategy_type == 'GRID' %}
-                                <div class="mt-2 pt-2 border-top border-light">
-                                    <div class="row g-1">
-                                        <div class="col-4">
-                                            <small class="text-muted d-block text-truncate" title="Mínimo">Mín:</small>
-                                            <span class="fw-bold" style="font-size: 0.75rem;">${{
-                                                data.bot.parameters.lower_price|floatformat:4 }}</span>
-                                        </div>
-                                        <div class="col-4">
-                                            <small class="text-muted d-block text-truncate" title="Máximo">Máx:</small>
-                                            <span class="fw-bold" style="font-size: 0.75rem;">${{
-                                                data.bot.parameters.upper_price|floatformat:4 }}</span>
-                                        </div>
-                                        <div class="col-4">
-                                            <small class="text-muted d-block text-truncate"
-                                                title="Punto de Escape (Stop Loss)">Esc:</small>
-                                            <span class="text-danger fw-bold" style="font-size: 0.75rem;">
-                                                {% if data.bot.parameters.global_stop_loss %}
-                                                ${{ data.bot.parameters.global_stop_loss|floatformat:4 }}
-                                                {% else %}
-                                                ---
-                                                {% endif %}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                                {% endif %}
-                            </div>
-                            <div class="col-auto">
-                                <i class="fas fa-robot fa-2x text-gray-300"></i>
-                            </div>
-                        </div>
-                        <hr>
-                        <div class="d-flex justify-content-end gap-2">
-                            <form action="{% url 'bot_action' data.bot.id %}" method="POST">
-                                {% csrf_token %}
-                                {% if data.bot.status != 'RUNNING' %}
-                                <button type="submit" name="action" value="start" class="btn btn-sm btn-success"
-                                    title="Iniciar/Reactivar">
-                                    <i class="fas fa-play"></i>
-                                </button>
-                                {% endif %}
-
-                                {% if data.bot.status == 'RUNNING' %}
-                                <button type="submit" name="action" value="close_only" class="btn btn-sm btn-info"
-                                    title="Solo Cerrar (No comprar más)">
-                                    <i class="fas fa-sign-out-alt"></i>
-                                </button>
-                                <button type="submit" name="action" value="stop" class="btn btn-sm btn-warning"
-                                    title="Pausar Bot">
-                                    <i class="fas fa-pause"></i>
-                                </button>
-                                {% endif %}
-                                {% if data.bot.last_error %}
-                                <button type="submit" name="action" value="clear_error" class="btn btn-sm btn-info"
-                                    title="Limpiar Error">
-                                    <i class="fas fa-broom"></i>
-                                </button>
-                                {% endif %}
-                                <button type="submit" name="action" value="delete" class="btn btn-sm btn-danger"
-                                    onclick="return confirm('¿Borrar este bot?')">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </form>
-                        </div>
+            {% if equity_chart %}
+            <div class="card mb-4 shadow-sm border-0">
+                <div class="card-body p-0">
+                    <div id="equity-curve-container">
+                        {{ equity_chart|safe }}
                     </div>
                 </div>
             </div>
-            {% empty %}
-            <div class="col-12 text-center py-5">
-                <p class="text-muted">No tienes bots configurados. ¡Crea uno para empezar!</p>
+            {% endif %}
+
+            {% if messages %}
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
             {% endfor %}
-        </div>
+            {% endif %}
 
-        <!-- Tabla de Actividad Reciente -->
-        <div class="card mt-4 shadow-sm">
-            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                <h5 class="mb-0 text-gray-800"><i class="fas fa-history me-2 text-primary"></i>Actividad Reciente y
-                    Órdenes</h5>
-                <span class="badge bg-secondary">Últimas 50 operaciones</span>
+            <div class="row">
+                {% for data in bots_data %}
+                <div class="col-xl-4 col-md-6 mb-4">
+                    <div
+                        class="card h-100 py-2 {% if data.bot.strategy_type == 'GRID' %}bot-card-grid{% else %}bot-card-daytrading{% endif %}">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                        {{ data.bot.pair.symbol }} | {{ data.bot.get_strategy_type_display }}
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ data.bot.name }}</div>
+                                    <div class="mt-2">
+                                        <span
+                                            class="badge {% if data.bot.status == 'RUNNING' %}bg-success{% elif data.bot.status == 'STOPPED' %}bg-warning{% else %}bg-danger{% endif %}">
+                                            {{ data.bot.status }}
+                                        </span>
+                                        <span
+                                            class="badge {% if data.bot.is_live %}bg-danger{% else %}bg-info text-dark{% endif %} ms-1">
+                                            {% if data.bot.is_live %}
+                                            <i class="fas fa-satellite-dish me-1"></i>LIVE
+                                            {% else %}
+                                            <i class="fas fa-vial me-1"></i>PAPER
+                                            {% endif %}
+                                        </span>
+                                        {% if data.bot.last_error %}
+                                        <div class="alert alert-danger p-2 mt-2 small" style="font-size: 0.75rem;">
+                                            <i class="fas fa-exclamation-circle me-1"></i>
+                                            <strong>Error:</strong> {{ data.bot.last_error }}
+                                        </div>
+                                        {% endif %}
+                                        <small class="text-muted ms-2">Balance: ${{
+                                            data.bot.current_balance|floatformat:2
+                                            }}</small>
+                                    </div>
+                                    <div class="row mt-3">
+                                        <div class="col-4">
+                                            <small class="text-muted d-block">PnL Tot:</small>
+                                            <span
+                                                class="{% if data.total_pnl >= 0 %}pnl-positive{% else %}pnl-negative{% endif %}"
+                                                style="font-size: 0.9rem;">
+                                                ${{ data.total_pnl|floatformat:2 }}
+                                            </span>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted d-block">ROI:</small>
+                                            <span class="fw-bold" style="font-size: 0.9rem;">{{
+                                                data.profit_pct|floatformat:2 }}%</span>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted d-block">Actv:</small>
+                                            <span class="fw-bold" style="font-size: 0.9rem;">{{ data.active_trades
+                                                }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2 pt-2 border-top border-light d-flex justify-content-between">
+                                        <small class="text-muted"><i class="fas fa-clock me-1"></i>Corriendo
+                                            hace:</small>
+                                        <span class="text-dark fw-bold small">{{ data.bot.created_at|timesince }}</span>
+                                    </div>
+                                    {% if data.break_even %}
+                                    <div class="mt-2 pt-2 border-top border-light">
+                                        <small class="text-muted">Break-even:</small>
+                                        <span class="text-primary fw-bold"
+                                            title="Precio promedio de entrada de lo que está abierto">
+                                            ${{ data.break_even|floatformat:4 }}
+                                        </span>
+                                    </div>
+                                    {% endif %}
+
+                                    {% if data.bot.strategy_type == 'GRID' %}
+                                    <div class="mt-2 pt-2 border-top border-light">
+                                        <div class="row g-1">
+                                            <div class="col-4">
+                                                <small class="text-muted d-block text-truncate"
+                                                    title="Mínimo">Mín:</small>
+                                                <span class="fw-bold" style="font-size: 0.75rem;">${{
+                                                    data.bot.parameters.lower_price|floatformat:4 }}</span>
+                                            </div>
+                                            <div class="col-4">
+                                                <small class="text-muted d-block text-truncate"
+                                                    title="Máximo">Máx:</small>
+                                                <span class="fw-bold" style="font-size: 0.75rem;">${{
+                                                    data.bot.parameters.upper_price|floatformat:4 }}</span>
+                                            </div>
+                                            <div class="col-4">
+                                                <small class="text-muted d-block text-truncate"
+                                                    title="Punto de Escape (Stop Loss)">Esc:</small>
+                                                <span class="text-danger fw-bold" style="font-size: 0.75rem;">
+                                                    {% if data.bot.parameters.global_stop_loss %}
+                                                    ${{ data.bot.parameters.global_stop_loss|floatformat:4 }}
+                                                    {% else %}
+                                                    ---
+                                                    {% endif %}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-robot fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                            <hr>
+                            <div class="d-flex justify-content-end gap-2">
+                                <form action="{% url 'bot_action' data.bot.id %}" method="POST">
+                                    {% csrf_token %}
+                                    {% if data.bot.status != 'RUNNING' %}
+                                    <button type="submit" name="action" value="start" class="btn btn-sm btn-success"
+                                        title="Iniciar/Reactivar">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    {% endif %}
+
+                                    {% if data.bot.status == 'RUNNING' %}
+                                    <button type="submit" name="action" value="close_only" class="btn btn-sm btn-info"
+                                        title="Solo Cerrar (No comprar más)">
+                                        <i class="fas fa-sign-out-alt"></i>
+                                    </button>
+                                    <button type="submit" name="action" value="stop" class="btn btn-sm btn-warning"
+                                        title="Pausar Bot">
+                                        <i class="fas fa-pause"></i>
+                                    </button>
+                                    {% endif %}
+                                    {% if data.bot.last_error %}
+                                    <button type="submit" name="action" value="clear_error" class="btn btn-sm btn-info"
+                                        title="Limpiar Error">
+                                        <i class="fas fa-broom"></i>
+                                    </button>
+                                    {% endif %}
+                                    <button type="submit" name="action" value="delete" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('¿Borrar este bot?')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12 text-center py-5">
+                    <p class="text-muted">No tienes bots configurados. ¡Crea uno para empezar!</p>
+                </div>
+                {% endfor %}
             </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table id="activityTable" class="table table-hover align-middle" style="color: #333;">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Bot / Par</th>
-                                <th>ID Orden</th>
-                                <th>Tipo</th>
-                                <th>Pr. Actual</th>
-                                <th>Precio Entrada</th>
-                                <th>Precio Salida</th>
-                                <th>Cantidad</th>
-                                <th>Comisión (USD)</th>
-                                <th>PnL Neto (USD)</th>
-                                <th>Estado</th>
-                                <th>Fecha</th>
-                                <th>Actualizado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for trade in recent_trades %}
-                            <tr>
-                                <td>
-                                    <div class="fw-bold">{{ trade.bot.name }}</div>
-                                    <small class="text-muted">{{ trade.bot.pair.symbol }}</small>
-                                </td>
-                                <td>
-                                    <small class="text-muted font-monospace">{{ trade.order_id|default:"-" }}</small>
-                                </td>
-                                <td>
-                                    <span
-                                        class="badge {% if trade.side == 'BUY' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
-                                        {{ trade.side }}
-                                    </span>
-                                </td>
-                                <td>
-                                    {% if trade.status == 'OPEN' and trade.current_price %}
-                                    <span
-                                        class="{% if trade.current_price >= trade.entry_price %}pnl-positive{% else %}pnl-negative{% endif %}">
-                                        ${{ trade.current_price|floatformat:4 }}
-                                    </span>
-                                    {% else %}
-                                    <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>${{ trade.entry_price|floatformat:4 }}</td>
-                                <td>
-                                    {% if trade.exit_price %}
-                                    ${{ trade.exit_price|floatformat:4 }}
-                                    {% elif trade.status == 'OPEN' and trade.target_price %}
-                                    <span class="text-info" title="Precio Objetivo de Venta">
-                                        ${{ trade.target_price|floatformat:4 }}*
-                                    </span>
-                                    {% else %}
-                                    <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ trade.amount|floatformat:6 }}</td>
-                                <td>
-                                    {% if trade.status == 'CLOSED' %}
-                                    <span class="text-muted" title="Comisión entrada + salida (0.1% c/u)">
-                                        ${{ trade.commission|floatformat:4 }}
-                                    </span>
-                                    {% else %}
-                                    <span class="text-muted italic small">Pendiente</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if trade.status == 'CLOSED' %}
-                                    <span
-                                        class="{% if trade.pnl >= 0 %}pnl-positive{% else %}pnl-negative{% endif %} fw-bold">
-                                        {% if trade.pnl >= 0 %}+{% endif %}${{ trade.pnl|floatformat:2 }}
-                                    </span>
-                                    {% else %}
-                                    <span class="text-muted italic small">Abierta</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if trade.status == 'WAITING' %}
-                                    <span class="badge bg-warning text-dark">
-                                        <i class="fas fa-clock me-1"></i>WAIT BUY
-                                    </span>
-                                    {% elif trade.status == 'OPEN' %}
-                                    <span class="badge bg-success">
-                                        <i class="fas fa-shopping-cart me-1"></i>WAIT SELL
-                                    </span>
-                                    {% elif trade.status == 'CLOSED' %}
-                                    <span class="badge bg-dark">CLOSED</span>
-                                    {% elif trade.status == 'CANCELED' %}
-                                    <span class="badge bg-danger">CANCELED</span>
-                                    {% else %}
-                                    <span class="badge bg-light text-dark">{{ trade.status }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <small class="text-muted">{{ trade.entry_time|date:"d/m H:i" }}</small>
-                                </td>
-                                <td>
-                                    <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i"
-                                        }}</small>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+
+            <!-- Tabla de Actividad Reciente -->
+            <div class="card mt-4 shadow-sm">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 text-gray-800"><i class="fas fa-history me-2 text-primary"></i>Actividad Reciente y
+                        Órdenes</h5>
+                    <span class="badge bg-secondary">Últimas 50 operaciones</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table id="activityTable" class="table table-hover align-middle" style="color: #333;">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Bot / Par</th>
+                                    <th>ID Orden</th>
+                                    <th>Tipo</th>
+                                    <th>Pr. Actual</th>
+                                    <th>Precio Entrada</th>
+                                    <th>Precio Salida</th>
+                                    <th>Cantidad</th>
+                                    <th>Comisión (USD)</th>
+                                    <th>PnL Neto (USD)</th>
+                                    <th>Estado</th>
+                                    <th>Fecha</th>
+                                    <th>Actualizado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for trade in recent_trades %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold">{{ trade.bot.name }}</div>
+                                        <small class="text-muted">{{ trade.bot.pair.symbol }}</small>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted font-monospace">{{ trade.order_id|default:"-"
+                                            }}</small>
+                                    </td>
+                                    <td>
+                                        <span
+                                            class="badge {% if trade.side == 'BUY' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+                                            {{ trade.side }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if trade.status == 'OPEN' and trade.current_price %}
+                                        <span
+                                            class="{% if trade.current_price >= trade.entry_price %}pnl-positive{% else %}pnl-negative{% endif %}">
+                                            ${{ trade.current_price|floatformat:4 }}
+                                        </span>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>${{ trade.entry_price|floatformat:4 }}</td>
+                                    <td>
+                                        {% if trade.exit_price %}
+                                        ${{ trade.exit_price|floatformat:4 }}
+                                        {% elif trade.status == 'OPEN' and trade.target_price %}
+                                        <span class="text-info" title="Precio Objetivo de Venta">
+                                            ${{ trade.target_price|floatformat:4 }}*
+                                        </span>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ trade.amount|floatformat:6 }}</td>
+                                    <td>
+                                        {% if trade.status == 'CLOSED' %}
+                                        <span class="text-muted" title="Comisión entrada + salida (0.1% c/u)">
+                                            ${{ trade.commission|floatformat:4 }}
+                                        </span>
+                                        {% else %}
+                                        <span class="text-muted italic small">Pendiente</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if trade.status == 'CLOSED' %}
+                                        <span
+                                            class="{% if trade.pnl >= 0 %}pnl-positive{% else %}pnl-negative{% endif %} fw-bold">
+                                            {% if trade.pnl >= 0 %}+{% endif %}${{ trade.pnl|floatformat:2 }}
+                                        </span>
+                                        {% else %}
+                                        <span class="text-muted italic small">Abierta</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if trade.status == 'WAITING' %}
+                                        <span class="badge bg-warning text-dark">
+                                            <i class="fas fa-clock me-1"></i>WAIT BUY
+                                        </span>
+                                        {% elif trade.status == 'OPEN' %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-shopping-cart me-1"></i>WAIT SELL
+                                        </span>
+                                        {% elif trade.status == 'CLOSED' %}
+                                        <span class="badge bg-dark">CLOSED</span>
+                                        {% elif trade.status == 'CANCELED' %}
+                                        <span class="badge bg-danger">CANCELED</span>
+                                        {% else %}
+                                        <span class="badge bg-light text-dark">{{ trade.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ trade.entry_time|date:"d/m H:i" }}</small>
+                                    </td>
+                                    <td>
+                                        <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m
+                                            H:i"
+                                            }}</small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
 
-    <!-- jQuery y DataTables JS -->
-    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+        <!-- jQuery y DataTables JS -->
+        <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+        <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+        <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 
-    <script>
-        // Inicializar DataTables en español
-        $(document).ready(function () {
-            $('#activityTable').DataTable({
-                "order": [[11, "desc"]], // Ordenar por 'Actualizado' por defecto
-                "pageLength": 10,
-                "language": {
-                    "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json"
-                },
-                "columnDefs": [
-                    { "orderable": false, "targets": [1] } // El ID de orden no suele ser útil para ordenar
-                ]
+        <script>
+            // Inicializar DataTables en español
+            $(document).ready(function () {
+                $('#activityTable').DataTable({
+                    "order": [[11, "desc"]], // Ordenar por 'Actualizado' por defecto
+                    "pageLength": 10,
+                    "language": {
+                        "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json"
+                    },
+                    "columnDefs": [
+                        { "orderable": false, "targets": [1] } // El ID de orden no suele ser útil para ordenar
+                    ]
+                });
             });
-        });
-        function toggleStrategyFields() {
-            const strategy = document.getElementById('strategySelector').value;
-            document.getElementById('gridFields').classList.toggle('d-none', strategy !== 'GRID');
-            document.getElementById('daytradingFields').classList.toggle('d-none', strategy !== 'DAYTRADING');
-        }
+            function toggleStrategyFields() {
+                const strategy = document.getElementById('strategySelector').value;
+                document.getElementById('gridFields').classList.toggle('d-none', strategy !== 'GRID');
+                document.getElementById('daytradingFields').classList.toggle('d-none', strategy !== 'DAYTRADING');
+            }
 
-        async function updateAllBots(e) {
-            const btn = e ? e.target.closest('button') : document.querySelector('button[onclick*="updateAllBots"]');
-            if (btn) {
-                const originalHtml = btn.innerHTML;
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Actualizando...';
+            async function updateAllBots(e) {
+                const btn = e ? e.target.closest('button') : document.querySelector('button[onclick*="updateAllBots"]');
+                if (btn) {
+                    const originalHtml = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Actualizando...';
+
+                    try {
+                        const response = await fetch("{% url 'trigger_bot_update' %}");
+                        if (!response.ok) {
+                            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                        }
+                        const data = await response.json();
+                        location.reload();
+                    } catch (err) {
+                        console.error(err);
+                        alert("Error al actualizar bots: " + err.message);
+                        btn.disabled = false;
+                        btn.innerHTML = originalHtml;
+                    }
+                }
+            }
+
+            // Auto-select pair and strategy from URL params (for Range Scanner)
+            document.addEventListener('DOMContentLoaded', function () {
+                const urlParams = new URLSearchParams(window.location.search);
+                const pairSymbol = urlParams.get('pair');
+                const strategy = urlParams.get('strategy');
+                const timeframe = urlParams.get('timeframe');
+                const lowerPrice = urlParams.get('lower');
+                const upperPrice = urlParams.get('upper');
+                const stopPrice = urlParams.get('stop');
+
+                const minAdx = urlParams.get('min_adx');
+                const minStrength = urlParams.get('min_strength');
+                const allowLate = urlParams.get('allow_late');
+
+                if (pairSymbol || strategy || timeframe || lowerPrice || upperPrice || stopPrice || minAdx || minStrength || allowLate) {
+                    const modal = new bootstrap.Modal(document.getElementById('createBotModal'));
+
+                    if (pairSymbol) {
+                        const pairSelect = document.querySelector('select[name="pair"]');
+                        const option = Array.from(pairSelect.options).find(opt => opt.text === pairSymbol);
+                        if (option) {
+                            pairSelect.value = option.value;
+                        }
+                    }
+
+                    if (strategy) {
+                        const stratSelect = document.getElementById('strategySelector');
+                        stratSelect.value = strategy;
+                        toggleStrategyFields();
+                    }
+
+                    if (timeframe) {
+                        const tfSelect = document.getElementById('timeframeSelector');
+                        if (tfSelect) tfSelect.value = timeframe;
+                    }
+
+                    if (lowerPrice) document.querySelector('input[name="lower_price"]').value = lowerPrice;
+                    if (upperPrice) document.querySelector('input[name="upper_price"]').value = upperPrice;
+                    if (stopPrice) document.querySelector('input[name="global_stop_loss"]').value = stopPrice;
+
+                    if (minAdx) {
+                        const adxInput = document.querySelector('input[name="min_adx"]');
+                        if (adxInput) adxInput.value = minAdx;
+                    }
+                    if (minStrength) {
+                        const strengthInput = document.querySelector('input[name="min_strength"]');
+                        if (strengthInput) strengthInput.value = minStrength;
+                    }
+
+                    if (allowLate === 'true') {
+                        const allowLateCheck = document.getElementById('allowLateEntryCheck');
+                        if (allowLateCheck) allowLateCheck.checked = true;
+                    }
+
+                    modal.show();
+                }
+            });
+
+            async function suggestGridByVolatility() {
+                const pairSelect = document.querySelector('select[name="pair"]');
+                const symbol = pairSelect.options[pairSelect.selectedIndex].text;
+
+                const loader = document.getElementById('volatilityLoader');
+                const results = document.getElementById('volatilityResults');
+
+                loader.classList.remove('d-none');
+                results.classList.add('d-none');
 
                 try {
-                    const response = await fetch("{% url 'trigger_bot_update' %}");
-                    if (!response.ok) {
-                        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-                    }
+                    const response = await fetch(`/api/volatility/?symbol=${encodeURIComponent(symbol)}`);
                     const data = await response.json();
-                    location.reload();
-                } catch (err) {
-                    console.error(err);
-                    alert("Error al actualizar bots: " + err.message);
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
-                }
-            }
-        }
 
-        // Auto-select pair and strategy from URL params (for Range Scanner)
-        document.addEventListener('DOMContentLoaded', function () {
-            const urlParams = new URLSearchParams(window.location.search);
-            const pairSymbol = urlParams.get('pair');
-            const strategy = urlParams.get('strategy');
-            const timeframe = urlParams.get('timeframe');
-            const lowerPrice = urlParams.get('lower');
-            const upperPrice = urlParams.get('upper');
-            const stopPrice = urlParams.get('stop');
+                    loader.classList.add('d-none');
 
-            const minAdx = urlParams.get('min_adx');
-            const minStrength = urlParams.get('min_strength');
-            const allowLate = urlParams.get('allow_late');
+                    if (data.status === 'success') {
+                        document.querySelector('input[name="upper_price"]').value = data.suggested_upper;
+                        document.querySelector('input[name="lower_price"]').value = data.suggested_lower;
+                        document.querySelector('input[name="grid_levels"]').value = data.suggested_levels;
 
-            if (pairSymbol || strategy || timeframe || lowerPrice || upperPrice || stopPrice || minAdx || minStrength || allowLate) {
-                const modal = new bootstrap.Modal(document.getElementById('createBotModal'));
-
-                if (pairSymbol) {
-                    const pairSelect = document.querySelector('select[name="pair"]');
-                    const option = Array.from(pairSelect.options).find(opt => opt.text === pairSymbol);
-                    if (option) {
-                        pairSelect.value = option.value;
-                    }
-                }
-
-                if (strategy) {
-                    const stratSelect = document.getElementById('strategySelector');
-                    stratSelect.value = strategy;
-                    toggleStrategyFields();
-                }
-
-                if (timeframe) {
-                    const tfSelect = document.getElementById('timeframeSelector');
-                    if (tfSelect) tfSelect.value = timeframe;
-                }
-
-                if (lowerPrice) document.querySelector('input[name="lower_price"]').value = lowerPrice;
-                if (upperPrice) document.querySelector('input[name="upper_price"]').value = upperPrice;
-                if (stopPrice) document.querySelector('input[name="global_stop_loss"]').value = stopPrice;
-
-                if (minAdx) {
-                    const adxInput = document.querySelector('input[name="min_adx"]');
-                    if (adxInput) adxInput.value = minAdx;
-                }
-                if (minStrength) {
-                    const strengthInput = document.querySelector('input[name="min_strength"]');
-                    if (strengthInput) strengthInput.value = minStrength;
-                }
-
-                if (allowLate === 'true') {
-                    const allowLateCheck = document.getElementById('allowLateEntryCheck');
-                    if (allowLateCheck) allowLateCheck.checked = true;
-                }
-
-                modal.show();
-            }
-        });
-
-        async function suggestGridByVolatility() {
-            const pairSelect = document.querySelector('select[name="pair"]');
-            const symbol = pairSelect.options[pairSelect.selectedIndex].text;
-
-            const loader = document.getElementById('volatilityLoader');
-            const results = document.getElementById('volatilityResults');
-
-            loader.classList.remove('d-none');
-            results.classList.add('d-none');
-
-            try {
-                const response = await fetch(`/api/volatility/?symbol=${encodeURIComponent(symbol)}`);
-                const data = await response.json();
-
-                loader.classList.add('d-none');
-
-                if (data.status === 'success') {
-                    document.querySelector('input[name="upper_price"]').value = data.suggested_upper;
-                    document.querySelector('input[name="lower_price"]').value = data.suggested_lower;
-                    document.querySelector('input[name="grid_levels"]').value = data.suggested_levels;
-
-                    results.innerHTML = `
+                        results.innerHTML = `
                         <i class="fas fa-info-circle me-1"></i> <strong>Autoconfiguración exitosa:</strong><br>
                         Volatilidad diaria: <strong>$${data.atr_1d}</strong>. 
                         BB 4H: [${data.bb_lower_4h} a ${data.bb_upper_4h}].<br>
                         Precio actual: $${data.current_price}.
                     `;
-                    results.classList.remove('d-none');
-                } else {
-                    alert('Error al calcular volatilidad: ' + data.message);
+                        results.classList.remove('d-none');
+                    } else {
+                        alert('Error al calcular volatilidad: ' + data.message);
+                    }
+                } catch (error) {
+                    loader.classList.add('d-none');
+                    alert('Error de conexión al analizar volatilidad.');
                 }
-            } catch (error) {
-                loader.classList.add('d-none');
-                alert('Error de conexión al analizar volatilidad.');
             }
-        }
-    </script>
-    <!-- Modal Crear Bot -->
-    <div class="modal fade" id="createBotModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <form action="{% url 'create_bot' %}" method="POST">
-                    {% csrf_token %}
-                    <div class="modal-header">
-                        <h5 class="modal-title">Lanzar Nuevo Bot de Estrategia</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Nombre del Bot</label>
-                                <input type="text" name="name" class="form-control" required placeholder="Mi Super Bot">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Par</label>
-                                <select name="pair" class="form-select">
-                                    {% for p in available_pairs %}
-                                    <option value="{{ p.id }}">{{ p.symbol }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Temporalidad</label>
-                                <select name="timeframe" id="timeframeSelector" class="form-select">
-                                    <option value="15m">15m</option>
-                                    <option value="1h" selected>1h</option>
-                                    <option value="4h">4h</option>
-                                    <option value="1d">1d</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Balance (USD)</label>
-                                <input type="number" name="balance" class="form-control" required step="0.01"
-                                    value="1000">
-                                {% if exchange_balance %}
-                                <div class="form-text text-info">
-                                    <i class="fas fa-wallet me-1"></i> Libre en Binance: <strong>${{
-                                        exchange_balance.free|floatformat:2 }}</strong>
+        </script>
+        <!-- Modal Crear Bot -->
+        <div class="modal fade" id="createBotModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <form action="{% url 'create_bot' %}" method="POST">
+                        {% csrf_token %}
+                        <div class="modal-header">
+                            <h5 class="modal-title">Lanzar Nuevo Bot de Estrategia</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Nombre del Bot</label>
+                                    <input type="text" name="name" class="form-control" required
+                                        placeholder="Mi Super Bot">
                                 </div>
-                                {% endif %}
+                                <div class="col-md-3">
+                                    <label class="form-label">Par</label>
+                                    <select name="pair" class="form-select">
+                                        {% for p in available_pairs %}
+                                        <option value="{{ p.id }}">{{ p.symbol }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Temporalidad</label>
+                                    <select name="timeframe" id="timeframeSelector" class="form-select">
+                                        <option value="15m">15m</option>
+                                        <option value="1h" selected>1h</option>
+                                        <option value="4h">4h</option>
+                                        <option value="1d">1d</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Balance (USD)</label>
+                                    <input type="number" name="balance" class="form-control" required step="0.01"
+                                        value="1000">
+                                    {% if exchange_balance %}
+                                    <div class="form-text text-info">
+                                        <i class="fas fa-wallet me-1"></i> Libre en Binance: <strong>${{
+                                            exchange_balance.free|floatformat:2 }}</strong>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-12">
+                                    <label class="form-label">Estrategia</label>
+                                    <select name="strategy_type" id="strategySelector" class="form-select"
+                                        onchange="toggleStrategyFields()">
+                                        <option value="GRID">Grid Trading (Malla)</option>
+                                        <option value="DAYTRADING">Day Trading EMA/RSI</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-12">
+                                    <div class="form-check form-switch p-3 bg-light border rounded">
+                                        <input class="form-check-input ms-0 me-2" type="checkbox" name="is_live"
+                                            id="isLiveSwitch">
+                                        <label class="form-check-label fw-bold text-danger" for="isLiveSwitch">
+                                            <i class="fas fa-exclamation-triangle me-1"></i> ¿EJECUTAR EN REAL? (Dinero
+                                            Real)
+                                        </label>
+                                        <div class="form-text mt-1">Si se activa, el bot enviará órdenes reales a
+                                            Binance.
+                                            Si se deja desactivado, funcionará como simulación.</div>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-md-12">
-                                <label class="form-label">Estrategia</label>
-                                <select name="strategy_type" id="strategySelector" class="form-select"
-                                    onchange="toggleStrategyFields()">
-                                    <option value="GRID">Grid Trading (Malla)</option>
-                                    <option value="DAYTRADING">Day Trading EMA/RSI</option>
-                                </select>
+
+                            <!-- Campos específicos para Grid -->
+                            <div id="gridFields" class="mt-4 p-3 bg-light rounded shadow-sm">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="mb-0">Parámetros de Malla (Grid)</h6>
+                                    <button type="button" class="btn btn-sm btn-outline-info"
+                                        onclick="suggestGridByVolatility()">
+                                        <i class="fas fa-magic"></i> Sugerir por Volatilidad
+                                    </button>
+                                </div>
+                                <div id="volatilityLoader" class="d-none text-info small mb-2">
+                                    <i class="fas fa-spinner fa-spin"></i> Analizando Velas 1D y 4H en Binance...
+                                </div>
+                                <div id="volatilityResults" class="d-none alert alert-info small py-2 mb-3">
+                                    <!-- Resultados aquí -->
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Precio Superior</label>
+                                        <input type="number" name="upper_price" class="form-control" step="0.0001">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Precio Inferior</label>
+                                        <input type="number" name="lower_price" class="form-control" step="0.0001">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Niveles</label>
+                                        <input type="number" name="grid_levels" class="form-control" value="10">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Monto por Nivel (USD)</label>
+                                        <input type="number" name="amount_per_level" class="form-control" value="100">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Stop Loss Global (Precio)</label>
+                                        <input type="number" name="global_stop_loss" class="form-control" step="0.0001">
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-check form-switch mt-2">
+                                            <input class="form-check-input" type="checkbox" name="trailing_enabled"
+                                                id="trailingCheck">
+                                            <label class="form-check-label fw-bold text-primary" for="trailingCheck">
+                                                <i class="fas fa-arrow-up me-1"></i> TRAILING ALCISTA
+                                            </label>
+                                            <div class="form-text">El rango sube automáticamente si el precio supera el
+                                                límite superior.</div>
+                                        </div>
+                                        <div class="form-check form-switch mt-3">
+                                            <input class="form-check-input" type="checkbox" name="trailing_down"
+                                                id="trailingDownCheck">
+                                            <label class="form-check-label fw-bold text-warning"
+                                                for="trailingDownCheck">
+                                                <i class="fas fa-arrow-down me-1"></i> TRAILING DESCENDENTE
+                                            </label>
+                                            <div class="form-text">
+                                                Si el precio cae, el rango baja automáticamente.
+                                                <span class="text-danger fw-bold">Atención:</span> Puede vender niveles
+                                                superiores con pérdidas para reponer capital abajo.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-md-12">
-                                <div class="form-check form-switch p-3 bg-light border rounded">
-                                    <input class="form-check-input ms-0 me-2" type="checkbox" name="is_live"
-                                        id="isLiveSwitch">
-                                    <label class="form-check-label fw-bold text-danger" for="isLiveSwitch">
-                                        <i class="fas fa-exclamation-triangle me-1"></i> ¿EJECUTAR EN REAL? (Dinero
-                                        Real)
-                                    </label>
-                                    <div class="form-text mt-1">Si se activa, el bot enviará órdenes reales a Binance.
-                                        Si se deja desactivado, funcionará como simulación.</div>
+
+                            <!-- Campos específicos para Day Trading -->
+                            <div id="daytradingFields" class="mt-4 p-3 bg-light rounded shadow-sm d-none">
+                                <h6>Parámetros Day Trading</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Fuerza Mínima (1-5)</label>
+                                        <input type="number" name="min_strength" class="form-control" value="3" min="1"
+                                            max="5">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">ADX Mínimo</label>
+                                        <input type="number" name="min_adx" class="form-control" value="20">
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-check form-switch mt-2">
+                                            <input class="form-check-input" type="checkbox" name="allow_late_entry"
+                                                id="allowLateEntryCheck">
+                                            <label class="form-check-label fw-bold text-success"
+                                                for="allowLateEntryCheck">
+                                                <i class="fas fa-sign-in-alt me-1"></i> ENTRADA EN TENDENCIA
+                                            </label>
+                                            <div class="form-text">Si se activa, el bot podrá abrir posiciones incluso
+                                                si la
+                                                tendencia ya ha comenzado (no requiere cruce EMA exacto en la vela
+                                                actual).
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Lanzar Bot</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
 
-                        <!-- Campos específicos para Grid -->
-                        <div id="gridFields" class="mt-4 p-3 bg-light rounded shadow-sm">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h6 class="mb-0">Parámetros de Malla (Grid)</h6>
-                                <button type="button" class="btn btn-sm btn-outline-info"
-                                    onclick="suggestGridByVolatility()">
-                                    <i class="fas fa-magic"></i> Sugerir por Volatilidad
+        <!-- Modal Registrar Inversión (Funding) -->
+        <div class="modal fade" id="addFundingModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-info text-white">
+                        <h5 class="modal-title"><i class="fas fa-hand-holding-usd me-2"></i>Registrar Nueva Inyección de
+                            Capital</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                            aria-label="Close"></button>
+                    </div>
+                    <form action="{% url 'add_funding' %}" method="POST">
+                        {% csrf_token %}
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">Monto (USDT)</label>
+                                <input type="number" name="amount" class="form-control" required step="0.01"
+                                    placeholder="Ej: 50.00">
+                                <div class="form-text">Esto sumará al Capital Inyectado total.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Descripción / Origen</label>
+                                <input type="text" name="description" class="form-control"
+                                    placeholder="Ej: Transferencia Binance Earn, Depósito Tarjeta...">
+                            </div>
+                            <hr>
+                            <h6>Historial Reciente</h6>
+                            <div class="table-responsive" style="max-height: 200px;">
+                                <table class="table table-sm table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Monto</th>
+                                            <th>Origen</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for f in funding_history %}
+                                        <tr>
+                                            <td><small>{{ f.funding_date|date:"d/m/y" }}</small></td>
+                                            <td><strong>${{ f.amount|floatformat:2 }}</strong></td>
+                                            <td><small class="text-muted">{{ f.description|default:"---" }}</small></td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr>
+                                            <td colspan="3" class="text-center text-muted"><small>No hay registros
+                                                    aún</small></td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                            <button type="submit" class="btn btn-info text-white">Registrar Inversión</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Configuración de Riesgo Global -->
+        <div class="modal fade" id="riskSettingsModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-dark text-white">
+                        <h5 class="modal-title"><i class="fas fa-shield-alt me-2"></i>Gestión de Riesgo Global</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                            aria-label="Close"></button>
+                    </div>
+                    <form action="{% url 'update_risk_settings' %}" method="POST">
+                        {% csrf_token %}
+                        <div class="modal-body">
+                            <div class="mb-4">
+                                <label class="form-label fw-bold">Max Drawdown Global (%)</label>
+                                <div class="input-group">
+                                    <input type="number" name="max_drawdown_pct" class="form-control" step="0.1"
+                                        value="{{ global_settings.max_drawdown_pct|stringformat:'.2f' }}" required>
+                                    <span class="input-group-text">%</span>
+                                </div>
+                                <div class="form-text">Si la pérdida total acumulada de la cuenta supera este
+                                    porcentaje, se
+                                    activará el Kill-Switch automáticamente.</div>
+                            </div>
+
+                            {% if global_settings.kill_switch_active %}
+                            <div class="card border-danger bg-light-danger mb-3 shadow-sm">
+                                <div class="card-body py-2">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="reset_kill_switch"
+                                            id="resetKSSwitch">
+                                        <label class="form-check-label fw-bold text-danger" for="resetKSSwitch">
+                                            DESACTIVAR KILL-SWITCH Y REANUDAR
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-info small py-2 mb-3">
+                                <i class="fas fa-check-circle me-1"></i> El sistema está operando normalmente.
+                            </div>
+                            {% endif %}
+
+                            <hr>
+                            <h6 class="fw-bold mb-3"><i class="fab fa-telegram me-2 text-info"></i>Notificaciones por
+                                Telegram</h6>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Telegram Bot Token</label>
+                                <input type="password" name="telegram_token" class="form-control form-control-sm"
+                                    value="{{ global_settings.telegram_token|default:'' }}"
+                                    placeholder="Ej: 123456789:ABCDefgh...">
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Telegram Chat ID</label>
+                                <input type="text" name="telegram_chat_id" class="form-control form-control-sm"
+                                    value="{{ global_settings.telegram_chat_id|default:'' }}"
+                                    placeholder="Ej: 987654321">
+                            </div>
+
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" name="notifications_enabled"
+                                    id="notifEnabledSwitch" {% if global_settings.notifications_enabled %}checked{%
+                                    endif %}>
+                                <label class="form-check-label fw-bold" for="notifEnabledSwitch">
+                                    Activar Notificaciones en Tiempo Real
+                                </label>
+                            </div>
+                        </div>
+                        <div class="modal-footer d-flex justify-content-between">
+                            <div>
+                                <button type="submit" form="testTelegramForm" class="btn btn-outline-info btn-sm">
+                                    <i class="fas fa-paper-plane me-1"></i> Probar Conexión
                                 </button>
                             </div>
-                            <div id="volatilityLoader" class="d-none text-info small mb-2">
-                                <i class="fas fa-spinner fa-spin"></i> Analizando Velas 1D y 4H en Binance...
-                            </div>
-                            <div id="volatilityResults" class="d-none alert alert-info small py-2 mb-3">
-                                <!-- Resultados aquí -->
-                            </div>
-                            <div class="row g-3">
-                                <div class="col-md-4">
-                                    <label class="form-label">Precio Superior</label>
-                                    <input type="number" name="upper_price" class="form-control" step="0.0001">
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Precio Inferior</label>
-                                    <input type="number" name="lower_price" class="form-control" step="0.0001">
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Niveles</label>
-                                    <input type="number" name="grid_levels" class="form-control" value="10">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Monto por Nivel (USD)</label>
-                                    <input type="number" name="amount_per_level" class="form-control" value="100">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Stop Loss Global (Precio)</label>
-                                    <input type="number" name="global_stop_loss" class="form-control" step="0.0001">
-                                </div>
-                                <div class="col-12">
-                                    <div class="form-check form-switch mt-2">
-                                        <input class="form-check-input" type="checkbox" name="trailing_enabled"
-                                            id="trailingCheck">
-                                        <label class="form-check-label fw-bold text-primary" for="trailingCheck">
-                                            <i class="fas fa-arrow-up me-1"></i> TRAILING ALCISTA
-                                        </label>
-                                        <div class="form-text">El rango sube automáticamente si el precio supera el
-                                            límite superior.</div>
-                                    </div>
-                                    <div class="form-check form-switch mt-3">
-                                        <input class="form-check-input" type="checkbox" name="trailing_down"
-                                            id="trailingDownCheck">
-                                        <label class="form-check-label fw-bold text-warning" for="trailingDownCheck">
-                                            <i class="fas fa-arrow-down me-1"></i> TRAILING DESCENDENTE
-                                        </label>
-                                        <div class="form-text">
-                                            Si el precio cae, el rango baja automáticamente.
-                                            <span class="text-danger fw-bold">Atención:</span> Puede vender niveles
-                                            superiores con pérdidas para reponer capital abajo.
-                                        </div>
-                                    </div>
-                                </div>
+                            <div>
+                                <button type="button" class="btn btn-secondary btn-sm"
+                                    data-bs-dismiss="modal">Cancelar</button>
+                                <button type="submit" class="btn btn-dark btn-sm">Guardar Configuración</button>
                             </div>
                         </div>
+                    </form>
 
-                        <!-- Campos específicos para Day Trading -->
-                        <div id="daytradingFields" class="mt-4 p-3 bg-light rounded shadow-sm d-none">
-                            <h6>Parámetros Day Trading</h6>
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label class="form-label">Fuerza Mínima (1-5)</label>
-                                    <input type="number" name="min_strength" class="form-control" value="3" min="1"
-                                        max="5">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">ADX Mínimo</label>
-                                    <input type="number" name="min_adx" class="form-control" value="20">
-                                </div>
-                                <div class="col-12">
-                                    <div class="form-check form-switch mt-2">
-                                        <input class="form-check-input" type="checkbox" name="allow_late_entry"
-                                            id="allowLateEntryCheck">
-                                        <label class="form-check-label fw-bold text-success" for="allowLateEntryCheck">
-                                            <i class="fas fa-sign-in-alt me-1"></i> ENTRADA EN TENDENCIA
-                                        </label>
-                                        <div class="form-text">Si se activa, el bot podrá abrir posiciones incluso si la
-                                            tendencia ya ha comenzado (no requiere cruce EMA exacto en la vela actual).
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary">Lanzar Bot</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+                    <!-- Formulario invisible para el test de Telegram -->
+                    <form id="testTelegramForm" action="{% url 'test_telegram_view' %}" method="POST"
+                        style="display:none;">
+                        {% csrf_token %}
+                        <input type="hidden" name="telegram_token" id="test_token">
+                        <input type="hidden" name="telegram_chat_id" id="test_chat_id">
+                    </form>
 
-    <!-- Modal Registrar Inversión (Funding) -->
-    <div class="modal fade" id="addFundingModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-info text-white">
-                    <h5 class="modal-title"><i class="fas fa-hand-holding-usd me-2"></i>Registrar Nueva Inyección de
-                        Capital</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
-                        aria-label="Close"></button>
+                    <script>
+                        document.getElementById('testTelegramForm').onsubmit = function () {
+                            document.getElementById('test_token').value = document.querySelector('input[name="telegram_token"]').value;
+                            document.getElementById('test_chat_id').value = document.querySelector('input[name="telegram_chat_id"]').value;
+                        };
+                    </script>
                 </div>
-                <form action="{% url 'add_funding' %}" method="POST">
-                    {% csrf_token %}
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label class="form-label">Monto (USDT)</label>
-                            <input type="number" name="amount" class="form-control" required step="0.01"
-                                placeholder="Ej: 50.00">
-                            <div class="form-text">Esto sumará al Capital Inyectado total.</div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Descripción / Origen</label>
-                            <input type="text" name="description" class="form-control"
-                                placeholder="Ej: Transferencia Binance Earn, Depósito Tarjeta...">
-                        </div>
-                        <hr>
-                        <h6>Historial Reciente</h6>
-                        <div class="table-responsive" style="max-height: 200px;">
-                            <table class="table table-sm table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Fecha</th>
-                                        <th>Monto</th>
-                                        <th>Origen</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for f in funding_history %}
-                                    <tr>
-                                        <td><small>{{ f.funding_date|date:"d/m/y" }}</small></td>
-                                        <td><strong>${{ f.amount|floatformat:2 }}</strong></td>
-                                        <td><small class="text-muted">{{ f.description|default:"---" }}</small></td>
-                                    </tr>
-                                    {% empty %}
-                                    <tr>
-                                        <td colspan="3" class="text-center text-muted"><small>No hay registros
-                                                aún</small></td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                        <button type="submit" class="btn btn-info text-white">Registrar Inversión</button>
-                    </div>
-                </form>
             </div>
         </div>
-    </div>
-
-    <!-- Modal Configuración de Riesgo Global -->
-    <div class="modal fade" id="riskSettingsModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-dark text-white">
-                    <h5 class="modal-title"><i class="fas fa-shield-alt me-2"></i>Gestión de Riesgo Global</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
-                        aria-label="Close"></button>
-                </div>
-                <form action="{% url 'update_risk_settings' %}" method="POST">
-                    {% csrf_token %}
-                    <div class="modal-body">
-                        <div class="mb-4">
-                            <label class="form-label fw-bold">Max Drawdown Global (%)</label>
-                            <div class="input-group">
-                                <input type="number" name="max_drawdown_pct" class="form-control" step="0.1"
-                                    value="{{ global_settings.max_drawdown_pct|stringformat:'.2f' }}" required>
-                                <span class="input-group-text">%</span>
-                            </div>
-                            <div class="form-text">Si la pérdida total acumulada de la cuenta supera este porcentaje, se
-                                activará el Kill-Switch automáticamente.</div>
-                        </div>
-
-                        {% if global_settings.kill_switch_active %}
-                        <div class="card border-danger bg-light-danger mb-3 shadow-sm">
-                            <div class="card-body py-2">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" name="reset_kill_switch"
-                                        id="resetKSSwitch">
-                                    <label class="form-check-label fw-bold text-danger" for="resetKSSwitch">
-                                        DESACTIVAR KILL-SWITCH Y REANUDAR
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                        {% else %}
-                        <div class="alert alert-info small py-2 mb-3">
-                            <i class="fas fa-check-circle me-1"></i> El sistema está operando normalmente.
-                        </div>
-                        {% endif %}
-
-                        <hr>
-                        <h6 class="fw-bold mb-3"><i class="fab fa-telegram me-2 text-info"></i>Notificaciones por
-                            Telegram</h6> 
-
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Telegram Bot Token</label>
-                            <input type="password" name="telegram_token" class="form-control form-control-sm"
-                                value="{{ global_settings.telegram_token|default:'' }}"
-                                placeholder="Ej: 123456789:ABCDefgh...">
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Telegram Chat ID</label>
-                            <input type="text" name="telegram_chat_id" class="form-control form-control-sm"
-                                value="{{ global_settings.telegram_chat_id|default:'' }}" placeholder="Ej: 987654321">
-                        </div>
-
-                        <div class="form-check form-switch mb-3">
-                            <input class="form-check-input" type="checkbox" name="notifications_enabled"
-                                id="notifEnabledSwitch" {% if global_settings.notifications_enabled %}checked{% endif %}>
-                            <label class="form-check-label fw-bold" for="notifEnabledSwitch">
-                                Activar Notificaciones en Tiempo Real
-                            </label>
-                        </div>
-                    </div>
-                    <div class="modal-footer d-flex justify-content-between">
-                        <div>
-                            <button type="submit" form="testTelegramForm" class="btn btn-outline-info btn-sm">
-                                <i class="fas fa-paper-plane me-1"></i> Probar Conexión
-                            </button>
-                        </div>
-                        <div>
-                            <button type="button" class="btn btn-secondary btn-sm"
-                                data-bs-dismiss="modal">Cancelar</button>
-                            <button type="submit" class="btn btn-dark btn-sm">Guardar Configuración</button>
-                        </div>
-                    </div>
-                </form>
-
-                <!-- Formulario invisible para el test de Telegram -->
-                <form id="testTelegramForm" action="{% url 'test_telegram_view' %}" method="POST" style="display:none;">
-                    {% csrf_token %}
-                    <input type="hidden" name="telegram_token" id="test_token">
-                    <input type="hidden" name="telegram_chat_id" id="test_chat_id">
-                </form>
-
-                <script>
-                    document.getElementById('testTelegramForm').onsubmit = function () {
-                        document.getElementById('test_token').value = document.querySelector('input[name="telegram_token"]').value;
-                        document.getElementById('test_chat_id').value = document.querySelector('input[name="telegram_chat_id"]').value;
-                    };
-                </script>
-            </div>
-        </div>
-    </div>
 </body>
 
 </html>
