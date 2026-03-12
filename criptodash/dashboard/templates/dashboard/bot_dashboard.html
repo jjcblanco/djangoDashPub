@@ -847,27 +847,72 @@
                         <div id="daytradingFields" class="mt-4 p-3 bg-light rounded shadow-sm d-none">
                             <h6>Parámetros Day Trading</h6>
                             <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label class="form-label">Fuerza Mínima (1-5)</label>
-                                    <input type="number" name="min_strength" class="form-control" value="3" min="1"
-                                        max="5">
+                                <div class="col-md-4">
+                                    <label class="form-label">Modo Estrategia</label>
+                                    <select name="strategy_mode" class="form-select">
+                                        <option value="custom" selected>Personalizado (Scoring Flexible)</option>
+                                        <option value="balanced">Balanceada (Min 4pts)</option>
+                                        <option value="conservative">Conservadora (Min 6pts)</option>
+                                        <option value="aggressive">Agresiva (Min 2pts)</option>
+                                    </select>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-4">
+                                    <label class="form-label"
+                                        title="Puntaje mínimo de indicadores alcistas. Relevante en modo Personalizado.">Fuerza
+                                        Mínima (1-8)</label>
+                                    <input type="number" name="min_strength" class="form-control" value="2" min="1"
+                                        max="8" step="0.5">
+                                </div>
+                                <div class="col-md-4">
                                     <label class="form-label">ADX Mínimo</label>
-                                    <input type="number" name="min_adx" class="form-control" value="20">
+                                    <input type="number" name="min_adx" class="form-control" value="15">
                                 </div>
-                                <div class="col-12">
-                                    <div class="form-check form-switch mt-2">
-                                        <input class="form-check-input" type="checkbox" name="allow_late_entry"
-                                            id="allowLateEntryCheck">
-                                        <label class="form-check-label fw-bold text-success" for="allowLateEntryCheck">
-                                            <i class="fas fa-sign-in-alt me-1"></i> ENTRADA EN TENDENCIA
-                                        </label>
-                                        <div class="form-text">Si se activa, el bot podrá abrir posiciones
-                                            incluso
-                                            si la
-                                            tendencia ya ha comenzado (no requiere cruce EMA exacto en la vela
-                                            actual).
+                                <div class="col-md-4" title="% de capital a arriesgar por trade">
+                                    <label class="form-label">Riesgo por Trade (%)</label>
+                                    <input type="number" name="risk_per_trade_pct" class="form-control" value="2.0"
+                                        step="0.5" min="0.5" max="100.0">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Mult. ATR StopLoss</label>
+                                    <input type="number" name="atr_mult_sl" class="form-control" value="1.5" step="0.1"
+                                        min="0.5">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Mult. ATR TakeProfit</label>
+                                    <input type="number" name="atr_mult_tp" class="form-control" value="3.0" step="0.1"
+                                        min="0.5">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Cooldown Velas</label>
+                                    <input type="number" name="cooldown_bars" class="form-control" value="3" min="0"
+                                        title="Velas de espera tras un cierre">
+                                </div>
+
+                                <div class="col-12 mt-3">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" name="allow_late_entry"
+                                                    id="allowLateEntryCheck" checked>
+                                                <label class="form-check-label fw-bold"
+                                                    for="allowLateEntryCheck">Entrada Tardía Permitida</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" name="use_candles"
+                                                    id="useCandlesCheck" checked>
+                                                <label class="form-check-label fw-bold" for="useCandlesCheck">Patrones
+                                                    de Velas</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox"
+                                                    name="use_bollinger_filter" id="useBollingerFilterCheck">
+                                                <label class="form-check-label fw-bold text-danger"
+                                                    for="useBollingerFilterCheck">Filtro Bollinger (Squeeze)</label>
+                                            </div>
+                                            <div class="form-text small">Desactivar filtro de Bollinger permite
+                                                operaciones en todos los rangos (más agresivo).</div>
                                         </div>
                                     </div>
                                 </div>
@@ -1008,7 +1053,8 @@
 
                         <div class="form-check form-switch mb-3">
                             <input class="form-check-input" type="checkbox" name="notifications_enabled"
-                                id="notifEnabledSwitch" {% if global_settings.notifications_enabled %}checked{% endif %}>
+                                id="notifEnabledSwitch" {% if global_settings.notifications_enabled %}checked{% endif
+                                %}>
                             <label class="form-check-label fw-bold" for="notifEnabledSwitch">
                                 Activar Notificaciones en Tiempo Real
                             </label>

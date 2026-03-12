@@ -255,9 +255,16 @@ def create_bot(request):
             }
         elif strategy_type == 'DAYTRADING':
             params = {
-                'min_strength': request.POST.get('min_strength', 3),
-                'min_adx': request.POST.get('min_adx', 20),
+                'strategy_mode': request.POST.get('strategy_mode', 'custom'),
+                'min_strength': float(request.POST.get('min_strength', 3)),
+                'min_adx': float(request.POST.get('min_adx', 20)),
                 'allow_late_entry': request.POST.get('allow_late_entry') == 'on',
+                'use_bollinger_filter': request.POST.get('use_bollinger_filter') == 'on',
+                'use_candles': request.POST.get('use_candles') == 'on',
+                'risk_per_trade_pct': float(request.POST.get('risk_per_trade_pct', 2.0)),
+                'atr_sl': float(request.POST.get('atr_mult_sl', 1.5)),
+                'atr_tp': float(request.POST.get('atr_mult_tp', 3.0)),
+                'cooldown_bars': int(request.POST.get('cooldown_bars', 3))
             }
 
         pair = TradingPair.objects.get(id=pair_id)
