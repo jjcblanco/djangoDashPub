@@ -307,7 +307,12 @@
                                 <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
                                     {{ data.bot.pair.symbol }} | {{ data.bot.get_strategy_type_display }}
                                 </div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ data.bot.name }}</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                    <a href="{% url 'bot_detail' data.bot.id %}"
+                                        style="color:inherit; text-decoration:none;" title="Ver análisis detallado">
+                                        {{ data.bot.name }}
+                                    </a>
+                                </div>
                                 <div class="mt-2">
                                     <span
                                         class="badge {% if data.bot.status == 'RUNNING' %}bg-success{% elif data.bot.status == 'STOPPED' %}bg-warning{% else %}bg-danger{% endif %}">
@@ -327,7 +332,8 @@
                                         <strong>Error:</strong> {{ data.bot.last_error }}
                                     </div>
                                     {% endif %}
-                                    <small class="text-muted ms-2">Balance: ${{ data.bot.current_balance|floatformat:2 }}</small>
+                                    <small class="text-muted ms-2">Balance: ${{ data.bot.current_balance|floatformat:2
+                                        }}</small>
                                 </div>
                                 <div class="row mt-3">
                                     <div class="col-4">
@@ -340,7 +346,8 @@
                                     </div>
                                     <div class="col-4">
                                         <small class="text-muted d-block">ROI:</small>
-                                        <span class="fw-bold" style="font-size: 0.9rem;">{{ data.profit_pct|floatformat:2 }}%</span>
+                                        <span class="fw-bold" style="font-size: 0.9rem;">{{
+                                            data.profit_pct|floatformat:2 }}%</span>
                                     </div>
                                     <div class="col-4">
                                         <small class="text-muted d-block">Actv:</small>
@@ -367,11 +374,13 @@
                                     <div class="row g-1">
                                         <div class="col-4">
                                             <small class="text-muted d-block text-truncate" title="Mínimo">Mín:</small>
-                                            <span class="fw-bold" style="font-size: 0.75rem;">${{ data.bot.parameters.lower_price|floatformat:4 }}</span>
+                                            <span class="fw-bold" style="font-size: 0.75rem;">${{
+                                                data.bot.parameters.lower_price|floatformat:4 }}</span>
                                         </div>
                                         <div class="col-4">
                                             <small class="text-muted d-block text-truncate" title="Máximo">Máx:</small>
-                                            <span class="fw-bold" style="font-size: 0.75rem;">${{ data.bot.parameters.upper_price|floatformat:4 }}</span>
+                                            <span class="fw-bold" style="font-size: 0.75rem;">${{
+                                                data.bot.parameters.upper_price|floatformat:4 }}</span>
                                         </div>
                                         <div class="col-4">
                                             <small class="text-muted d-block text-truncate"
@@ -424,6 +433,10 @@
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </form>
+                            <a href="{% url 'bot_detail' data.bot.id %}" class="btn btn-sm btn-outline-primary"
+                                title="Ver análisis detallado">
+                                <i class="fas fa-chart-bar"></i>
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -541,7 +554,8 @@
                                     <small class="text-muted">{{ trade.entry_time|date:"d/m H:i" }}</small>
                                 </td>
                                 <td>
-                                    <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i" }}</small>
+                                    <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i"
+                                        }}</small>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -994,7 +1008,8 @@
 
                         <div class="form-check form-switch mb-3">
                             <input class="form-check-input" type="checkbox" name="notifications_enabled"
-                                id="notifEnabledSwitch" {% if global_settings.notifications_enabled %}checked{% endif %}>
+                                id="notifEnabledSwitch" {% if global_settings.notifications_enabled %}checked{% endif
+                                %}>
                             <label class="form-check-label fw-bold" for="notifEnabledSwitch">
                                 Activar Notificaciones en Tiempo Real
                             </label>

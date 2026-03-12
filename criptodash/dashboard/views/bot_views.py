@@ -517,3 +517,130 @@ def test_telegram_view(request):
         messages.error(request, "Error enviando mensaje. Verifica el Token y Chat ID.")
     return redirect('bot_dashboard')
 
+
+
+@login_required
+def bot_detail(request, bot_id):
+    """Vista de analisis detallado para un bot especifico."""
+    import plotly.graph_objs as go
+    import plotly.offline as pyo
+    from collections import defaultdict
+
+    bot = get_object_or_404(LiveBot, id=bot_id)
+    all_trades = list(LiveTrade.objects.filter(bot=bot).order_by("entry_time"))
+    closed_trades = [t for t in all_trades if t.status in ("CLOSED", "CLOSED_EMERGENCY") and t.pnl is not None]
+    open_trades = [t for t in all_trades if t.status == "OPEN"]
+
+    # ---- METRICAS BASICAS ----
+    total_trades = len(closed_trades)
+    winning = [t for t in closed_trades if float(t.pnl) > 0]
+    losing  = [t for t in closed_trades if float(t.pnl) <= 0]
+    win_rate = (len(winning) / total_trades * 100) if total_trades > 0 else 0
+    total_pnl = sum(float(t.pnl) for t in closed_trades)
+    gross_profit = sum(float(t.pnl) for t in winning)
+    gross_loss   = abs(sum(float(t.pnl) for t in losing))
+    profit_factor_val = (gross_profit / gross_loss) if gross_loss > 0 else None
+    avg_win  = (gross_profit / len(winning)) if winning else 0
+    avg_loss = (gross_loss  / len(losing))  if losing  else 0
+    roi = (total_pnl / float(bot.initial_balance) * 100) if bot.initial_balance > 0 else 0
+
+    # ---- DURACION PROMEDIO ----
+    durations = [
+        (t.exit_time - t.entry_time).total_seconds() / 3600
+        for t in closed_trades if t.exit_time and t.entry_time
+    ]
+    avg_duration_h = (sum(durations) / len(durations)) if durations else 0
+
+    # ---- STREAKS ----
+    max_win_streak = max_loss_streak = cur_win = cur_loss = 0
+    for t in closed_trades:
+        if float(t.pnl) > 0:
+            cur_win += 1; cur_loss = 0
+        else:
+            cur_loss += 1; cur_win = 0
+        max_win_streak  = max(max_win_streak,  cur_win)
+        max_loss_streak = max(max_loss_streak, cur_loss)
+
+    # ---- EQUITY CURVE + MAX DRAWDOWN ----
+    balance = float(bot.initial_balance)
+    peak = balance
+    max_drawdown = 0
+    eq_times, eq_values = [], []
+    for t in closed_trades:
+        balance += float(t.pnl)
+        eq_times.append(t.exit_time)
+        eq_values.append(balance)
+        if balance > peak:
+            peak = balance
+        dd = (peak - balance) / peak * 100 if peak > 0 else 0
+        if dd > max_drawdown:
+            max_drawdown = dd
+
+    # ---- GRAFICO: EQUITY CURVE ----
+    equity_chart = ""
+    if eq_values:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=eq_times, y=eq_values, mode="lines+markers", name="Balance",
+            line=dict(color="#2ecc71", width=2), marker=dict(size=4),
+            fill="tozeroy", fillcolor="rgba(46,204,113,0.1)"
+        ))
+        fig.add_hline(y=float(bot.initial_balance), line_dash="dash",
+                      line_color="rgba(255,255,255,0.35)", annotation_text="Capital inicial")
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#ecf0f1"), height=300,
+            margin=dict(l=50, r=20, t=20, b=40),
+            xaxis=dict(gridcolor="rgba(255,255,255,0.1)"),
+            yaxis=dict(gridcolor="rgba(255,255,255,0.1)", tickprefix="$"),
+            showlegend=False
+        )
+        equity_chart = pyo.plot(fig, output_type="div", include_plotlyjs=False)
+
+    # ---- GRAFICO: PnL DIARIO ----
+    pnl_by_day = defaultdict(float)
+    for t in closed_trades:
+        if t.exit_time:
+            pnl_by_day[t.exit_time.date()] += float(t.pnl)
+
+    pnl_daily_chart = ""
+    if pnl_by_day:
+        days = sorted(pnl_by_day.keys())
+        vals = [pnl_by_day[d] for d in days]
+        fig2 = go.Figure(go.Bar(
+            x=days, y=vals,
+            marker_color=["#2ecc71" if v >= 0 else "#e74c3c" for v in vals]
+        ))
+        fig2.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#ecf0f1"), height=240,
+            margin=dict(l=50, r=20, t=10, b=40),
+            xaxis=dict(gridcolor="rgba(255,255,255,0.1)"),
+            yaxis=dict(gridcolor="rgba(255,255,255,0.1)", tickprefix="$"),
+            showlegend=False
+        )
+        pnl_daily_chart = pyo.plot(fig2, output_type="div", include_plotlyjs=False)
+
+    context = {
+        "bot": bot,
+        "total_trades": total_trades,
+        "win_rate": round(win_rate, 2),
+        "total_pnl": round(total_pnl, 4),
+        "roi": round(roi, 2),
+        "profit_factor": round(profit_factor_val, 2) if profit_factor_val is not None else "Inf",
+        "gross_profit": round(gross_profit, 4),
+        "gross_loss": round(gross_loss, 4),
+        "avg_win": round(avg_win, 4),
+        "avg_loss": round(avg_loss, 4),
+        "max_drawdown": round(max_drawdown, 2),
+        "max_win_streak": max_win_streak,
+        "max_loss_streak": max_loss_streak,
+        "avg_duration_h": round(avg_duration_h, 2),
+        "winning_count": len(winning),
+        "losing_count": len(losing),
+        "equity_chart": equity_chart,
+        "pnl_daily_chart": pnl_daily_chart,
+        "closed_trades": list(reversed(closed_trades)),
+        "open_trades": open_trades,
+    }
+    return render(request, "dashboard/bot_detail.html", context)

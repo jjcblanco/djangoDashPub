@@ -34,7 +34,8 @@ from .bot_views import (
     analyze_volatility_api,
     trigger_kill_switch,
     update_risk_settings,
-    test_telegram_view
+    test_telegram_view,
+    bot_detail
 )
 
 # Importar vistas de datos
@@ -87,6 +88,7 @@ __all__ = [
     'trigger_kill_switch',
     'update_risk_settings',
     'test_telegram_view',
+    'bot_detail',
 
     # Dash app
     'app',
