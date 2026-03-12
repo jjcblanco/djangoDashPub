@@ -166,7 +166,10 @@ class DayTradingStrategy(TradingStrategy):
         # Queremos comprar cuando NO estamos en un squeeze profundo (queremos expansión)
         # O cuando el precio rompe una zona de squeeze
         vol_filter_buy = True
-        if self.parameters.get('use_bollinger_filter', True):
+        use_boll = self.parameters.get('use_bollinger_filter', True)
+        if isinstance(use_boll, str): use_boll = use_boll.lower() == 'true'
+        
+        if use_boll:
             df = bollinger_bands(df, window=20, num_std=2, generate_signals=False)
             # Evitar comprar si estamos comprimidos (bajo volumen/volatilidad)
             # Comprar solo si hay expansión o no hay squeeze activo
@@ -188,7 +191,7 @@ class DayTradingStrategy(TradingStrategy):
         entry_condition_sell = (df['ema9'] < df['ema21']) & (df['ema9'].shift(1) >= df['ema21'].shift(1))
         
         vol_filter_sell = True
-        if self.parameters.get('use_bollinger_filter', True):
+        if use_boll:
             vol_filter_sell = ~df['bb_squeezing'] | (df['close'] < df['bb_lower'])
 
         sell_cond = (
@@ -206,6 +209,10 @@ class DayTradingStrategy(TradingStrategy):
         elif mode == 'aggressive':
             min_strength = 2.0
             min_adx = 15.0
+        elif mode == 'custom':
+            # Respetar absolutamente los parámetros del usuario
+            min_strength = float(self.parameters.get('min_strength', 3.0))
+            min_adx = float(self.parameters.get('min_adx', 20.0))
         else: # balanced
             min_strength = 4.0
             min_adx = 20.0
@@ -214,7 +221,10 @@ class DayTradingStrategy(TradingStrategy):
         sell_cond = sell_cond & (df['adx'] >= min_adx) & (df['strength'] >= min_strength)
 
         # 7. Aplicar filtro de Velas (si está activado)
-        if self.parameters.get('use_candles', False):
+        use_candles = self.parameters.get('use_candles', False)
+        if isinstance(use_candles, str): use_candles = use_candles.lower() == 'true'
+        
+        if use_candles:
             # Si permitimos entrada tardía, no forzamos patrón de velas para la COMPRA 
             # (porque los patrones suelen estar al inicio de la tendencia)
             if allow_late:
