@@ -48,6 +48,7 @@ def backtest_view(request):
             use_candles = request.POST.get('use_candles') == 'on'
             strategy_mode = request.POST.get('strategy_mode', 'balanced')
             use_bollinger_filter = request.POST.get('use_bollinger_filter') == 'on'
+            risk_per_trade_pct = float(request.POST.get('risk_per_trade_pct', 2.0))
 
             strategy_type = request.POST.get('strategy', 'signal-based')  # 'signal-based', 'supertrend', 'day-trading', 'grid'
             timeframe = request.POST.get('timeframe', '1h')
@@ -65,7 +66,11 @@ def backtest_view(request):
             end_date = timezone.make_aware(datetime.strptime(end_date_str, '%Y-%m-%d')) + timedelta(days=1)
 
             # Crear backtester
-            backtester = Backtester(initial_balance=initial_balance, commission=commission)
+            backtester = Backtester(
+                initial_balance=initial_balance,
+                commission=commission,
+                risk_per_trade_pct=risk_per_trade_pct
+            )
 
             # Ejecutar backtest según estrategia
             if strategy_type == 'signal-based':
@@ -107,7 +112,8 @@ def backtest_view(request):
                     'atr_tp': atr_mult_tp,
                     'use_candles': use_candles,
                     'strategy_mode': strategy_mode,
-                    'use_bollinger_filter': use_bollinger_filter
+                    'use_bollinger_filter': use_bollinger_filter,
+                    'risk_per_trade_pct': risk_per_trade_pct
                 }
                 strategy = DayTradingStrategy(parameters=strategy_params)
                 results = backtester.run_backtest(

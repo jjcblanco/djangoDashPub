@@ -55,13 +55,15 @@ class DayTradingStrategy(TradingStrategy):
             'rsi_period': 14,
             'rsi_buy': 55,
             'rsi_sell': 45,
-            'atr_sl': 3.0,
-            'atr_tp': 2.0,
+            'atr_sl': 1.5,          # Corregido: SL más ajustado para mejor RR
+            'atr_tp': 3.0,          # Corregido: TP más amplio -> RR mínimo 1:2
             'use_candles': True,
-            'min_strength': 4, # Subimos el requerimiento base para modo Balanceado
+            'min_strength': 4, # Requerimiento base para modo Balanceado
             'min_adx': 20,     # Mínimo de tendencia para operar
             'strategy_mode': 'balanced', # opciones: conservative, balanced, aggressive
-            'use_bollinger_filter': True
+            'use_bollinger_filter': True,
+            'cooldown_bars': 3,     # Velas de espera mínima entre trades
+            'risk_per_trade_pct': 2.0  # % del balance a arriesgar por trade
         }
         # Mezclar con los pasados y asegurar tipos numéricos
         self.parameters = {**default_params, **(parameters or {})}
@@ -306,9 +308,10 @@ class Backtester:
     """
     Motor de backtesting mejorado que puede trabajar con señales de la BD
     """
-    def __init__(self, initial_balance=10000, commission=0.001):
+    def __init__(self, initial_balance=10000, commission=0.001, risk_per_trade_pct=2.0):
         self.initial_balance = initial_balance
         self.commission = commission  # 0.1% commission por defecto
+        self.risk_per_trade_pct = risk_per_trade_pct  # % del balance a arriesgar por trade
         self.results = []
 
     def run_backtest_from_signals(self, pair_symbol, start_date, end_date, timeframe='1h', signals_queryset=None, min_strength=0, min_adx=0, stop_loss_pct=None, take_profit_pct=None, trailing_stop=False, atr_mult_sl=1.5, atr_mult_tp=3.0):
@@ -541,8 +544,14 @@ class Backtester:
 
         return results
 
-    def simulate_trading(self, df, stop_loss_pct=None, take_profit_pct=None, trailing_stop=False, atr_multiplier_sl=1.5, atr_multiplier_tp=3.0):
-        """Simula ejecución de trades con gestión de riesgo avanzada"""
+    def simulate_trading(self, df, stop_loss_pct=None, take_profit_pct=None, trailing_stop=False,
+                         atr_multiplier_sl=1.5, atr_multiplier_tp=3.0, cooldown_bars=3):
+        """Simula ejecución de trades con gestión de riesgo avanzada.
+        
+        Mejoras v2:
+        - Position sizing dinámico: arriesga un % fijo del balance por trade.
+        - Cool-down: mínimo N velas entre trades para evitar overtrading.
+        """
         balance = self.initial_balance
         position = 0
         trades = []
@@ -551,16 +560,19 @@ class Backtester:
         sl_price = 0
         tp_price = 0
         max_price_since_entry = 0
+        last_sell_bar = -cooldown_bars  # Permite operar desde la primera barra
+        bar_counter = 0
 
         for i, row in df.iterrows():
             current_price = float(row['close'])
             signal = row.get('signal', 'HOLD')
-            
+            current_balance = balance + (position * current_price if position > 0 else 0)
+
             # 1. Verificar Stop Loss o Take Profit si estamos en posición
             if position > 0:
                 exit_reason = None
                 
-                # Priorizar SL/TP dinámicos del DataFrame si existen (enviados desde señales con ATR)
+                # Priorizar SL/TP dinámicos del DataFrame si existen
                 current_sl_price = row.get('stop_loss', sl_price) if not pd.isna(row.get('stop_loss')) else sl_price
                 current_tp_price = row.get('take_profit', tp_price) if not pd.isna(row.get('take_profit')) else tp_price
 
@@ -568,11 +580,10 @@ class Backtester:
                 if trailing_stop and stop_loss_pct:
                     if current_price > max_price_since_entry:
                         max_price_since_entry = current_price
-                        # Mover SL hacia arriba
                         new_sl = max_price_since_entry * (1 - stop_loss_pct / 100)
                         if new_sl > current_sl_price:
                             current_sl_price = new_sl
-                            sl_price = new_sl # Actualizar para la siguiente barra
+                            sl_price = new_sl
 
                 if current_sl_price and current_price <= current_sl_price:
                     exit_reason = 'STOP_LOSS'
@@ -581,10 +592,8 @@ class Backtester:
                 
                 if exit_reason:
                     exit_price = current_price * (1 - self.commission)
-
-                    balance = position * exit_price
-                    
-                    pnl = balance - trades[-1]['balance_before']
+                    realized_balance = position * exit_price
+                    pnl = realized_balance - trades[-1]['balance_before']
                     pnl_pct = (pnl / trades[-1]['balance_before']) * 100
                     
                     trades.append({
@@ -594,33 +603,54 @@ class Backtester:
                         'price': current_price,
                         'exit_price': exit_price,
                         'size': position,
-                        'balance_after': balance,
+                        'balance_after': realized_balance,
                         'pnl': pnl,
                         'pnl_pct': pnl_pct
                     })
+                    balance = realized_balance
                     position = 0
-                    continue # Saltamos el resto del loop para esta barra
+                    last_sell_bar = bar_counter
+                    bar_counter += 1
+                    equity_curve.append({'timestamp': row['timestamp'], 'equity': balance, 'in_position': False})
+                    continue
 
-            # 2. Ejecutar señales normales
-            if signal == 'BUY' and position == 0:
-                # Comprar
+            # 2. Ejecutar señales de entrada (con cool-down)
+            in_cooldown = (bar_counter - last_sell_bar) < cooldown_bars
+            
+            if signal == 'BUY' and position == 0 and not in_cooldown:
                 entry_price_actual = current_price * (1 + self.commission)
-                position = balance / entry_price_actual
+                
+                # ---- POSITION SIZING DINÁMICO ----
+                # Calcular SL provisional para determinar el tamaño de posición
+                provisional_sl = None
+                if 'stop_loss' in row and not pd.isna(row.get('stop_loss')):
+                    provisional_sl = float(row['stop_loss'])
+                elif stop_loss_pct:
+                    provisional_sl = entry_price_actual * (1 - stop_loss_pct / 100)
+                
+                if provisional_sl and provisional_sl < entry_price_actual:
+                    sl_distance = entry_price_actual - provisional_sl
+                    risk_amount = balance * (self.risk_per_trade_pct / 100)
+                    position = risk_amount / sl_distance  # Unidades a comprar
+                    # Cap: no invertir más del 100% del balance disponible
+                    max_units = balance / entry_price_actual
+                    position = min(position, max_units)
+                else:
+                    # Sin SL definido: usar el 100% del balance (comportamiento legacy)
+                    position = balance / entry_price_actual
+                
+                sl_price = provisional_sl or 0
+                tp_price = 0
                 max_price_since_entry = entry_price_actual
                 
-                # Niveles iniciales (se pueden sobreescribir por los de la señal en la siguiente barra)
-                if stop_loss_pct:
-                    sl_price = entry_price_actual * (1 - stop_loss_pct / 100)
                 if take_profit_pct:
                     tp_price = entry_price_actual * (1 + take_profit_pct / 100)
-                
-                # Sobreescribir con valores dinámicos si la señal los traía
-                if 'stop_loss' in row and not pd.isna(row['stop_loss']):
-                    sl_price = float(row['stop_loss'])
-                if 'take_profit' in row and not pd.isna(row['take_profit']):
+                if 'take_profit' in row and not pd.isna(row.get('take_profit')):
                     tp_price = float(row['take_profit'])
 
-                balance_before = self.initial_balance if not trades else (trades[-1].get('balance_after', balance) if trades[-1]['action'] == 'SELL' else trades[-1]['balance_before'])
+                balance_before = balance
+                cost = position * entry_price_actual
+                balance -= cost  # El resto queda como efectivo libre
                 
                 trades.append({
                     'timestamp': row['timestamp'],
@@ -633,15 +663,13 @@ class Backtester:
                     'sl_price': sl_price if sl_price else None,
                     'tp_price': tp_price if tp_price else None
                 })
-                balance = 0
                 
             elif signal == 'SELL' and position > 0:
-                # Vender por señal (si no salió por SL/TP antes)
                 exit_price = current_price * (1 - self.commission)
-                balance = position * exit_price
+                proceeds = position * exit_price
+                balance += proceeds  # Sumar lo obtenido al efectivo libre
                 
-                # Calcular P&L del trade
-                pnl = balance - trades[-1]['balance_before']
+                pnl = proceeds - (trades[-1]['size'] * trades[-1]['entry_price'])
                 pnl_pct = (pnl / trades[-1]['balance_before']) * 100
                 
                 trades.append({
@@ -656,6 +684,7 @@ class Backtester:
                     'pnl_pct': pnl_pct
                 })
                 position = 0
+                last_sell_bar = bar_counter
 
             # Calcular equity actual
             current_equity = balance + (position * current_price if position > 0 else 0)
@@ -664,6 +693,7 @@ class Backtester:
                 'equity': current_equity,
                 'in_position': position > 0
             })
+            bar_counter += 1
 
         # Calcular métricas finales
         final_price = float(df.iloc[-1]['close'])
