@@ -122,8 +122,7 @@
                     <i class="fas fa-exclamation-triangle fa-2x me-3 text-warning"></i>
                     <div>
                         <h5 class="alert-heading mb-1">¡Sobre-asignación Detectada!</h5>
-                        Los bots están gestionando virtualmente <strong>${{ global_assigned|floatformat:2 }}
-                            USDT</strong>,
+                        Los bots están gestionando virtualmente <strong>${{ global_assigned|floatformat:2 }} USDT</strong>,
                         pero en Binance solo hay <strong>${{ real_total|floatformat:2 }} USDT</strong> reales.
                         Para evitar errores de compra, te recomendamos sincronizar los balances.
                     </div>
@@ -339,15 +338,13 @@
                                     <div class="col-4">
                                         <small class="text-muted d-block">PnL Tot:</small>
                                         <span
-                                            class="{% if data.total_pnl >= 0 %}pnl-positive{% else %}pnl-negative{% endif %}"
-                                            style="font-size: 0.9rem;">
+                                            class="{% if data.total_pnl >= 0 %}pnl-positive{% else %}pnl-negative{% endif %}" style="font-size: 0.9rem;">
                                             ${{ data.total_pnl|floatformat:2 }}
                                         </span>
                                     </div>
                                     <div class="col-4">
                                         <small class="text-muted d-block">ROI:</small>
-                                        <span class="fw-bold" style="font-size: 0.9rem;">{{
-                                            data.profit_pct|floatformat:2 }}%</span>
+                                        <span class="fw-bold" style="font-size: 0.9rem;">{{ data.profit_pct|floatformat:2 }}%</span>
                                     </div>
                                     <div class="col-4">
                                         <small class="text-muted d-block">Actv:</small>
@@ -570,8 +567,7 @@
                                     <small class="text-muted">{{ trade.entry_time|date:"d/m H:i" }}</small>
                                 </td>
                                 <td>
-                                    <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i"
-                                        }}</small>
+                                    <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i" }}</small>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -803,8 +799,7 @@
                                     value="1000">
                                 {% if exchange_balance %}
                                 <div class="form-text text-info">
-                                    <i class="fas fa-wallet me-1"></i> Libre en Binance: <strong>${{
-                                        exchange_balance.free|floatformat:2 }}</strong>
+                                    <i class="fas fa-wallet me-1"></i> Libre en Binance: <strong>${{ exchange_balance.free|floatformat:2 }}</strong>
                                 </div>
                                 {% endif %}
                             </div>
@@ -1129,8 +1124,7 @@
                                     </tr>
                                     {% empty %}
                                     <tr>
-                                        <td colspan="3" class="text-center text-muted"><small>No hay registros
-                                                aún</small></td>
+                                        <td colspan="3" class="text-center text-muted"><small>No hay registros aún</small></td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
