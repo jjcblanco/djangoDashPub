@@ -464,14 +464,12 @@
                     {% for t in closed_trades %}
                     <tr>
                         <td style="color:var(--muted);">{{ forloop.counter }}</td>
-                        <td><span class="badge {% if t.side == 'BUY' %}bg-success{% else %}bg-danger{% endif %}">{{
-                                t.side }}</span></td>
+                        <td><span class="badge {% if t.side == 'BUY' %}bg-success{% else %}bg-danger{% endif %}">{{ t.side }}</span></td>
                         <td style="font-size:0.75rem;">{{ t.entry_time|date:"d/m/Y H:i" }}</td>
                         <td>${{ t.entry_price|floatformat:4 }}</td>
                         <td>{% if t.exit_price %}${{ t.exit_price|floatformat:4 }}{% else %}<span
                                 style="color:var(--muted);">—</span>{% endif %}</td>
-                        <td style="font-size:0.75rem;">{% if t.exit_time %}{{ t.exit_time|date:"d/m/Y H:i" }}{% else
-                            %}<span style="color:var(--muted);">—</span>{% endif %}</td>
+                        <td style="font-size:0.75rem;">{% if t.exit_time %}{{ t.exit_time|date:"d/m/Y H:i" }}{% else %}<span style="color:var(--muted);">—</span>{% endif %}</td>
                         <td class="{% if t.pnl >= 0 %}text-green{% else %}text-red{% endif %} fw-bold">
                             {% if t.pnl >= 0 %}+{% endif %}${{ t.pnl|floatformat:4 }}
                         </td>
