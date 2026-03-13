@@ -2,8 +2,9 @@ import os
 import django
 from django.db.models import Count, Sum
 
-# --- CONFIGURACIÓN ---
-# Asegúrate de que este script esté en la misma carpeta que manage.py (en tu caso /var/www/javierblanco.com.ar/web/criptodash/)
+# --- CONFIGURACIÓN PARA EVITAR ERRORES DE DECOUPLE (.env) ---
+# Inyectamos una clave falsa para que Django no se queje de SECRET_KEY
+os.environ['SECRET_KEY'] = 'fake-key-para-scripts-123'
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'criptodash.settings')
 django.setup()
 
