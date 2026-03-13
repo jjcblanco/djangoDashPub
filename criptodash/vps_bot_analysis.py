@@ -3,8 +3,21 @@ import django
 from django.db.models import Count, Sum
 
 # --- CONFIGURACIÓN PARA EVITAR ERRORES DE DECOUPLE (.env) ---
-# Inyectamos una clave falsa para que Django no se queje de SECRET_KEY
-os.environ['SECRET_KEY'] = 'fake-key-para-scripts-123'
+# Forzamos la carga del archivo .env que sabemos que existe en tu VPS
+env_file = "/var/www/javierblanco.com.ar/web/criptodash/.env"
+if os.path.exists(env_file):
+    with open(env_file, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, val = line.split("=", 1)
+                # Removes optional quotes
+                os.environ[key.strip()] = val.strip().strip("'").strip('"')
+else:
+    print(f"ADVERTENCIA: No se encontró el archivo {env_file}")
+
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'criptodash.settings')
 django.setup()
 
@@ -35,4 +48,3 @@ for bot in bots:
     print(f"  WinRate: {winrate:.2f}% ({winners} G / {losers} P)")
     print(f"  Parámetros: {bot.parameters}")
     print("-" * 40 + "\n")
-
