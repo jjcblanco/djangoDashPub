@@ -21,11 +21,18 @@ django.setup()
 
 from dashboard.models import LiveBot
 
-def update_bot(bot_id, mode=None, custom_params=None):
+def update_bot(bot_id, mode=None, custom_params=None, new_balance=None):
     try:
         bot = LiveBot.objects.get(id=bot_id)
         print(f"Bot encontrado: {bot.name} (ID: {bot.id})")
         
+        # 1. Actualizar Balance si se solicita
+        if new_balance is not None:
+            old_val = bot.current_balance
+            bot.current_balance = Decimal(str(new_balance))
+            print(f"Actualizando BALANCE: {old_val} -> {bot.current_balance}")
+        
+        # 2. Actualizar Parámetros
         params = bot.parameters.copy()
         
         if mode == 'balanced':
@@ -63,7 +70,8 @@ def update_bot(bot_id, mode=None, custom_params=None):
 
         bot.parameters = params
         bot.save()
-        print(f"¡Éxito! Parámetros actualizados: {bot.parameters}")
+        print(f"¡Éxito! Bot guardado correctamente.")
+        print(f"Estado Final - Balance: {bot.current_balance} | Params: {bot.parameters}")
         
     except LiveBot.DoesNotExist:
         print(f"Error: No se encontró el bot con ID {bot_id}")
@@ -75,6 +83,7 @@ if __name__ == "__main__":
     parser.add_argument("--bot_id", type=int, required=True, help="ID del bot en la base de datos")
     parser.add_argument("--mode", type=str, choices=['balanced', 'conservative', 'aggressive'], help="Modo predefinido")
     parser.add_argument("--params", type=str, help="JSON string con parámetros personalizados")
+    parser.add_argument("--balance", type=float, help="Nuevo balance actual para el bot")
     
     args = parser.parse_args()
-    update_bot(args.bot_id, args.mode, args.params)
+    update_bot(args.bot_id, args.mode, args.params, args.balance)
