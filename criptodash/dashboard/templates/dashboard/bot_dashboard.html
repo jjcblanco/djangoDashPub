@@ -332,7 +332,8 @@
                                         <strong>Error:</strong> {{ data.bot.last_error }}
                                     </div>
                                     {% endif %}
-                                    <small class="text-muted ms-2">Balance: ${{ data.bot.current_balance|floatformat:2 }}</small>
+                                    <small class="text-muted ms-2">Balance: ${{ data.bot.current_balance|floatformat:2
+                                        }}</small>
                                 </div>
                                 <div class="row mt-3">
                                     <div class="col-4">
@@ -345,7 +346,8 @@
                                     </div>
                                     <div class="col-4">
                                         <small class="text-muted d-block">ROI:</small>
-                                        <span class="fw-bold" style="font-size: 0.9rem;">{{ data.profit_pct|floatformat:2 }}%</span>
+                                        <span class="fw-bold" style="font-size: 0.9rem;">{{
+                                            data.profit_pct|floatformat:2 }}%</span>
                                     </div>
                                     <div class="col-4">
                                         <small class="text-muted d-block">Actv:</small>
@@ -372,11 +374,13 @@
                                     <div class="row g-1">
                                         <div class="col-4">
                                             <small class="text-muted d-block text-truncate" title="Mínimo">Mín:</small>
-                                            <span class="fw-bold" style="font-size: 0.75rem;">${{ data.bot.parameters.lower_price|floatformat:4 }}</span>
+                                            <span class="fw-bold" style="font-size: 0.75rem;">${{
+                                                data.bot.parameters.lower_price|floatformat:4 }}</span>
                                         </div>
                                         <div class="col-4">
                                             <small class="text-muted d-block text-truncate" title="Máximo">Máx:</small>
-                                            <span class="fw-bold" style="font-size: 0.75rem;">${{ data.bot.parameters.upper_price|floatformat:4 }}</span>
+                                            <span class="fw-bold" style="font-size: 0.75rem;">${{
+                                                data.bot.parameters.upper_price|floatformat:4 }}</span>
                                         </div>
                                         <div class="col-4">
                                             <small class="text-muted d-block text-truncate"
@@ -424,6 +428,22 @@
                                     <i class="fas fa-broom"></i>
                                 </button>
                                 {% endif %}
+                                <button type="button" class="btn btn-sm btn-outline-secondary btn-edit-bot"
+                                    title="Editar Parámetros" data-bot-id="{{ data.bot.id }}"
+                                    data-bot-name="{{ data.bot.name }}" data-bot-strategy="{{ data.bot.strategy_type }}"
+                                    data-bot-balance="{{ data.bot.current_balance|floatformat:2 }}"
+                                    data-bot-live="{% if data.bot.is_live %}true{% else %}false{% endif %}"
+                                    data-bot-timeframe="{{ data.bot.parameters.timeframe|default:" 1h" }}"
+                                    data-bot-upper="{{ data.bot.parameters.upper_price|default:"" }}"
+                                    data-bot-lower="{{ data.bot.parameters.lower_price|default:"" }}"
+                                    data-bot-levels="{{ data.bot.parameters.grid_levels|default:"" }}"
+                                    data-bot-sl="{{ data.bot.parameters.global_stop_loss|default:"" }}"
+                                    data-bot-trailing="{% if data.bot.parameters.trailing_enabled %}true{% else %}false{% endif %}"
+                                    data-bot-adx="{{ data.bot.parameters.min_adx|default:"" }}"
+                                    data-bot-strength="{{ data.bot.parameters.min_strength|default:"" }}"
+                                    data-bot-mode="{{ data.bot.parameters.strategy_mode|default:" custom" }}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
                                 <button type="submit" name="action" value="delete" class="btn btn-sm btn-danger"
                                     onclick="return confirm('¿Borrar este bot?')">
                                     <i class="fas fa-trash"></i>
@@ -550,7 +570,8 @@
                                     <small class="text-muted">{{ trade.entry_time|date:"d/m H:i" }}</small>
                                 </td>
                                 <td>
-                                    <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i" }}</small>
+                                    <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i"
+                                        }}</small>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -704,6 +725,43 @@
                 loader.classList.add('d-none');
                 alert('Error de conexión al analizar volatilidad.');
             }
+        }
+
+        document.querySelectorAll('.btn-edit-bot').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const data = this.dataset;
+                const modalEl = document.getElementById('editBotModal');
+                const form = modalEl.querySelector('form');
+
+                form.action = `/bots/edit/${data.botId}/`;
+
+                modalEl.querySelector('[name="name"]').value = data.botName;
+                modalEl.querySelector('[name="balance"]').value = data.botBalance;
+                modalEl.querySelector('[name="is_live"]').checked = data.botLive === 'true';
+                modalEl.querySelector('[name="timeframe"]').value = data.botTimeframe;
+
+                // Mostrar campos según estrategia
+                const strategy = data.botStrategy;
+                modalEl.querySelector('#editGridFields').classList.toggle('d-none', strategy !== 'GRID');
+                modalEl.querySelector('#editDaytradingFields').classList.toggle('d-none', strategy !== 'DAYTRADING');
+
+                if (strategy === 'GRID') {
+                    modalEl.querySelector('[name="upper_price"]').value = data.botUpper;
+                    modalEl.querySelector('[name="lower_price"]').value = data.botLower;
+                    modalEl.querySelector('[name="grid_levels"]').value = data.botLevels;
+                    modalEl.querySelector('[name="global_stop_loss"]').value = data.botSl;
+                    modalEl.querySelector('[name="trailing_enabled"]').checked = data.botTrailing === 'true';
+                } else if (strategy === 'DAYTRADING') {
+                    modalEl.querySelector('[name="strategy_mode"]').value = data.botMode;
+                    modalEl.querySelector('[name="min_adx"]').value = data.botAdx;
+                    modalEl.querySelector('[name="min_strength"]').value = data.botStrength;
+                }
+
+                const modal = new bootstrap.Modal(modalEl);
+                modal.show();
+            });
+        });
+
         }
     </script>
     <!-- Modal Crear Bot -->
@@ -923,6 +981,108 @@
         </div>
     </div>
 
+    <!-- Modal Editar Bot -->
+    <div class="modal fade" id="editBotModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <form action="#" method="POST">
+                    {% csrf_token %}
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Editar Parámetros del Bot</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Nombre del Bot</label>
+                                <input type="text" name="name" class="form-control" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Temporalidad</label>
+                                <select name="timeframe" class="form-select">
+                                    <option value="15m">15m</option>
+                                    <option value="1h">1h</option>
+                                    <option value="4h">4h</option>
+                                    <option value="1d">1d</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Balance Actual (USD)</label>
+                                <input type="number" name="balance" class="form-control" step="0.01">
+                            </div>
+                            <div class="col-md-12">
+                                <div class="form-check form-switch p-3 bg-light border rounded">
+                                    <input class="form-check-input ms-0 me-2" type="checkbox" name="is_live"
+                                        id="isLiveEditSwitch">
+                                    <label class="form-check-label fw-bold text-danger" for="isLiveEditSwitch">
+                                        ¿MODO REAL?
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Campos Grid -->
+                        <div id="editGridFields" class="mt-4 p-3 bg-light rounded d-none">
+                            <h6>Parámetros Grid</h6>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Upper Price</label>
+                                    <input type="number" name="upper_price" class="form-control" step="0.0001">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Lower Price</label>
+                                    <input type="number" name="lower_price" class="form-control" step="0.0001">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Niveles</label>
+                                    <input type="number" name="grid_levels" class="form-control">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Stop Loss</label>
+                                    <input type="number" name="global_stop_loss" class="form-control" step="0.0001">
+                                </div>
+                                <div class="col-md-6 d-flex align-items-end">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox" name="trailing_enabled">
+                                        <label class="form-check-label">Trailing Up</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Campos Daytrading -->
+                        <div id="editDaytradingFields" class="mt-4 p-3 bg-light rounded d-none">
+                            <h6>Parámetros Day Trading</h6>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Modo</label>
+                                    <select name="strategy_mode" class="form-select">
+                                        <option value="custom">Custom</option>
+                                        <option value="balanced">Balanced</option>
+                                        <option value="conservative">Conservative</option>
+                                        <option value="aggressive">Aggressive</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Min ADX</label>
+                                    <input type="number" name="min_adx" class="form-control">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Min Strength</label>
+                                    <input type="number" name="min_strength" class="form-control" step="0.5">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Registrar Inversión (Funding) -->
     <div class="modal fade" id="addFundingModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
@@ -1048,7 +1208,8 @@
 
                         <div class="form-check form-switch mb-3">
                             <input class="form-check-input" type="checkbox" name="notifications_enabled"
-                                id="notifEnabledSwitch" {% if global_settings.notifications_enabled %}checked{% endif %}>
+                                id="notifEnabledSwitch" {% if global_settings.notifications_enabled %}checked{% endif
+                                %}>
                             <label class="form-check-label fw-bold" for="notifEnabledSwitch">
                                 Activar Notificaciones en Tiempo Real
                             </label>

@@ -27,6 +27,7 @@ urlpatterns = [
     # Bot Management URLs
     path('bots/', views.bot_dashboard, name='bot_dashboard'),
     path('bots/create/', views.create_bot, name='create_bot'),
+    path('bots/edit/<int:bot_id>/', views.edit_bot, name='edit_bot'),
     path('bots/action/<int:bot_id>/', views.bot_action, name='bot_action'),
     path('bots/update/', views.trigger_bot_update, name='trigger_bot_update'),
     path('bots/sync-balance/', views.trigger_balance_sync, name='trigger_balance_sync'),

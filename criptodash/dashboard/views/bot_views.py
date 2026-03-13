@@ -300,6 +300,66 @@ def create_bot(request):
 
 @login_required
 @require_POST
+def edit_bot(request, bot_id):
+    """Actualiza los parámetros de un bot existente."""
+    try:
+        bot = get_object_or_404(LiveBot, id=bot_id)
+        name = request.POST.get('name')
+        strategy_type = bot.strategy_type
+        
+        # Balance inicial y actual (opcional)
+        balance = request.POST.get('balance')
+        if balance:
+            bot.initial_balance = Decimal(balance)
+            bot.current_balance = Decimal(balance)
+            
+        # Extraer parámetros dinámicos según estrategia
+        params = bot.parameters.copy()
+        
+        # Parámetros comunes
+        if request.POST.get('timeframe'):
+            params['timeframe'] = request.POST.get('timeframe')
+            
+        if strategy_type == 'GRID':
+            params.update({
+                'upper_price': request.POST.get('upper_price'),
+                'lower_price': request.POST.get('lower_price'),
+                'grid_levels': request.POST.get('grid_levels'),
+                'amount_per_level': request.POST.get('amount_per_level'),
+                'global_stop_loss': request.POST.get('global_stop_loss'),
+                'trailing_enabled': request.POST.get('trailing_enabled') == 'on',
+                'trailing_down': request.POST.get('trailing_down') == 'on',
+            })
+        elif strategy_type == 'DAYTRADING':
+            params.update({
+                'strategy_mode': request.POST.get('strategy_mode', 'custom'),
+                'min_strength': float(request.POST.get('min_strength', 3)),
+                'min_adx': float(request.POST.get('min_adx', 20)),
+                'allow_late_entry': request.POST.get('allow_late_entry') == 'on',
+                'use_bollinger_filter': request.POST.get('use_bollinger_filter') == 'on',
+                'use_candles': request.POST.get('use_candles') == 'on',
+                'risk_per_trade_pct': float(request.POST.get('risk_per_trade_pct', 2.0)),
+                'atr_sl': float(request.POST.get('atr_mult_sl', 1.5)),
+                'atr_tp': float(request.POST.get('atr_mult_tp', 3.0)),
+                'cooldown_bars': int(request.POST.get('cooldown_bars', 3))
+            })
+
+        bot.name = name
+        bot.parameters = params
+        
+        # Permitir cambiar entre Live/Paper
+        bot.is_live = request.POST.get('is_live') == 'on'
+        
+        bot.save()
+        messages.success(request, f"Parámetros de '{name}' actualizados correctamente.")
+        
+    except Exception as e:
+        messages.error(request, f"Error al editar bot: {e}")
+    
+    return redirect('bot_dashboard')
+
+@login_required
+@require_POST
 def bot_action(request, bot_id):
     """Controla el estado del bot (start/stop/delete)."""
     action = request.POST.get('action')
