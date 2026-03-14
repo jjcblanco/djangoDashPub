@@ -14,27 +14,31 @@ from decimal import Decimal
 @login_required
 def whale_insights(request):
     """Vista para seguimiento de ballenas y análisis de patrones."""
-    wallets = WhaleWallet.objects.filter(is_active=True)
-    
-    # Sincronizar billeteras si se solicita
-    if request.GET.get('sync') == '1':
-        tracker = SolanaWhaleTracker()
-        for wallet in wallets:
-            if wallet.blockchain == 'solana':
-                tracker.sync_wallet(wallet)
-                # Ejecutar análisis básico
-                PatternEngine.analyze_wallet(wallet)
-        messages.success(request, "Billeteras sincronizadas y analizadas correctamente.")
-        return redirect('whale_insights')
+    try:
+        wallets = WhaleWallet.objects.filter(is_active=True)
+        
+        # Sincronizar billeteras si se solicita
+        if request.GET.get('sync') == '1':
+            tracker = SolanaWhaleTracker()
+            for wallet in wallets:
+                if wallet.blockchain == 'solana':
+                    tracker.sync_wallet(wallet)
+                    # Ejecutar análisis básico
+                    PatternEngine.analyze_wallet(wallet)
+            messages.success(request, "Billeteras sincronizadas y analizadas correctamente.")
+            return redirect('whale_insights')
 
-    insights = PatternInsight.objects.all().order_by('-detected_at')[:20]
-    
-    context = {
-        'wallets': wallets,
-        'insights': insights,
-        'page_title': 'Whale Insights & Alpha'
-    }
-    return render(request, 'dashboard/whale_insights.html', context)
+        insights = PatternInsight.objects.all().order_by('-detected_at')[:20]
+        
+        context = {
+            'wallets': wallets,
+            'insights': insights,
+            'page_title': 'Whale Insights & Alpha'
+        }
+        return render(request, 'dashboard/whale_insights.html', context)
+    except Exception as e:
+        import traceback
+        return HttpResponse(f"<h3>Error 500 en Whale Insights</h3><pre>{traceback.format_exc()}</pre>", status=500)
 
 @login_required
 def bot_dashboard(request):
