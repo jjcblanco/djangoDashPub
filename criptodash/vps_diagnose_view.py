@@ -40,9 +40,9 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from dashboard.views.bot_views import whale_insights
 
 def run_diagnosis():
-    print("\n--- Iniciando Diagnóstico de Vista Whale Insights ---")
+    print("\n--- Iniciando Diagnóstico de Sincronización Whale Insights ---")
     factory = RequestFactory()
-    request = factory.get('/whale-insights/')
+    request = factory.get('/whale-insights/?sync=1')
     
     # Usuario
     user = User.objects.first()
