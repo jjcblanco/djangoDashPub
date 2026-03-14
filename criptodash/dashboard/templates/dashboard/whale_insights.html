@@ -1,0 +1,161 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }} - CriptoDash</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4e73df;
+            --secondary: #858796;
+            --dark: #5a5c69;
+            --whale-color: #2c3e50;
+        }
+
+        body {
+            background-color: #f8f9fc;
+            font-family: 'Nunito', sans-serif;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, #1a2a6c 0%, #b21f1f 50%, #fdbb2d 100%);
+        }
+
+        .insight-card {
+            border-left: 0.25rem solid var(--primary);
+            transition: 0.3s;
+        }
+
+        .insight-card:hover {
+            transform: scale(1.02);
+        }
+
+        .badge-pattern {
+            font-size: 0.8rem;
+            padding: 0.4em 0.8em;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar navbar-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="/"><i class="fas fa-whale me-2"></i>Whale Insights & Alpha</a>
+            <div class="ms-auto">
+                <a href="{% url 'bot_dashboard' %}" class="btn btn-outline-light btn-sm"><i
+                        class="fas fa-robot me-1"></i>Bots</a>
+                <a href="?sync=1" class="btn btn-light btn-sm ms-2"><i class="fas fa-sync-alt me-1"></i>Sincronizar</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">Billeteras Seguidas</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            {% for wallet in wallets %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="fw-bold">{{ wallet.name|default:wallet.address|truncatechars:12
+                                        }}</span>
+                                    <small class="d-block text-muted">{{ wallet.blockchain }}</small>
+                                </div>
+                                <span class="badge bg-primary rounded-pill">{{ wallet.transactions.count }}</span>
+                            </li>
+                            {% empty %}
+                            <li class="list-group-item text-muted">No hay billeteras seguidas.</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-8">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">Alpha Feed (Patrones Detectados)</h6>
+                    </div>
+                    <div class="card-body">
+                        {% for insight in insights %}
+                        <div class="card mb-3 insight-card border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <h5 class="card-title h6 mb-1 text-dark">{{
+                                        insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
+                                    <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type
+                                        }}</span>
+                                </div>
+                                <p class="card-text small text-muted mb-2">{{ insight.description }}</p>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted"><i class="far fa-clock me-1"></i>{{
+                                        insight.detected_at|timesince }} ago</small>
+                                    <div class="progress w-25" style="height: 5px;">
+                                        <div class="progress-bar bg-success" role="progressbar"
+                                            style="width: {{ insight.confidence|multiply:100 }}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="text-center py-5 text-muted">
+                            <i class="fas fa-search fa-3x mb-3"></i>
+                            <p>Esperando la siguiente señal de ballenas...</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-dark text-white py-3">
+                        <i class="fas fa-graduation-cap me-2"></i>Módulo de Aprendizaje: Lecciones On-Chain
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-4 mb-4">
+                                <div class="p-3 border rounded">
+                                    <i class="fas fa-layer-group fa-2x text-primary mb-2"></i>
+                                    <h6>Acumulación Dinámica</h6>
+                                    <p class="small text-muted">Aprende cómo las ballenas compran en mallas (GRID)
+                                        humanas sin mover el precio.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-4">
+                                <div class="p-3 border rounded">
+                                    <i class="fas fa-shield-alt fa-2x text-success mb-2"></i>
+                                    <h6>Gestión de Riesgo Real</h6>
+                                    <p class="small text-muted">Observa sus niveles de salida y cómo protegen su capital
+                                        ante caídas.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-4">
+                                <div class="p-3 border rounded">
+                                    <i class="fas fa-chart-pie fa-2x text-warning mb-2"></i>
+                                    <h6>Rotación de Capital</h6>
+                                    <p class="small text-muted">Identifica cuándo el dinero inteligente sale de una
+                                        moneda para entrar en otra.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
