@@ -63,15 +63,28 @@ def run_diagnosis():
         response = whale_insights(request)
         print(f"[OK] Status Code: {response.status_code}")
         
-        if response.status_code == 500:
-            print("\n[ERROR DETECTADO]")
-            # Intentar extraer el traceback del HTML que devuelve nuestra vista
-            content = response.content.decode('utf-8')
-            if "<pre>" in content:
-                trace = content.split("<pre>")[1].split("</pre>")[0]
-                print(f"Traceback:\n{trace}")
-            else:
-                print(f"Contenido de error:\n{content[:500]}...")
+        if response.status_code == 302:
+            redirect_url = response['Location']
+            print(f"[OK] Redirección detectada a: {redirect_url}")
+            print(f"[...] Siguiendo redirección a {redirect_url}...")
+            
+            # Simular la petición a la que redirige
+            request_fb = factory.get(redirect_url)
+            request_fb.user = user
+            middleware.process_request(request_fb)
+            setattr(request_fb, '_messages', FallbackStorage(request_fb))
+            
+            response_fb = whale_insights(request_fb)
+            print(f"[OK] Status Code tras redirección: {response_fb.status_code}")
+            
+            if response_fb.status_code == 500:
+                print("\n[ERROR EN EL DESTINO]")
+                content = response_fb.content.decode('utf-8')
+                if "<pre>" in content:
+                    print(f"Traceback:\n{content.split('<pre>')[1].split('</pre>')[0]}")
+                else:
+                    print(f"Contenido:\n{content[:500]}")
+        elif response.status_code == 500:
         else:
             print("[EXITO] La vista funciona correctamente en este entorno.")
             
