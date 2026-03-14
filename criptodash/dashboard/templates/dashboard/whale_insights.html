@@ -69,8 +69,7 @@
                             {% for wallet in wallets %}
                             <li class="list-group-item d-flex justify-content-between align-items-center">
                                 <div>
-                                    <span class="fw-bold">{{ wallet.name|default:wallet.address|truncatechars:12
-                                        }}</span>
+                                    <span class="fw-bold">{{ wallet.name|default:wallet.address|truncatechars:12 }}</span>
                                     <small class="d-block text-muted">{{ wallet.blockchain }}</small>
                                 </div>
                                 <span class="badge bg-primary rounded-pill">{{ wallet.transactions.count }}</span>
@@ -95,13 +94,11 @@
                                 <div class="d-flex justify-content-between">
                                     <h5 class="card-title h6 mb-1 text-dark">{{
                                         insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
-                                    <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type
-                                        }}</span>
+                                    <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type }}</span>
                                 </div>
                                 <p class="card-text small text-muted mb-2">{{ insight.description }}</p>
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <small class="text-muted"><i class="far fa-clock me-1"></i>{{
-                                        insight.detected_at|timesince }} ago</small>
+                                    <small class="text-muted"><i class="far fa-clock me-1"></i>{{ insight.detected_at|timesince }} ago</small>
                                     <div class="progress w-25" style="height: 5px;">
                                         <div class="progress-bar bg-success" role="progressbar"
                                             style="width: {% widthratio insight.confidence 1 100 %}%"></div>
