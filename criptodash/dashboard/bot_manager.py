@@ -76,6 +76,13 @@ class BotManager:
     def _manage_grid_bot(bot, df):
         """Lógica para bots de malla en tiempo real."""
         params = bot.parameters
+        
+        # Validación de parámetros requeridos
+        required_params = ['upper_price', 'lower_price', 'grid_levels', 'amount_per_level']
+        missing = [p for p in required_params if params.get(p) is None]
+        if missing:
+            raise ValueError(f"Faltan parámetros requeridos para GRID: {', '.join(missing)}")
+
         current_price = float(df['close'].iloc[-1])
         upper = float(params.get('upper_price'))
         lower = float(params.get('lower_price'))
