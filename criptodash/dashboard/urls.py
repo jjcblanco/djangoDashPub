@@ -1,8 +1,9 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from . import views
 from . import auth_views
-from .views import api_views
+from .views import api_views, bot_views # Para asegurar acceso a follow_whale si es necesario
 
 router = DefaultRouter()
 router.register(r'bots', api_views.LiveBotViewSet, basename='api_bots')
@@ -34,6 +35,7 @@ urlpatterns = [
     path('bots/add-funding/', views.add_funding, name='add_funding'),
     path('api/volatility/', views.analyze_volatility_api, name='api_volatility'),
     path('whale-insights/', views.whale_insights, name='whale_insights'),
+    path('whale-insights/follow/', views.follow_whale, name='follow_whale'),
     path('bots/<validation_id>/detail/', views.bot_detail, name='bot_detail'),
     path('bots/kill-switch/', views.trigger_kill_switch, name='trigger_kill_switch'),
     path('bots/risk-settings/', views.update_risk_settings, name='update_risk_settings'),
