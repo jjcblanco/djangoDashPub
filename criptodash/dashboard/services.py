@@ -81,37 +81,73 @@ class SolanaWhaleTracker:
 class PatternEngine:
     @staticmethod
     def analyze_wallet(wallet_obj):
-        """Analiza las transacciones de una billetera para detectar patrones de comportamiento."""
-        txs = wallet_obj.transactions.order_by('-timestamp')[:100] # Analizamos más historial
+        """Analiza las transacciones de una billetera para detectar patrones y tokens específicos."""
+        txs = wallet_obj.transactions.order_by('-timestamp')[:50]
         if txs.count() < 2:
             return "Datos insuficientes (necesita al menos 2 transacciones)"
             
-        # Contadores básicos
-        swaps_in = 0
-        swaps_out = 0
-        total_volume = 0
+        token_stats = {} # {token_mint: {'buys': 0, 'volume': 0}}
         
-        # Lógica de detección simplificada
+        # Mapeo básico de tokens comunes
+        TOKEN_MAP = {
+            'So11111111111111111111111111111111111111112': 'SOL',
+            'EPjFW3F2KVq2aLecqCP5i5nw53J2tOt9iies23XYwjLu': 'USDC',
+            'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 'USDT',
+            'JUPyiPZp718zay7kaPn2CoJvRwvpqcRuS5B7shuYf79': 'JUP',
+            'DezXAZ8z7Pnrn9vzctrxEXpWMrNHqR1f6f69nL4XYUDx': 'BONK',
+        }
+        
         for tx in txs:
-            # Intentar identificar si es compra o venta por los balances (placeholder mejorado)
-            # En una implementación real, analizaríamos postTokenBalances del RPC
-            if "buy" in str(tx.raw_data).lower() or "swap" in str(tx.raw_data).lower():
-                swaps_in += 1
+            try:
+                raw = tx.raw_data
+                if not raw or 'meta' not in raw: continue
+                
+                # Buscar cambios en balances de tokens
+                pre_balances = {b['mint']: b['uiTokenAmount']['uiAmount'] or 0 
+                               for b in raw['meta'].get('preTokenBalances', []) 
+                               if b.get('owner') == wallet_obj.address}
+                
+                post_balances = {b['mint']: b['uiTokenAmount']['uiAmount'] or 0 
+                                for b in raw['meta'].get('postTokenBalances', []) 
+                                if b.get('owner') == wallet_obj.address}
+                
+                for mint, post_val in post_balances.items():
+                    pre_val = pre_balances.get(mint, 0)
+                    change = post_val - pre_val
+                    
+                    if change > 0: # Compra o recepción
+                        if mint not in token_stats:
+                            token_stats[mint] = {'buys': 0, 'volume': 0}
+                        token_stats[mint]['buys'] += 1
+                        token_stats[mint]['volume'] += change
+            except:
+                continue
+                
+        # Encontrar el token más "caliente" (más compras)
+        hot_token = None
+        max_buys = 0
+        if token_stats:
+            hot_token_mint = max(token_stats, key=lambda k: token_stats[k]['buys'])
+            max_buys = token_stats[hot_token_mint]['buys']
+            hot_token = TOKEN_MAP.get(hot_token_mint, hot_token_mint[:8] + "...")
             
         confidence = 0.5
         pattern = "OBSERVACIÓN"
         description = "La billetera está bajo observación inicial."
         
-        if swaps_in > 15:
-            pattern = "ACUMULACIÓN AGRESIVA"
-            description = "Esta ballena está acumulando activos de forma constante en cortos periodos de tiempo."
-            confidence = 0.85
-        elif swaps_in > 5:
-            pattern = "ACUMULACIÓN (DCA)"
-            description = "Patrón de compras regulares detectado. Típicamente indica confianza a largo plazo."
-            confidence = 0.7
-            
-        # Guardar el insight en la base de datos
+        if hot_token:
+            if max_buys > 15:
+                pattern = "ACUMULACIÓN AGRESIVA"
+                description = f"Esta ballena está acumulando fuertemente el token {hot_token}."
+                confidence = 0.9
+            elif max_buys > 5:
+                pattern = "ACUMULACIÓN (DCA)"
+                description = f"Patrón de compras progresivas detectado en {hot_token}."
+                confidence = 0.75
+            else:
+                description = f"Actividad reciente detectada en el token {hot_token}."
+                
+        # Guardar el insight
         PatternInsight.objects.update_or_create(
             wallet=wallet_obj,
             pattern_type=pattern,
