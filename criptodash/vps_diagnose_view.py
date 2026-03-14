@@ -51,7 +51,11 @@ def run_diagnosis():
         user = User.objects.create_user(username='diag_user', password='password')
     request.user = user
     
-    # Mensajes
+    # Mensajes y Sesión
+    from django.contrib.sessions.middleware import SessionMiddleware
+    middleware = SessionMiddleware(lambda r: None)
+    middleware.process_request(request)
+    request.session.save()
     setattr(request, '_messages', FallbackStorage(request))
     
     try:
