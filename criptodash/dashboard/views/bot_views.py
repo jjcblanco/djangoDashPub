@@ -19,13 +19,23 @@ def whale_insights(request):
         
         # Sincronizar billeteras si se solicita
         if request.GET.get('sync') == '1':
+            try:
+                with open('whale_debug.log', 'a') as f:
+                    f.write(f"\n[{timezone.now()}] Iniciando Sincronización vía Web...\n")
+            except: pass
+            
             tracker = SolanaWhaleTracker()
             for wallet in wallets:
                 if wallet.blockchain == 'solana':
+                    try:
+                        with open('whale_debug.log', 'a') as f:
+                            f.write(f"Sincronizando wallet: {wallet.address[:8]}...\n")
+                    except: pass
+                    
                     # Ultra-limitado a 2 transacciones por billetera en web para evitar timeout
                     tracker.sync_wallet(wallet, max_new=2)
-                    # Ejecutar análisis básico
                     PatternEngine.analyze_wallet(wallet)
+            
             messages.success(request, "Billeteras sincronizadas y analizadas correctamente.")
             return redirect('whale_insights')
 
@@ -39,7 +49,13 @@ def whale_insights(request):
         return render(request, 'dashboard/whale_insights.html', context)
     except Exception as e:
         import traceback
-        return HttpResponse(f"<h3>Error 500 en Whale Insights</h3><pre>{traceback.format_exc()}</pre>", status=500)
+        error_msg = traceback.format_exc()
+        try:
+            with open('whale_debug.log', 'a') as f:
+                f.write(f"\n--- {timezone.now()} ---\n{error_msg}\n")
+        except:
+            pass
+        return HttpResponse(f"<h3>Error 500 en Whale Insights</h3><pre>{error_msg}</pre>", status=500)
 
 @login_required
 @require_POST
