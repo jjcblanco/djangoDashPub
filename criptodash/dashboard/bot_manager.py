@@ -77,23 +77,33 @@ class BotManager:
         """Lógica para bots de malla en tiempo real."""
         params = bot.parameters
         
-        # Validación de parámetros requeridos
-        required_params = ['upper_price', 'lower_price', 'grid_levels', 'amount_per_level']
-        missing = [p for p in required_params if params.get(p) is None]
-        if missing:
-            raise ValueError(f"Faltan parámetros requeridos para GRID: {', '.join(missing)}")
+        # Función auxiliar para conversión segura
+        def safe_float(val, name):
+            if val is None or val == '':
+                raise ValueError(f"Parámetro GRID '{name}' es nulo o vacío.")
+            return float(val)
 
-        current_price = float(df['close'].iloc[-1])
-        upper = float(params.get('upper_price'))
-        lower = float(params.get('lower_price'))
-        levels_count = int(params.get('grid_levels'))
-        amount_per_level = float(params.get('amount_per_level'))
-        stop_loss_price = params.get('global_stop_loss')
-        if stop_loss_price: stop_loss_price = float(stop_loss_price)
+        try:
+            current_price = float(df['close'].iloc[-1])
+            upper = safe_float(params.get('upper_price'), 'upper_price')
+            lower = safe_float(params.get('lower_price'), 'lower_price')
+            levels_count = int(params.get('grid_levels', 0))
+            if levels_count < 2: raise ValueError("Grid levels debe ser >= 2")
+            
+            amount_per_level = safe_float(params.get('amount_per_level'), 'amount_per_level')
+            
+            stop_loss_price = params.get('global_stop_loss')
+            if stop_loss_price: stop_loss_price = float(stop_loss_price)
 
-        grid_step = (upper - lower) / (levels_count - 1)
-        grid_levels = [lower + i * grid_step for i in range(levels_count)]
-        
+            grid_step = (upper - lower) / (levels_count - 1)
+            grid_levels = [lower + i * grid_step for i in range(levels_count)]
+        except (ValueError, TypeError) as e:
+            bot.last_error = f"Error de parámetros GRID: {e}"
+            bot.status = 'ERROR'
+            bot.save()
+            logger.error(f"Error en bot {bot.id}: {e}")
+            return {'bot_id': bot.id, 'status': 'error', 'message': str(e)}
+
         # 0. Verificar Inicialización (Bootstrap)
         # Solo inicializamos si no hay operaciones ACTIVAS (OPEN o WAITING)
         active_trades_exist = LiveTrade.objects.filter(bot=bot, status__in=['OPEN', 'WAITING']).exists()
