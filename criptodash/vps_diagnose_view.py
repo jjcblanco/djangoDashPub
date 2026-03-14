@@ -85,6 +85,12 @@ def run_diagnosis():
                 else:
                     print(f"Contenido:\n{content[:500]}")
         elif response.status_code == 500:
+            print("\n[ERROR DETECTADO EN PETICION ORIGINAL]")
+            content = response.content.decode('utf-8')
+            if "<pre>" in content:
+                print(f"Traceback:\n{content.split('<pre>')[1].split('</pre>')[0]}")
+            else:
+                print(f"Contenido:\n{content[:500]}")
         else:
             print("[EXITO] La vista funciona correctamente en este entorno.")
             
