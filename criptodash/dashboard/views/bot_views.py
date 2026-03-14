@@ -41,6 +41,37 @@ def whale_insights(request):
         return HttpResponse(f"<h3>Error 500 en Whale Insights</h3><pre>{traceback.format_exc()}</pre>", status=500)
 
 @login_required
+@require_POST
+def follow_whale(request):
+    """Añade una nueva billetera a la lista de seguimiento."""
+    try:
+        address = request.POST.get('address')
+        name = request.POST.get('name')
+        blockchain = request.POST.get('blockchain', 'solana')
+        
+        if not address:
+            messages.error(request, "La dirección es obligatoria.")
+            return redirect('whale_insights')
+            
+        # Evitar duplicados
+        if WhaleWallet.objects.filter(address=address).exists():
+            messages.warning(request, f"La billetera {address} ya está siendo seguida.")
+            return redirect('whale_insights')
+            
+        WhaleWallet.objects.create(
+            address=address,
+            name=name,
+            blockchain=blockchain,
+            is_active=True
+        )
+        messages.success(request, f"Ahora sigues a {name or address[:8]}.")
+        
+    except Exception as e:
+        messages.error(request, f"Error al seguir billetera: {e}")
+        
+    return redirect('whale_insights')
+
+@login_required
 def bot_dashboard(request):
     """Vista principal para gestionar bots con diagnóstico."""
     import logging
