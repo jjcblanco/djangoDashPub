@@ -22,7 +22,8 @@ def whale_insights(request):
             tracker = SolanaWhaleTracker()
             for wallet in wallets:
                 if wallet.blockchain == 'solana':
-                    tracker.sync_wallet(wallet)
+                    # Limitar a 5 transacciones por billetera en web para evitar timeout
+                    tracker.sync_wallet(wallet, max_new=5)
                     # Ejecutar análisis básico
                     PatternEngine.analyze_wallet(wallet)
             messages.success(request, "Billeteras sincronizadas y analizadas correctamente.")
