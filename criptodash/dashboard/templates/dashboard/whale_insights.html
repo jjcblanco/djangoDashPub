@@ -94,11 +94,9 @@
                                 </div>
                                 <p class="card-text small text-muted mb-2">{{ insight.description }}</p>
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <small class="text-muted"><i class="far fa-clock me-1"></i>{{
-                                        insight.detected_at|timesince }} ago</small>
+                                    <small class="text-muted"><i class="far fa-clock me-1"></i>{{ insight.detected_at|timesince }} ago</small>
                                     <div class="progress w-25" style="height: 5px;">
-                                        <div class="progress-bar bg-success" role="progressbar"
-                                            style="width: {{ insight.confidence|multiply:100 }}%"></div>
+                                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ insight.confidence|multiply:100 }}%"></div>
                                     </div>
                                 </div>
                             </div>
