@@ -66,14 +66,45 @@ class SolanaWhaleTracker:
 class PatternEngine:
     @staticmethod
     def analyze_wallet(wallet_obj):
-        txs = wallet_obj.transactions.order_by('timestamp')
-        if not txs.exists():
-            return "No hay transacciones suficientes para analizar."
+        """Analiza las transacciones de una billetera para detectar patrones de comportamiento."""
+        txs = wallet_obj.transactions.order_by('-timestamp')[:50] # Analizamos las últimas 50
+        if txs.count() < 5:
+            return "Datos insuficientes"
             
-        # Placeholder for complex pattern logic
-        # Ej: Si hay muchos depósitos seguidos sin ventas = Acumulación
+        # Contadores básicos
+        swaps_in = 0
+        swaps_out = 0
+        total_volume = 0
         
-        insight_msg = f"Análisis de {wallet_obj.name or wallet_obj.address[:8]}: "
-        # ... lógica de detección ...
+        # Lógica de detección simplificada
+        for tx in txs:
+            # Intentar identificar si es compra o venta por los balances (placeholder mejorado)
+            # En una implementación real, analizaríamos postTokenBalances del RPC
+            if "buy" in str(tx.raw_data).lower() or "swap" in str(tx.raw_data).lower():
+                swaps_in += 1
+            
+        confidence = 0.5
+        pattern = "OBSERVACIÓN"
+        description = "La billetera está bajo observación inicial."
         
-        return insight_msg
+        if swaps_in > 15:
+            pattern = "ACUMULACIÓN AGRESIVA"
+            description = "Esta ballena está acumulando activos de forma constante en cortos periodos de tiempo."
+            confidence = 0.85
+        elif swaps_in > 5:
+            pattern = "ACUMULACIÓN (DCA)"
+            description = "Patrón de compras regulares detectado. Típicamente indica confianza a largo plazo."
+            confidence = 0.7
+            
+        # Guardar el insight en la base de datos
+        PatternInsight.objects.update_or_create(
+            wallet=wallet_obj,
+            pattern_type=pattern,
+            defaults={
+                'description': description,
+                'confidence': confidence,
+                'detected_at': timezone.now()
+            }
+        )
+        
+        return f"Patrón detectado: {pattern}"
