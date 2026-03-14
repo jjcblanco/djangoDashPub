@@ -332,8 +332,7 @@
                                         <strong>Error:</strong> {{ data.bot.last_error }}
                                     </div>
                                     {% endif %}
-                                    <small class="text-muted ms-2">Balance: ${{ data.bot.current_balance|floatformat:2
-                                        }}</small>
+                                    <small class="text-muted ms-2">Balance: ${{ data.bot.current_balance|floatformat:2 }}</small>
                                 </div>
                                 <div class="row mt-3">
                                     <div class="col-4">
@@ -373,13 +372,11 @@
                                     <div class="row g-1">
                                         <div class="col-4">
                                             <small class="text-muted d-block text-truncate" title="Mínimo">Mín:</small>
-                                            <span class="fw-bold" style="font-size: 0.75rem;">${{
-                                                data.bot.parameters.lower_price|floatformat:4 }}</span>
+                                            <span class="fw-bold" style="font-size: 0.75rem;">${{ data.bot.parameters.lower_price|floatformat:4 }}</span>
                                         </div>
                                         <div class="col-4">
                                             <small class="text-muted d-block text-truncate" title="Máximo">Máx:</small>
-                                            <span class="fw-bold" style="font-size: 0.75rem;">${{
-                                                data.bot.parameters.upper_price|floatformat:4 }}</span>
+                                            <span class="fw-bold" style="font-size: 0.75rem;">${{ data.bot.parameters.upper_price|floatformat:4 }}</span>
                                         </div>
                                         <div class="col-4">
                                             <small class="text-muted d-block text-truncate"
@@ -570,8 +567,7 @@
                                     <small class="text-muted">{{ trade.entry_time|date:"d/m H:i" }}</small>
                                 </td>
                                 <td>
-                                    <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i"
-                                        }}</small>
+                                    <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i" }}</small>
                                 </td>
                             </tr>
                             {% endfor %}
