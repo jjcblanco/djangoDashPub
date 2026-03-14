@@ -19,8 +19,11 @@ class SolanaWhaleTracker:
                 {"limit": limit}
             ]
         }
-        response = requests.post(self.rpc_url, json=payload)
-        return response.json().get('result', [])
+        try:
+            response = requests.post(self.rpc_url, json=payload, timeout=10)
+            return response.json().get('result', [])
+        except requests.exceptions.RequestException:
+            return []
 
     def get_transaction_details(self, tx_hash):
         payload = {
@@ -32,8 +35,11 @@ class SolanaWhaleTracker:
                 {"encoding": "json", "maxSupportedTransactionVersion": 0}
             ]
         }
-        response = requests.post(self.rpc_url, json=payload)
-        return response.json().get('result', {})
+        try:
+            response = requests.post(self.rpc_url, json=payload, timeout=10)
+            return response.json().get('result', {})
+        except requests.exceptions.RequestException:
+            return {}
 
     def sync_wallet(self, wallet_obj, max_new=5):
         """
@@ -66,7 +72,7 @@ class SolanaWhaleTracker:
                 raw_data=details
             )
             new_txs += 1
-            time.sleep(0.5) # Avoid rate limiting
+            time.sleep(0.1) # Faster sync for web
             
         return new_txs
 
