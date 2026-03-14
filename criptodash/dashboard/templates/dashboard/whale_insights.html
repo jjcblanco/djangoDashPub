@@ -100,7 +100,7 @@
                                         insight.detected_at|timesince }} ago</small>
                                     <div class="progress w-25" style="height: 5px;">
                                         <div class="progress-bar bg-success" role="progressbar"
-                                            style="width: {{ insight.confidence|multiply:100 }}%"></div>
+                                            style="width: {% widthratio insight.confidence 1 100 %}%"></div>
                                     </div>
                                 </div>
                             </div>
