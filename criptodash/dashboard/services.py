@@ -9,7 +9,9 @@ class SolanaWhaleTracker:
     def __init__(self, rpc_url="https://api.mainnet-beta.solana.com"):
         self.rpc_url = rpc_url
 
-    def get_transactions(self, address, limit=50):
+    def get_transactions(self, address, limit=None):
+        if limit is None:
+            limit = 50 # Default para background script
         payload = {
             "jsonrpc": "2.0",
             "id": 1,
@@ -41,12 +43,12 @@ class SolanaWhaleTracker:
         except requests.exceptions.RequestException:
             return {}
 
-    def sync_wallet(self, wallet_obj, max_new=5):
+    def sync_wallet(self, wallet_obj, max_new=5, signatures_limit=None):
         """
         Sincroniza las transacciones de una billetera.
         max_new: Límite de transacciones nuevas a procesar para evitar timeouts en peticiones web.
         """
-        signatures = self.get_transactions(wallet_obj.address)
+        signatures = self.get_transactions(wallet_obj.address, limit=signatures_limit)
         new_txs = 0
         
         for sig in signatures:
@@ -72,7 +74,7 @@ class SolanaWhaleTracker:
                 raw_data=details
             )
             new_txs += 1
-            time.sleep(0.1) # Faster sync for web
+            # Eliminamos el sleep en la web para ganar cada milisegundo posible
             
         return new_txs
 

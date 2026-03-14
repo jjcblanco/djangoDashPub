@@ -29,11 +29,11 @@ def whale_insights(request):
                 if wallet.blockchain == 'solana':
                     try:
                         with open('whale_debug.log', 'a') as f:
-                            f.write(f"Sincronizando wallet: {wallet.address[:8]}...\n")
+                            f.write(f"Sincronizando wallet (web limit): {wallet.address[:8]}...\n")
                     except: pass
                     
-                    # Ultra-limitado a 2 transacciones por billetera en web para evitar timeout
-                    tracker.sync_wallet(wallet, max_new=2)
+                    # Buscamos solo 5 firmas recientes (en lugar de 50) y procesamos máximo 2 nuevas
+                    tracker.sync_wallet(wallet, max_new=2, signatures_limit=5)
                     PatternEngine.analyze_wallet(wallet)
             
             messages.success(request, "Billeteras sincronizadas y analizadas correctamente.")
