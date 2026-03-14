@@ -9,7 +9,7 @@ class SolanaWhaleTracker:
     def __init__(self, rpc_url="https://api.mainnet-beta.solana.com"):
         self.rpc_url = rpc_url
 
-    def get_transactions(self, address, limit=10):
+    def get_transactions(self, address, limit=50):
         payload = {
             "jsonrpc": "2.0",
             "id": 1,
@@ -67,9 +67,9 @@ class PatternEngine:
     @staticmethod
     def analyze_wallet(wallet_obj):
         """Analiza las transacciones de una billetera para detectar patrones de comportamiento."""
-        txs = wallet_obj.transactions.order_by('-timestamp')[:50] # Analizamos las últimas 50
-        if txs.count() < 5:
-            return "Datos insuficientes"
+        txs = wallet_obj.transactions.order_by('-timestamp')[:100] # Analizamos más historial
+        if txs.count() < 2:
+            return "Datos insuficientes (necesita al menos 2 transacciones)"
             
         # Contadores básicos
         swaps_in = 0
