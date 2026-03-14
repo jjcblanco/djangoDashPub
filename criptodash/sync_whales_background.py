@@ -1,9 +1,26 @@
-import os
-import time
-import django
-from datetime import datetime
+# 1. Cargar .env manualmente (Fix para VPS)
+def load_env_manually():
+    try:
+        env_path = '.env'
+        if not os.path.exists(env_path):
+            env_path = os.path.join('..', '.env')
+        
+        if os.path.exists(env_path):
+            with open(env_path) as f:
+                for line in f:
+                    if line.strip() and not line.startswith('#'):
+                        if '=' in line:
+                            key, value = line.strip().split('=', 1)
+                            os.environ[key] = value.strip('"').strip("'")
+            print(f"[OK] .env cargado.")
+        else:
+            print("[!] No se encontró el archivo .env")
+    except Exception as e:
+        print(f"[!] Error cargando .env: {e}")
 
-# Configurar Django
+load_env_manually()
+
+# 2. Configurar Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'criptodash.settings')
 django.setup()
 
