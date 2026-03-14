@@ -221,3 +221,39 @@ class DailyMetric(models.Model):
         
     def __str__(self):
         return f"Metrics for {self.date} (Balance: {self.total_balance})"
+
+class WhaleWallet(models.Model):
+    address = models.CharField(max_length=255, unique=True)
+    name = models.CharField(max_length=100, blank=True, null=True)
+    blockchain = models.CharField(max_length=50, default='solana')
+    notes = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name or self.address[:8]} ({self.blockchain})"
+
+class WhaleTransaction(models.Model):
+    wallet = models.ForeignKey(WhaleWallet, on_delete=models.CASCADE, related_name='transactions')
+    tx_hash = models.CharField(max_length=255, unique=True)
+    timestamp = models.DateTimeField()
+    tx_type = models.CharField(max_length=50) # SWAP, TRANSFER, MINT
+    from_asset = models.CharField(max_length=50, blank=True, null=True)
+    to_asset = models.CharField(max_length=50, blank=True, null=True)
+    amount_in = models.DecimalField(max_digits=30, decimal_places=10, null=True, blank=True)
+    amount_out = models.DecimalField(max_digits=30, decimal_places=10, null=True, blank=True)
+    raw_data = models.JSONField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.tx_type} {self.wallet.name or self.wallet.address[:8]}"
+
+class PatternInsight(models.Model):
+    wallet = models.ForeignKey(WhaleWallet, on_delete=models.CASCADE, related_name='insights')
+    pattern_type = models.CharField(max_length=100) # ACCUMULATION, DISTRIBUTION, DCA, etc.
+    confidence = models.FloatField() # 0 to 1
+    description = models.TextField()
+    detected_at = models.DateTimeField(auto_now_add=True)
+    meta_data = models.JSONField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.pattern_type} for {self.wallet.name or self.wallet.address[:8]}"
