@@ -80,6 +80,47 @@ class SolanaWhaleTracker:
 
 class PatternEngine:
     @staticmethod
+    def get_token_symbol(mint):
+        """Busca el símbolo de un token dinámicamente usando la API de Jupiter."""
+        # Caché estática básica
+        TOKEN_MAP = {
+            'So11111111111111111111111111111111111111112': 'SOL',
+            'EPjFW3F2KVq2aLecqCP5i5nw53J2tOt9iies23XYwjLu': 'USDC',
+            'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 'USDT',
+            'JUPyiPZp718zay7kaPn2CoJvRwvpqcRuS5B7shuYf79': 'JUP',
+            'DezXAZ8z7Pnrn9vzctrxEXpWMrNHqR1f6f69nL4XYUDx': 'BONK',
+        }
+        
+        if mint in TOKEN_MAP:
+            return TOKEN_MAP[mint]
+            
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        try:
+            # Opción 1: Jupiter API
+            url = f"https://tokens.jup.ag/token/{mint}"
+            resp = requests.get(url, headers=headers, timeout=3)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get('symbol'):
+                    return data['symbol']
+            
+            # Opción 2: DexScreener API
+            url_dex = f"https://api.dexscreener.com/latest/dex/tokens/{mint}"
+            resp_dex = requests.get(url_dex, headers=headers, timeout=3)
+            if resp_dex.status_code == 200:
+                data_dex = resp_dex.json()
+                pairs = data_dex.get('pairs', [])
+                if pairs:
+                    return pairs[0].get('baseToken', {}).get('symbol', mint[:8] + "...")
+        except Exception as e:
+            try:
+                with open('whale_debug.log', 'a') as f:
+                    f.write(f"Error resolviendo token {mint}: {e}\n")
+            except: pass
+        
+        return mint[:8] + "..."
+
+    @staticmethod
     def analyze_wallet(wallet_obj):
         """Analiza las transacciones de una billetera para detectar patrones y tokens específicos."""
         txs = wallet_obj.transactions.order_by('-timestamp')[:50]
@@ -129,7 +170,7 @@ class PatternEngine:
         if token_stats:
             hot_token_mint = max(token_stats, key=lambda k: token_stats[k]['buys'])
             max_buys = token_stats[hot_token_mint]['buys']
-            hot_token = TOKEN_MAP.get(hot_token_mint, hot_token_mint[:8] + "...")
+            hot_token = PatternEngine.get_token_symbol(hot_token_mint)
             
         confidence = 0.5
         pattern = "OBSERVACIÓN"
