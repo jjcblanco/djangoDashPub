@@ -35,11 +35,18 @@ class SolanaWhaleTracker:
         response = requests.post(self.rpc_url, json=payload)
         return response.json().get('result', {})
 
-    def sync_wallet(self, wallet_obj):
+    def sync_wallet(self, wallet_obj, max_new=5):
+        """
+        Sincroniza las transacciones de una billetera.
+        max_new: Límite de transacciones nuevas a procesar para evitar timeouts en peticiones web.
+        """
         signatures = self.get_transactions(wallet_obj.address)
         new_txs = 0
         
         for sig in signatures:
+            if new_txs >= max_new:
+                break
+                
             tx_hash = sig['signature']
             if WhaleTransaction.objects.filter(tx_hash=tx_hash).exists():
                 continue
