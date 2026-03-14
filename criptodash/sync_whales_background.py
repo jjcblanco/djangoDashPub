@@ -1,3 +1,7 @@
+import os
+import django
+from datetime import datetime
+
 # 1. Cargar .env manualmente (Fix para VPS)
 def load_env_manually():
     try:
