@@ -267,3 +267,23 @@ class PatternInsight(models.Model):
 
     def __str__(self):
         return f"{self.pattern_type} for {self.wallet.name or self.wallet.address[:8]}"
+
+class ShadowTrade(models.Model):
+    STATUS_CHOICES = [
+        ('OPEN', 'Abierta'),
+        ('CLOSED', 'Cerrada'),
+    ]
+
+    wallet = models.ForeignKey(WhaleWallet, on_delete=models.CASCADE, related_name='shadow_trades')
+    token_symbol = models.CharField(max_length=50)
+    token_mint = models.CharField(max_length=255, blank=True, null=True)
+    entry_price = models.DecimalField(max_digits=30, decimal_places=10)
+    exit_price = models.DecimalField(max_digits=30, decimal_places=10, null=True, blank=True)
+    amount = models.DecimalField(max_digits=30, decimal_places=10, help_text="Cantidad simulada en el token")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OPEN')
+    pnl_percent = models.FloatField(default=0.0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Shadow {self.token_symbol} - {self.wallet.name or self.wallet.address[:8]}"
