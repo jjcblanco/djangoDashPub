@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db import models
 from django.db.models import Sum
@@ -47,9 +48,14 @@ def whale_insights(request):
         for wallet in wallets:
             wallet.pnl_stats = PatternEngine.get_wallet_pnl(wallet)
             
+        # Operaciones Shadow Activas
+        from ..models import ShadowTrade
+        shadow_trades = ShadowTrade.objects.filter(status='OPEN').order_by('-created_at')
+            
         context = {
             'wallets': wallets,
             'insights': insights,
+            'shadow_trades': shadow_trades,
             'page_title': 'Whale Insights & Alpha'
         }
         return render(request, 'dashboard/whale_insights.html', context)
@@ -811,5 +817,67 @@ def unfollow_whale(request, wallet_id):
         messages.success(request, f"Has dejado de seguir a {name} correctamente.")
     except Exception as e:
         messages.error(request, f"Error al dejar de seguir: {e}")
+        
+    return redirect('whale_insights')
+
+@login_required
+@require_POST
+def simulate_whale_trade(request):
+    """Simula una copia de trade de ballena (Shadow Trading)."""
+    try:
+        from ..models import ShadowTrade, WhaleWallet
+        wallet_id = request.POST.get('wallet_id')
+        symbol = request.POST.get('symbol', 'SOL')
+        mint = request.POST.get('mint', '')
+        # Un precio ficticio para la simulación inicial si no viene por POST
+        price_val = request.POST.get('price', '0')
+        entry_price = Decimal(price_val) if price_val else Decimal('0')
+        
+        amount_val = request.POST.get('amount', '1')
+        amount = Decimal(amount_val) if amount_val else Decimal('1')
+        
+        wallet = get_object_or_404(WhaleWallet, id=wallet_id)
+        
+        ShadowTrade.objects.create(
+            wallet=wallet,
+            token_symbol=symbol,
+            token_mint=mint,
+            entry_price=entry_price,
+            amount=amount,
+            status='OPEN'
+        )
+        messages.success(request, f"¡Simulación de copia en {symbol} abierta correctamente!")
+    except Exception as e:
+        messages.error(request, f"Error al abrir simulación: {e}")
+        
+    return redirect('whale_insights')
+
+@login_required
+@require_POST
+def close_shadow_trade(request, trade_id):
+    """Cierra una operación de Shadow Trading y calcula el P&L final."""
+    try:
+        from ..models import ShadowTrade
+        from django.utils import timezone
+        trade = get_object_or_404(ShadowTrade, id=trade_id)
+        
+        # Simulamos un precio de salida (para la demo)
+        exit_val = request.POST.get('exit_price')
+        if exit_val:
+            exit_price = Decimal(exit_val)
+        else:
+            exit_price = trade.entry_price * Decimal('1.05')
+        
+        trade.exit_price = exit_price
+        trade.status = 'CLOSED'
+        trade.closed_at = timezone.now()
+        
+        # Calcular P&L %
+        trade.pnl_percent = float((trade.exit_price - trade.entry_price) / trade.entry_price * 100)
+        trade.save()
+        
+        messages.success(request, f"Simulación de {trade.token_symbol} cerrada con {trade.pnl_percent:.2f}% de P&L.")
+    except Exception as e:
+        messages.error(request, f"Error al cerrar simulación: {e}")
         
     return redirect('whale_insights')

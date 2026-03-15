@@ -39,7 +39,9 @@ from .bot_views import (
     edit_bot,
     whale_insights,
     follow_whale,
-    unfollow_whale
+    unfollow_whale,
+    simulate_whale_trade,
+    close_shadow_trade
 )
 
 # Importar vistas de datos
@@ -97,6 +99,8 @@ __all__ = [
     'whale_insights',
     'follow_whale',
     'unfollow_whale',
+    'simulate_whale_trade',
+    'close_shadow_trade',
 
     # Dash app
     'app',
