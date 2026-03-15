@@ -14,8 +14,10 @@ from decimal import Decimal
 @login_required
 def whale_insights(request):
     """Vista para seguimiento de ballenas y análisis de patrones."""
+    from django.utils import timezone
     try:
-        wallets = WhaleWallet.objects.filter(is_active=True)
+        # Mostrar todas las billeteras (activas o no, para gestión)
+        wallets = WhaleWallet.objects.all()
         
         # Sincronizar billeteras si se solicita
         if request.GET.get('sync') == '1':
@@ -789,3 +791,19 @@ def bot_detail(request, bot_id):
         "open_trades": open_trades,
     }
     return render(request, "dashboard/bot_detail.html", context)
+
+@login_required
+@require_POST
+def unfollow_whale(request, wallet_id):
+    """Deja de seguir a una billetera (eliminación física)."""
+    try:
+        from ..models import WhaleWallet
+        wallet = get_object_or_404(WhaleWallet, id=wallet_id)
+        name = wallet.name or wallet.address[:8]
+        # Eliminamos la billetera (Cascade eliminará transacciones e insights)
+        wallet.delete()
+        messages.success(request, f"Has dejado de seguir a {name} correctamente.")
+    except Exception as e:
+        messages.error(request, f"Error al dejar de seguir: {e}")
+        
+    return redirect('whale_insights')

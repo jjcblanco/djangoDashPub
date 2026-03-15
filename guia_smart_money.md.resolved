@@ -1,0 +1,36 @@
+# Guía: ¿Cómo encontrar "Smart Money" para seguir?
+
+Una vez que tengas el sistema funcionando en el VPS, el siguiente paso es alimentar el módulo con billeteras ganadoras. Aquí tienes las mejores herramientas y técnicas para 2024.
+
+## 1. DexScreener (Gratis y Rápido)
+Es la forma más sencilla de encontrar "insiders" o traders con suerte/habilidad.
+
+1. Ve a [DexScreener.com](https://dexscreener.com/solana).
+2. Busca un token que haya subido mucho recientemente (ej. un +500% en 24h).
+3. Entra en el token y busca la pestaña **"Top Traders"**.
+4. Busca billeteras que tengan un **ROI alto** y que **no hayan vendido todo**.
+5. Copia la dirección de esa billetera y pégala en tu dashboard de Whale Insights.
+
+## 2. Arkham Intelligence (Visual y Potente)
+Permite ver quiénes son los dueños de las billeteras más grandes.
+
+1. Entra en [Arkham Intelligence](https://www.arkhamintelligence.com/).
+2. Usa el buscador para filtrar por "Solana" y "Large Transactions".
+3. Identifica billeteras etiquetadas como "Fund" o "High-Net-Worth Individual".
+4. Observa sus movimientos de "Accumulation".
+
+## 3. Solscan / Solana Explorer (Manual)
+Útil para ver los "Top Holders" de un proyecto serio.
+
+1. Busca un token sólido (ej: JUP, PYTH, SOL).
+2. Ve a la pestaña **"Holders"**.
+3. Ignora las billeteras de Exchanges (Binance, Raydium).
+4. Busca billeteras individuales que estén acumulando de forma constante (DCA).
+
+## 4. Birdeye.so (Específico de Solana)
+Tiene una pestaña de **"Find Gems"** y **"Top Traders"** muy enfocada en Smart Money de SOL.
+
+---
+
+> [!TIP]
+> **Estrategia Recomendada**: No sigas a la ballena más grande (que suele ser un exchange), sigue al trader que entró **antes** de una subida fuerte y que tiene un historial de éxito en varios tokens.
