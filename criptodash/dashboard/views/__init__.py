@@ -38,7 +38,8 @@ from .bot_views import (
     bot_detail,
     edit_bot,
     whale_insights,
-    follow_whale
+    follow_whale,
+    unfollow_whale
 )
 
 # Importar vistas de datos
@@ -95,6 +96,7 @@ __all__ = [
     'edit_bot',
     'whale_insights',
     'follow_whale',
+    'unfollow_whale',
 
     # Dash app
     'app',
