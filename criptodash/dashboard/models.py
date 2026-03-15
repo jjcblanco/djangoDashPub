@@ -223,9 +223,19 @@ class DailyMetric(models.Model):
         return f"Metrics for {self.date} (Balance: {self.total_balance})"
 
 class WhaleWallet(models.Model):
+    CATEGORY_CHOICES = [
+        ('DCA', 'Acumulación DCA'),
+        ('SNIPER', 'Sniper / Early Buyer'),
+        ('SMART_MONEY', 'Smart Money'),
+        ('INSIDER', 'Insider / Dev'),
+        ('OBSERVATION', 'En Observación'),
+    ]
+
     address = models.CharField(max_length=255, unique=True)
     name = models.CharField(max_length=100, blank=True, null=True)
     blockchain = models.CharField(max_length=50, default='solana')
+    wallet_category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='OBSERVATION')
+    target_token = models.CharField(max_length=100, blank=True, null=True, help_text="Token principal que opera (ej: JUP, PEPE)")
     notes = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
