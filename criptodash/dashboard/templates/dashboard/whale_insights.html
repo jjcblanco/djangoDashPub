@@ -76,15 +76,34 @@
                                 class="list-group-item d-flex justify-content-between align-items-center border-0 border-bottom px-3">
                                 <div class="flex-grow-1">
                                     <div class="d-flex justify-content-between align-items-center">
-                                        <span class="fw-bold text-dark">{{ wallet.name|default:wallet.address|truncatechars:12 }}</span>
+                                        <span class="fw-bold text-dark">{{
+                                            wallet.name|default:wallet.address|truncatechars:12 }}</span>
                                         {% if wallet.target_token %}
                                         <span class="badge bg-soft-info text-info border border-info-subtle small"
                                             style="font-size: 0.65rem;">
                                             <i class="fas fa-coins me-1"></i>{{ wallet.target_token }}
                                         </span>
                                         {% endif %}
+                                        {% if wallet.pnl_stats %}
+                                        <span
+                                            class="badge {% if wallet.pnl_stats.status == 'profit' %}bg-success{% elif wallet.pnl_stats.status == 'loss' %}bg-danger{% else %}bg-secondary{% endif %} ms-1"
+                                            style="font-size: 0.65rem;">
+                                            {% if wallet.pnl_stats.status == 'profit' %}+{% endif %}{{
+                                            wallet.pnl_stats.roi }}%
+                                        </span>
+                                        {% endif %}
                                     </div>
-                                    <small class="text-muted" style="font-size: 0.75rem;">{{ wallet.blockchain|capfirst }} • {{ wallet.transactions.count }} txs</small>
+                                    <div class="d-flex justify-content-between">
+                                        <small class="text-muted" style="font-size: 0.75rem;">{{
+                                            wallet.blockchain|capfirst }} • {{ wallet.transactions.count }} txs</small>
+                                        {% if wallet.pnl_stats and wallet.pnl_stats.pnl_usdt != 0 %}
+                                        <small
+                                            class="{% if wallet.pnl_stats.status == 'profit' %}text-success{% else %}text-danger{% endif %} fw-bold"
+                                            style="font-size: 0.75rem;">
+                                            ${{ wallet.pnl_stats.pnl_usdt|floatformat:0 }}
+                                        </small>
+                                        {% endif %}
+                                    </div>
                                 </div>
                                 <form action="{% url 'unfollow_whale' wallet.id %}" method="POST" class="ms-2"
                                     onsubmit="return confirm('¿Dejar de seguir a esta ballena?');">
@@ -116,12 +135,15 @@
                         <div class="card mb-3 insight-card border-0 shadow-sm">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between">
-                                    <h5 class="card-title h6 mb-1 text-dark">{{ insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
-                                    <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type }}</span>
+                                    <h5 class="card-title h6 mb-1 text-dark">{{
+                                        insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
+                                    <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type
+                                        }}</span>
                                 </div>
                                 <p class="card-text small text-muted mb-2">{{ insight.description }}</p>
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <small class="text-muted"><i class="far fa-clock me-1"></i>{{ insight.detected_at|timesince }} ago</small>
+                                    <small class="text-muted"><i class="far fa-clock me-1"></i>{{
+                                        insight.detected_at|timesince }} ago</small>
                                     <div class="progress w-25" style="height: 5px;">
                                         <div class="progress-bar bg-success" role="progressbar"
                                             style="width: {% widthratio insight.confidence 1 100 %}%"></div>

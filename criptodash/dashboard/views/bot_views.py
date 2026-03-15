@@ -43,6 +43,10 @@ def whale_insights(request):
 
         insights = PatternInsight.objects.all().order_by('-detected_at')[:20]
         
+        # Calcular P&L para cada billetera
+        for wallet in wallets:
+            wallet.pnl_stats = PatternEngine.get_wallet_pnl(wallet)
+            
         context = {
             'wallets': wallets,
             'insights': insights,
