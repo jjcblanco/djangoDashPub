@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 from django.utils import timezone
 from .models import WhaleWallet, WhaleTransaction, PatternInsight
+from .utils.notifications import send_telegram_message
 
 class SolanaWhaleTracker:
     def __init__(self, rpc_url="https://api.mainnet-beta.solana.com"):
@@ -189,7 +190,7 @@ class PatternEngine:
                 description = f"Actividad reciente detectada en el token {hot_token}."
                 
         # Guardar el insight
-        PatternInsight.objects.update_or_create(
+        insight, created = PatternInsight.objects.update_or_create(
             wallet=wallet_obj,
             pattern_type=pattern,
             defaults={
@@ -198,5 +199,38 @@ class PatternEngine:
                 'detected_at': timezone.now()
             }
         )
+        
+        # Enviar alerta de Telegram si la confianza es alta y es nuevo o han pasado más de 6 horas
+        if confidence >= 0.75:
+            send_alert = False
+            if created:
+                send_alert = True
+            else:
+                # Evitar spam: solo si el patrón cambió o ha pasado tiempo
+                last_alert = insight.meta_data.get('last_alert_at') if insight.meta_data else None
+                if not last_alert:
+                    send_alert = True
+                else:
+                    last_alert_dt = datetime.fromisoformat(last_alert)
+                    if (timezone.now() - last_alert_dt).total_seconds() > 21600: # 6 horas
+                        send_alert = True
+            
+            if send_alert:
+                wallet_name = wallet_obj.name or f"Ballena {wallet_obj.address[:8]}"
+                category = wallet_obj.get_wallet_category_display()
+                msg = (
+                    f"🐋 <b>¡ALERTA DE BALLENA DETECTADA!</b>\n\n"
+                    f"👤 <b>Billetera:</b> {wallet_name}\n"
+                    f"🏷️ <b>Categoría:</b> {category}\n"
+                    f"🎯 <b>Token:</b> {hot_token if hot_token else 'Varios'}\n"
+                    f"📈 <b>Patrón:</b> {pattern}\n"
+                    f"📝 <b>Detalle:</b> {description}\n\n"
+                    f"🔗 <a href='https://solscan.io/account/{wallet_obj.address}'>Ver en Solscan</a>\n"
+                    f"💡 <i>Analizado por CriptoDash PatternEngine</i>"
+                )
+                if send_telegram_message(msg):
+                    if not insight.meta_data: insight.meta_data = {}
+                    insight.meta_data['last_alert_at'] = timezone.now().isoformat()
+                    insight.save()
         
         return f"Patrón detectado: {pattern}"
