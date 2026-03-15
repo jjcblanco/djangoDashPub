@@ -117,8 +117,7 @@
                         <div class="card mb-3 insight-card border-0 shadow-sm">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between">
-                                    <h5 class="card-title h6 mb-1 text-dark">{{
-                                        insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
+                                    <h5 class="card-title h6 mb-1 text-dark">{{ insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
                                     <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type }}</span>
                                 </div>
                                 <p class="card-text small text-muted mb-2">{{ insight.description }}</p>
