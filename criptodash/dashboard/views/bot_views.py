@@ -81,6 +81,8 @@ def follow_whale(request):
             address=address,
             name=name,
             blockchain=blockchain,
+            wallet_category=request.POST.get('wallet_category', 'OBSERVATION'),
+            target_token=request.POST.get('target_token', ''),
             is_active=True
         )
         messages.success(request, f"Ahora sigues a {name or address[:8]}.")
