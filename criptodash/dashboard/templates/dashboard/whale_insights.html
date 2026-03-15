@@ -84,8 +84,7 @@
                                         </span>
                                         {% endif %}
                                     </div>
-                                    <small class="text-muted" style="font-size: 0.75rem;">{{ wallet.blockchain|capfirst
-                                        }} • {{ wallet.transactions.count }} txs</small>
+                                    <small class="text-muted" style="font-size: 0.75rem;">{{ wallet.blockchain|capfirst }} • {{ wallet.transactions.count }} txs</small>
                                 </div>
                                 <form action="{% url 'unfollow_whale' wallet.id %}" method="POST" class="ms-2"
                                     onsubmit="return confirm('¿Dejar de seguir a esta ballena?');">
