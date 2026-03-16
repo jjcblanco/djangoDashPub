@@ -440,8 +440,24 @@ def edit_bot(request, bot_id):
                 'cooldown_bars': int(request.POST.get('cooldown_bars', 3))
             })
 
+        # Verificar si es necesario resetear trades (si cambian parámetros críticos de GRID)
+        needs_grid_reset = False
+        if strategy_type == 'GRID':
+            critical_keys = ['upper_price', 'lower_price', 'grid_levels']
+            for key in critical_keys:
+                if str(params.get(key)) != str(request.POST.get(key)):
+                    needs_grid_reset = True
+                    break
+        
         bot.name = name
         bot.parameters = params
+        
+        if needs_grid_reset:
+            # Cancelar trades en espera para que el manager haga bootstrap en el siguiente ciclo
+            zombie_trades = LiveTrade.objects.filter(bot=bot, status='WAITING')
+            zombie_count = zombie_trades.count()
+            zombie_trades.update(status='CANCELED')
+            messages.info(request, f"Se han cancelado {zombie_count} órdenes pendientes para reiniciar la grilla con los nuevos parámetros.")
         
         # Permitir cambiar entre Live/Paper
         bot.is_live = request.POST.get('is_live') == 'on'
