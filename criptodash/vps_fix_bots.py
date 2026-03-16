@@ -4,7 +4,9 @@ import sys
 from decimal import Decimal
 
 # Configuración de Django
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(BASE_DIR)
+os.chdir(BASE_DIR) # Forzar el directorio de trabajo para que decouple encuentre el .env
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'criptodash.settings')
 django.setup()
 
