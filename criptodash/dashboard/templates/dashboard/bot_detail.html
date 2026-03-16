@@ -284,8 +284,7 @@
                 <div class="text-end">
                     <div style="font-size:0.75rem; color:var(--muted);">Balance Actual</div>
                     <div style="font-size:1.8rem; font-weight:700;">${{ bot.current_balance|floatformat:2 }}</div>
-                    <div style="font-size:0.75rem; color:var(--muted);">Inicial: ${{ bot.initial_balance|floatformat:2
-                        }}</div>
+                    <div style="font-size:0.75rem; color:var(--muted);">Inicial: ${{ bot.initial_balance|floatformat:2 }}</div>
                 </div>
             </div>
         </div>
@@ -354,8 +353,7 @@
         {% if total_trades > 0 %}
         <div class="mb-4 p-3" style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px;">
             <div class="d-flex justify-content-between mb-1" style="font-size:0.78rem;">
-                <span class="text-green"><i class="fas fa-arrow-up me-1"></i>{{ winning_count }} Ganados (${{ avg_win }}
-                    prom.)</span>
+                <span class="text-green"><i class="fas fa-arrow-up me-1"></i>{{ winning_count }} Ganados (${{ avg_win }} prom.)</span>
                 <span class="text-red">{{ losing_count }} Perdidos (${{ avg_loss }} prom.) <i
                         class="fas fa-arrow-down ms-1"></i></span>
             </div>
@@ -415,8 +413,7 @@
 
         <!-- ===== TRADES ABIERTOS ===== -->
         {% if open_trades %}
-        <div class="section-title mt-2"><i class="fas fa-spinner fa-spin me-2"></i>Posiciones Abiertas ({{
-            open_trades|length }})</div>
+        <div class="section-title mt-2"><i class="fas fa-spinner fa-spin me-2"></i>Posiciones Abiertas ({{ open_trades|length }})</div>
         <div class="table-dark-custom mb-4">
             <table class="table table-borderless mb-0">
                 <thead>
@@ -430,8 +427,7 @@
                 <tbody>
                     {% for t in open_trades %}
                     <tr>
-                        <td><span class="badge {% if t.side == 'BUY' %}bg-success{% else %}bg-danger{% endif %}">{{
-                                t.side }}</span></td>
+                        <td><span class="badge {% if t.side == 'BUY' %}bg-success{% else %}bg-danger{% endif %}">{{ t.side }}</span></td>
                         <td>{{ t.amount|floatformat:4 }}</td>
                         <td>${{ t.entry_price|floatformat:4 }}</td>
                         <td>{{ t.entry_time|date:"d/m/Y H:i" }}</td>
