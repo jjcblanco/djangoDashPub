@@ -21,6 +21,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'criptodash.settings')
 django.setup()
 
 from dashboard.models import LiveBot, LiveTrade
+from dashboard.bot_manager import BotManager
 
 def liquidate_stuck_trades():
     print("\n--- 🧹 Iniciando Liquidación de Trades Estancados ---")
