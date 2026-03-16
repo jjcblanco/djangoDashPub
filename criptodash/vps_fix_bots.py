@@ -22,9 +22,62 @@ django.setup()
 
 from dashboard.models import LiveBot, LiveTrade
 
+def liquidate_stuck_trades():
+    print("\n--- 🧹 Iniciando Liquidación de Trades Estancados ---")
+    bots = LiveBot.objects.filter(status__in=['RUNNING', 'CLOSE_ONLY'])
+    
+    for bot in bots:
+        print(f"\n  Bot: {bot.name} (ID: {bot.id}) | {bot.pair.symbol}")
+        
+        # Obtener precio actual
+        df = BotManager._get_live_df(bot.pair.symbol, timeframe=bot.parameters.get('timeframe', '1h'))
+        if df is None or df.empty:
+            print(f"    ⚠️ No se pudo obtener precio para {bot.pair.symbol}. Saltando.")
+            continue
+            
+        current_price = float(df['close'].iloc[-1])
+        print(f"    Precio Actual: {current_price}")
+        
+        # Calcular grid_step
+        grid_step = 0
+        if bot.strategy_type == 'GRID':
+            try:
+                upper = float(bot.parameters.get('upper_price'))
+                lower = float(bot.parameters.get('lower_price'))
+                levels = int(bot.parameters.get('grid_levels'))
+                grid_step = (upper - lower) / (levels - 1)
+            except: pass
+
+        # 1. Cerrar trades OPEN (Wait Sell) que ya pasaron su TP
+        stuck_open = LiveTrade.objects.filter(bot=bot, status='OPEN')
+        for t in stuck_open:
+            target_tp = float(t.entry_price) + grid_step
+            if current_price >= target_tp:
+                print(f"    ✅ CERRANDO TRADE {t.id}: Precio {current_price} >= TP {target_tp:.4f}")
+                BotManager._close_trade(t, current_price, "AUDIT_FIX_LIQUIDATION")
+        
+        # 2. Abrir trades WAITING (Wait Buy) que ya deberían haber entrado
+        stuck_waiting = LiveTrade.objects.filter(bot=bot, status='WAITING')
+        for t in stuck_waiting:
+            if current_price <= float(t.entry_price):
+                print(f"    ✅ ABRIENDO TRADE {t.id}: Precio {current_price} <= Entrada {t.entry_price}")
+                t.status = 'OPEN'
+                t.save()
+            
+            # 3. Cancelar trades WAITING que están fuera del rango actual (obsoletos)
+            elif bot.strategy_type == 'GRID':
+                lower_limit = float(bot.parameters.get('lower_price'))
+                if float(t.entry_price) < (lower_limit - (grid_step * 1.5)):
+                    print(f"    🗑️ CANCELANDO TRADE OBSOLETO {t.id}: Entrada {t.entry_price} fuera de rango ({lower_limit})")
+                    t.status = 'CANCELED'
+                    t.save()
+
 def fix_vps_bots():
     print("🚀 Iniciando saneamiento de bots en VPS...")
     print("========================================")
+    
+    # 0. Liquidar trades estancados (Cierra simulaciones que ya ganaron/perdieron)
+    liquidate_stuck_trades()
 
     # 1. Corregir etcgrid (ID: 27)
     try:
