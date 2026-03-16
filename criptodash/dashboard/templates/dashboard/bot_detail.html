@@ -353,8 +353,7 @@
         <div class="mb-4 p-3" style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px;">
             <div class="d-flex justify-content-between mb-1" style="font-size:0.78rem;">
                 <span class="text-green"><i class="fas fa-arrow-up me-1"></i>{{ winning_count }} Ganados (${{ avg_win }} prom.)</span>
-                <span class="text-red">{{ losing_count }} Perdidos (${{ avg_loss }} prom.) <i
-                        class="fas fa-arrow-down ms-1"></i></span>
+                <span class="text-red">{{ losing_count }} Perdidos (${{ avg_loss }} prom.) <i class="fas fa-arrow-down ms-1"></i></span>
             </div>
             <div class="winloss-bar">
                 <div class="winloss-fill" style="width: {{ win_rate }}%;"></div>
@@ -464,8 +463,7 @@
                         <td>${{ t.entry_price|floatformat:4 }}</td>
                         <td>{% if t.exit_price %}${{ t.exit_price|floatformat:4 }}{% else %}<span style="color:var(--muted);">—</span>{% endif %}</td>
                         <td style="font-size:0.75rem;">{% if t.exit_time %}{{ t.exit_time|date:"d/m/Y H:i" }}{% else %}<span style="color:var(--muted);">—</span>{% endif %}</td>
-                        <td class="{% if t.pnl >= 0 %}text-green{% else %}text-red{% endif %} fw-bold">
-                            {% if t.pnl >= 0 %}+{% endif %}${{ t.pnl|floatformat:4 }}
+                        <td class="{% if t.pnl >= 0 %}text-green{% else %}text-red{% endif %} fw-bold"> {% if t.pnl >= 0 %}+{% endif %}${{ t.pnl|floatformat:4 }}
                         </td>
                         <td style="color:var(--muted);">${{ t.commission|floatformat:4 }}</td>
                         <td><span style="font-size:0.7rem; color:var(--muted);">{{ t.status }}</span></td>
