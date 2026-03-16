@@ -218,9 +218,10 @@ class PatternEngine:
                 description = f"Actividad reciente detectada en el token {hot_token}."
                 
         # Guardar el insight
+        # Aseguramos que hot_token no sea None para poder filtrar
         meta_data = {
-            'hot_token_mint': hot_token_mint if hot_token else None,
-            'hot_token_symbol': hot_token if hot_token else None,
+            'hot_token_mint': hot_token_mint if hot_token else "Unknown",
+            'hot_token_symbol': hot_token if hot_token else "Unknown",
             'buys_count': max_buys
         }
         
@@ -273,23 +274,30 @@ class PatternEngine:
     @staticmethod
     def get_hot_tokens(hours=24):
         """Agrega el interés de todas las ballenas para encontrar tokens tendencia."""
-        from django.db.models import Count
         from datetime import timedelta
         since = timezone.now() - timedelta(hours=hours)
         
-        # Filtramos insights recientes que tengan un token detectado
-        recent_insights = PatternInsight.objects.filter(
-            detected_at__gte=since,
-            meta_data__hot_token_symbol__isnull=False
-        ).values('meta_data__hot_token_symbol', 'meta_data__hot_token_mint') \
-         .annotate(whale_count=Count('wallet', distinct=True)) \
-         .order_by('-whale_count')[:5]
-         
+        # Filtramos insights recientes
+        insights = PatternInsight.objects.filter(detected_at__gte=since)
+        
+        counts = {} # {symbol: {'mint': mint, 'count': sets_of_wallets}}
+        
+        for ins in insights:
+            if not ins.meta_data: continue
+            symbol = ins.meta_data.get('hot_token_symbol')
+            mint = ins.meta_data.get('hot_token_mint')
+            if symbol and symbol != "Unknown":
+                if symbol not in counts:
+                    counts[symbol] = {'mint': mint, 'wallets': set()}
+                counts[symbol]['wallets'].add(ins.wallet_id)
+        
+        # Convertir a lista y ordenar
         hot_list = []
-        for ri in recent_insights:
+        for symbol, data in counts.items():
             hot_list.append({
-                'symbol': ri['meta_data__hot_token_symbol'],
-                'mint': ri['meta_data__hot_token_mint'],
-                'count': ri['whale_count']
+                'symbol': symbol,
+                'mint': data['mint'],
+                'count': len(data['wallets'])
             })
-        return hot_list
+            
+        return sorted(hot_list, key=lambda x: x['count'], reverse=True)[:5]
