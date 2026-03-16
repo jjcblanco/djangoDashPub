@@ -44,7 +44,7 @@ for bot in bots:
     
     winrate = (winners / total_closed * 100) if total_closed > 0 else 0
     
-    print(f"  Trades Cerrados: {total_closed} | Abiertos (En curso): {trades.filter(status='OPEN').count()}")
+    print(f"  Trades Cerrados: {total_closed} | Abiertos: {trades.filter(status='OPEN').count()} | En espera (WAIT BUY): {trades.filter(status='WAITING').count()}")
     print(f"  WinRate: {winrate:.2f}% ({winners} G / {losers} P)")
     print(f"  Parámetros: {bot.parameters}")
     print("-" * 40 + "\n")
