@@ -76,7 +76,8 @@
                                 class="list-group-item d-flex justify-content-between align-items-center border-0 border-bottom px-3">
                                 <div class="flex-grow-1">
                                     <div class="d-flex justify-content-between align-items-center">
-                                        <span class="fw-bold text-dark">{{ wallet.name|default:wallet.address|truncatechars:12 }}</span>
+                                        <span class="fw-bold text-dark">{{
+                                            wallet.name|default:wallet.address|truncatechars:12 }}</span>
                                         {% if wallet.target_token %}
                                         <span class="badge bg-soft-info text-info border border-info-subtle small"
                                             style="font-size: 0.65rem;">
@@ -87,12 +88,14 @@
                                         <span
                                             class="badge {% if wallet.pnl_stats.status == 'profit' %}bg-success{% elif wallet.pnl_stats.status == 'loss' %}bg-danger{% else %}bg-secondary{% endif %} ms-1"
                                             style="font-size: 0.65rem;">
-                                            {% if wallet.pnl_stats.status == 'profit' %}+{% endif %}{{ wallet.pnl_stats.roi }}%
+                                            {% if wallet.pnl_stats.status == 'profit' %}+{% endif %}{{
+                                            wallet.pnl_stats.roi }}%
                                         </span>
                                         {% endif %}
                                     </div>
                                     <div class="d-flex justify-content-between">
-                                        <small class="text-muted" style="font-size: 0.75rem;">{{ wallet.blockchain|capfirst }} • {{ wallet.transactions.count }} txs</small>
+                                        <small class="text-muted" style="font-size: 0.75rem;">{{
+                                            wallet.blockchain|capfirst }} • {{ wallet.transactions.count }} txs</small>
                                         {% if wallet.pnl_stats and wallet.pnl_stats.pnl_usdt != 0 %}
                                         <small
                                             class="{% if wallet.pnl_stats.status == 'profit' %}text-success{% else %}text-danger{% endif %} fw-bold"
@@ -128,6 +131,29 @@
                         <h6 class="m-0 font-weight-bold text-primary">Alpha Feed (Patrones Detectados)</h6>
                     </div>
                     <div class="card-body">
+                        {% if hot_tokens %}
+                        <div class="mb-4">
+                            <h6 class="text-muted small fw-bold mb-3"><i
+                                    class="fas fa-fire text-danger me-1"></i>TRENDING NOW (HOT TOKENS)</h6>
+                            <div class="d-flex flex-wrap gap-2">
+                                {% for token in hot_tokens %}
+                                <div class="badge bg-soft-danger text-danger border border-danger-subtle p-2 d-flex align-items-center"
+                                    style="border-radius: 8px;">
+                                    <div class="me-2">
+                                        <i class="fas fa-chart-line"></i>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold" style="font-size: 0.8rem;">{{ token.symbol }}</div>
+                                        <div class="small opacity-75" style="font-size: 0.6rem;">{{ token.count }}
+                                            ballenas</div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <hr class="opacity-10 mt-3">
+                        </div>
+                        {% endif %}
+
                         {% if shadow_trades %}
                         <div class="mb-4">
                             <h6 class="text-muted small fw-bold mb-3"><i class="fas fa-ghost me-1"></i>OPERACIONES
@@ -141,7 +167,9 @@
                                             <div class="d-flex justify-content-between align-items-start mb-2">
                                                 <div>
                                                     <span class="badge bg-primary mb-1">{{ trade.token_symbol }}</span>
-                                                    <div class="small opacity-75">Copia de: {{ trade.wallet.name|default:trade.wallet.address|truncatechars:10 }}</div>
+                                                    <div class="small opacity-75">Copia de: {{
+                                                        trade.wallet.name|default:trade.wallet.address|truncatechars:10
+                                                        }}</div>
                                                 </div>
                                                 <div class="text-end">
                                                     <div class="fw-bold text-success">+2.4%</div> <!-- Demo P&L -->
@@ -169,8 +197,10 @@
                         <div class="card mb-3 insight-card border-0 shadow-sm">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between">
-                                    <h5 class="card-title h6 mb-1 text-dark">{{ insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
-                                    <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type }}</span>
+                                    <h5 class="card-title h6 mb-1 text-dark">{{
+                                        insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
+                                    <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type
+                                        }}</span>
                                 </div>
                                 <p class="card-text small text-muted mb-2">{{ insight.description }}</p>
                                 <div class="d-flex justify-content-between align-items-center">

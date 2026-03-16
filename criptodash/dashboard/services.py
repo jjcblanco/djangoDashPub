@@ -218,13 +218,20 @@ class PatternEngine:
                 description = f"Actividad reciente detectada en el token {hot_token}."
                 
         # Guardar el insight
+        meta_data = {
+            'hot_token_mint': hot_token_mint if hot_token else None,
+            'hot_token_symbol': hot_token if hot_token else None,
+            'buys_count': max_buys
+        }
+        
         insight, created = PatternInsight.objects.update_or_create(
             wallet=wallet_obj,
             pattern_type=pattern,
             defaults={
                 'description': description,
                 'confidence': confidence,
-                'detected_at': timezone.now()
+                'detected_at': timezone.now(),
+                'meta_data': meta_data
             }
         )
         
@@ -262,3 +269,27 @@ class PatternEngine:
                     insight.save()
         
         return f"Patrón detectado: {pattern}"
+
+    @staticmethod
+    def get_hot_tokens(hours=24):
+        """Agrega el interés de todas las ballenas para encontrar tokens tendencia."""
+        from django.db.models import Count
+        from datetime import timedelta
+        since = timezone.now() - timedelta(hours=hours)
+        
+        # Filtramos insights recientes que tengan un token detectado
+        recent_insights = PatternInsight.objects.filter(
+            detected_at__gte=since,
+            meta_data__hot_token_symbol__isnull=False
+        ).values('meta_data__hot_token_symbol', 'meta_data__hot_token_mint') \
+         .annotate(whale_count=Count('wallet', distinct=True)) \
+         .order_by('-whale_count')[:5]
+         
+        hot_list = []
+        for ri in recent_insights:
+            hot_list.append({
+                'symbol': ri['meta_data__hot_token_symbol'],
+                'mint': ri['meta_data__hot_token_mint'],
+                'count': ri['whale_count']
+            })
+        return hot_list
