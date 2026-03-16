@@ -6,7 +6,17 @@ from decimal import Decimal
 # Configuración de Django
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
-os.chdir(BASE_DIR) # Forzar el directorio de trabajo para que decouple encuentre el .env
+
+# Carga manual de .env para evitar problemas con decouple en scripts standalone
+env_path = os.path.join(BASE_DIR, '.env')
+if os.path.exists(env_path):
+    with open(env_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if '=' in line and not line.startswith('#'):
+                key, value = line.split('=', 1)
+                os.environ[key.strip()] = value.strip().strip("'").strip('"')
+
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'criptodash.settings')
 django.setup()
 
