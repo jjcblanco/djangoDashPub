@@ -70,4 +70,4 @@ def debug_all_bots():
                     print(f"      🚨 BUG DETECTADO: El precio {current_price} ya superó el TP {target_tp:.4f} pero el trade sigue OPEN.")
 
 if __name__ == "__main__":
-    debug_solbot()
+    debug_all_bots()
