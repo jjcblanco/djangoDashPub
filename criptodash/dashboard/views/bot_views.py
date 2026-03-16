@@ -51,11 +51,15 @@ def whale_insights(request):
         # Operaciones Shadow Activas
         from ..models import ShadowTrade
         shadow_trades = ShadowTrade.objects.filter(status='OPEN').order_by('-created_at')
+        
+        # Tokens Hot (Tendencias)
+        hot_tokens = PatternEngine.get_hot_tokens(hours=24)
             
         context = {
             'wallets': wallets,
             'insights': insights,
             'shadow_trades': shadow_trades,
+            'hot_tokens': hot_tokens,
             'page_title': 'Whale Insights & Alpha'
         }
         return render(request, 'dashboard/whale_insights.html', context)
