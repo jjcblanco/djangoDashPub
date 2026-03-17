@@ -167,6 +167,18 @@ class PatternEngine:
             'DezXAZ8z7Pnrn9vzctrxEXpWMrNHqR1f6f69nL4XYUDx': 'BONK',
         }
         
+        # MODIFICACIÓN: Filtro de Estables vs Pumps
+        ESTABLISHED_TOKENS = {
+            'So11111111111111111111111111111111111111112': 'SOL',
+            'EPjFW3F2KVq2aLecqCP5i5nw53J2tOt9iies23XYwjLu': 'USDC',
+            'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 'USDT',
+            'JUPyiPZp718zay7kaPn2CoJvRwvpqcRuS5B7shuYf79': 'JUP',
+            'DezXAZ8z7Pnrn9vzctrxEXpWMrNHqR1f6f69nL4XYUDx': 'BONK',
+            'mSoLzYq7M7P7BUqQEPRDe3y4tEYsgfJPsJ9Nq19yrBy': 'mSOL',
+            'jtoosevaECz9zJqN996BAtDkdV2jK9xV58hF7JidCUn': 'JTO',
+            '4k3Dyjzvzp8eMZWUXbBCjEvwSkk6M44R4B3E5K4z4m6': 'RAY',
+        }
+
         for tx in txs:
             try:
                 raw = tx.raw_data
@@ -186,6 +198,12 @@ class PatternEngine:
                     change = post_val - pre_val
                     
                     if change > 0: # Compra o recepción
+                        # FILTRO: Si el modo es STRICT, ignoramos si no es estables
+                        if wallet_obj.filter_mode == 'STRICT' and mint not in ESTABLISHED_TOKENS:
+                            # Opcional: Podríamos hacer una consulta a DexScreener para ver liquidez
+                            # pero para velocidad inicial, usamos whitelist estricta
+                            continue
+
                         if mint not in token_stats:
                             token_stats[mint] = {'buys': 0, 'volume': 0}
                         token_stats[mint]['buys'] += 1
@@ -196,6 +214,8 @@ class PatternEngine:
         # Encontrar el token más "caliente" (más compras)
         hot_token = None
         max_buys = 0
+        hot_token_mint = None
+        
         if token_stats:
             hot_token_mint = max(token_stats, key=lambda k: token_stats[k]['buys'])
             max_buys = token_stats[hot_token_mint]['buys']
@@ -216,6 +236,10 @@ class PatternEngine:
                 confidence = 0.75
             else:
                 description = f"Actividad reciente detectada en el token {hot_token}."
+        elif wallet_obj.filter_mode == 'STRICT':
+             description = "Actividad detectada, pero ignorada por filtros de seguridad (Pump Tokens)."
+             pattern = "FILTRADO"
+             confidence = 0.1
                 
         # Guardar el insight
         # Aseguramos que hot_token no sea None para poder filtrar

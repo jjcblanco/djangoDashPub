@@ -231,10 +231,16 @@ class WhaleWallet(models.Model):
         ('OBSERVATION', 'En Observación'),
     ]
 
+    FILTER_CHOICES = [
+        ('OPEN', 'Todo (Pumps & Stables)'),
+        ('STRICT', 'Solo Estables (Whitelist)'),
+    ]
+
     address = models.CharField(max_length=255, unique=True)
     name = models.CharField(max_length=100, blank=True, null=True)
     blockchain = models.CharField(max_length=50, default='solana')
     wallet_category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='OBSERVATION')
+    filter_mode = models.CharField(max_length=10, choices=FILTER_CHOICES, default='OPEN')
     target_token = models.CharField(max_length=100, blank=True, null=True, help_text="Token principal que opera (ej: JUP, PEPE)")
     notes = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
