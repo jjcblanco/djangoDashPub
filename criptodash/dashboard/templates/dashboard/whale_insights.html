@@ -76,8 +76,7 @@
                                 class="list-group-item d-flex justify-content-between align-items-center border-0 border-bottom px-3">
                                 <div class="flex-grow-1">
                                     <div class="d-flex justify-content-between align-items-center">
-                                        <span class="fw-bold text-dark">{{
-                                            wallet.name|default:wallet.address|truncatechars:12 }}</span>
+                                        <span class="fw-bold text-dark">{{ wallet.name|default:wallet.address|truncatechars:12 }}</span>
                                         {% if wallet.target_token %}
                                         <span class="badge bg-soft-info text-info border border-info-subtle small"
                                             style="font-size: 0.65rem;">
@@ -187,9 +186,7 @@
                                             <div class="d-flex justify-content-between align-items-start mb-2">
                                                 <div>
                                                     <span class="badge bg-primary mb-1">{{ trade.token_symbol }}</span>
-                                                    <div class="small opacity-75">Copia de: {{
-                                                        trade.wallet.name|default:trade.wallet.address|truncatechars:10
-                                                        }}</div>
+                                                    <div class="small opacity-75">Copia de: {{ trade.wallet.name|default:trade.wallet.address|truncatechars:10 }}</div>
                                                 </div>
                                                 <div class="text-end">
                                                     <div class="fw-bold text-success">+2.4%</div> <!-- Demo P&L -->
@@ -217,10 +214,8 @@
                         <div class="card mb-3 insight-card border-0 shadow-sm">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between">
-                                    <h5 class="card-title h6 mb-1 text-dark">{{
-                                        insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
-                                    <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type
-                                        }}</span>
+                                    <h5 class="card-title h6 mb-1 text-dark">{{ insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
+                                    <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type }}</span>
                                 </div>
                                 <p class="card-text small text-muted mb-2">{{ insight.description }}</p>
                                 <div class="d-flex justify-content-between align-items-center">
