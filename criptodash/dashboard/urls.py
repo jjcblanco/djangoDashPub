@@ -39,6 +39,7 @@ urlpatterns = [
     path('whale-insights/unfollow/<int:wallet_id>/', views.unfollow_whale, name='unfollow_whale'),
     path('whale-insights/simulate/', views.simulate_whale_trade, name='simulate_whale_trade'),
     path('whale-insights/shadow/close/<int:trade_id>/', views.close_shadow_trade, name='close_shadow_trade'),
+    path('whale-insights/search/', views.search_tokens_ajax, name='search_tokens_ajax'),
     path('bots/<int:bot_id>/detail/', views.bot_detail, name='bot_detail'),
     path('bots/kill-switch/', views.trigger_kill_switch, name='trigger_kill_switch'),
     path('bots/risk-settings/', views.update_risk_settings, name='update_risk_settings'),
