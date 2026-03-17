@@ -6,10 +6,11 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
-from ..models import LiveBot, LiveTrade, TradingPair, CapitalFunding, GlobalSettings, DailyMetric, WhaleWallet, WhaleTransaction, PatternInsight
+from ..models import LiveBot, LiveTrade, TradingPair, CapitalFunding, GlobalSettings, DailyMetric, WhaleWallet, WhaleTransaction, PatternInsight, ShadowTrade
 from ..bot_manager import BotManager
 from ..services import SolanaWhaleTracker, PatternEngine
 import json
+import requests
 from decimal import Decimal
 
 @login_required
@@ -707,7 +708,7 @@ def bot_detail(request, bot_id):
     from collections import defaultdict
 
     bot = get_object_or_404(LiveBot, id=bot_id)
-    all_trades = list(LiveTrade.objects.filter(bot=bot).order_by("entry_time"))
+    all_trades = list(LiveTrade.objects.filter(bot=bot).order_or_404("entry_time"))
     closed_trades = [t for t in all_trades if t.status in ("CLOSED", "CLOSED_EMERGENCY") and t.pnl is not None]
     open_trades = [t for t in all_trades if t.status == "OPEN"]
 
@@ -902,3 +903,45 @@ def close_shadow_trade(request, trade_id):
         messages.error(request, f"Error al cerrar simulación: {e}")
         
     return redirect('whale_insights')
+
+@login_required
+def search_tokens_ajax(request):
+    """Proxy para buscar tokens en DexScreener API."""
+    query = request.GET.get('q', '')
+    if len(query) < 2:
+        return JsonResponse({'results': []})
+        
+    url = f"https://api.dexscreener.com/latest/dex/search?q={query}"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    
+    try:
+        resp = requests.get(url, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            pairs = data.get('pairs', [])
+            
+            # Formatear resultados
+            results = []
+            seen_mints = set() # Evitar duplicados por diferentes pools
+            
+            for p in pairs:
+                mint = p.get('baseToken', {}).get('address')
+                if not mint or mint in seen_mints: continue
+                
+                results.append({
+                    'name': p.get('baseToken', {}).get('name'),
+                    'symbol': p.get('baseToken', {}).get('symbol'),
+                    'price': p.get('priceUsd'),
+                    'liquidity': p.get('liquidity', {}).get('usd'),
+                    'fdv': p.get('fdv'),
+                    'mint': mint,
+                    'url': p.get('url'),
+                    'chain': p.get('chainId')
+                })
+                seen_mints.add(mint)
+                if len(results) >= 10: break
+                
+            return JsonResponse({'results': results})
+        return JsonResponse({'error': 'Error en DexScreener API'}, status=500)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

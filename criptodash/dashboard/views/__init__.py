@@ -41,7 +41,8 @@ from .bot_views import (
     follow_whale,
     unfollow_whale,
     simulate_whale_trade,
-    close_shadow_trade
+    close_shadow_trade,
+    search_tokens_ajax
 )
 
 # Importar vistas de datos
@@ -101,6 +102,7 @@ __all__ = [
     'unfollow_whale',
     'simulate_whale_trade',
     'close_shadow_trade',
+    'search_tokens_ajax',
 
     # Dash app
     'app',
