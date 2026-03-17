@@ -96,6 +96,7 @@ def follow_whale(request):
             name=name,
             blockchain=blockchain,
             wallet_category=request.POST.get('wallet_category', 'OBSERVATION'),
+            filter_mode=request.POST.get('filter_mode', 'OPEN'),
             target_token=request.POST.get('target_token', ''),
             is_active=True
         )
