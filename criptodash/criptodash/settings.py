@@ -13,10 +13,17 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 from pathlib import Path
-from decouple import config
+from decouple import Config, RepositoryEnv, config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# --- NUEVO: Carga explícita de .env para VPS/Producción ---
+# Esto resuelve el error UndefinedValueError cuando se ejecutan comandos desde fuera de la raíz.
+env_path = os.path.join(BASE_DIR, '.env')
+if os.path.exists(env_path):
+    config = Config(RepositoryEnv(env_path))
+# ---------------------------------------------------------
 
 
 # Quick-start development settings - unsuitable for production
