@@ -931,6 +931,7 @@ def search_tokens_ajax(request):
                 results.append({
                     'name': p.get('baseToken', {}).get('name'),
                     'symbol': p.get('baseToken', {}).get('symbol'),
+                    'pairName': f"{p.get('baseToken', {}).get('symbol')}/{p.get('quoteToken', {}).get('symbol')}",
                     'price': p.get('priceUsd'),
                     'liquidity': p.get('liquidity', {}).get('usd'),
                     'fdv': p.get('fdv'),
