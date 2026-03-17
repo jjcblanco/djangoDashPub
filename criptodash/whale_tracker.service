@@ -1,0 +1,15 @@
+[Unit]
+Description=Whale Tracker Background Service
+After=network.target
+
+[Service]
+# Ajustar estas rutas según la ubicación real en el VPS
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/javierblanco.com.ar/web/criptodash
+ExecStart=/var/www/javierblanco.com.ar/web/venv/bin/python sync_whales_background.py --loop --interval 600
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
