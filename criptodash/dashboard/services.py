@@ -117,6 +117,54 @@ class EVMWhaleTracker:
         except Exception as e:
             print(f"[EVM Tracker Error] {e}")
             return 0
+class HyperliquidWhaleTracker:
+    """Rastreador para la red Hyperliquid L1 usando su API de Info."""
+    API_URL = "https://api.hyperliquid.xyz/info"
+
+    def sync_wallet(self, wallet_obj, max_new=20, **kwargs):
+        """Sincroniza los últimos trades (fills) del usuario."""
+        payload = {
+            "type": "userFills",
+            "user": wallet_obj.address
+        }
+        try:
+            resp = requests.post(self.API_URL, json=payload, timeout=15)
+            if resp.status_code != 200: return 0
+            
+            fills = resp.json()
+            if not isinstance(fills, list): return 0
+            
+            # HL 'time' es el timestamp en ms.
+            fills.sort(key=lambda x: x['time'], reverse=True)
+            
+            new_txs = 0
+            for fill in fills:
+                if new_txs >= max_new: break
+                
+                # Unicidad basada en hash de la transacción o ID del fill
+                unique_hash = f"hl_{fill.get('tid', fill['time'])}"
+                if WhaleTransaction.objects.filter(tx_hash=unique_hash).exists():
+                    continue
+                
+                timestamp = timezone.make_aware(datetime.fromtimestamp(fill['time'] / 1000.0))
+                
+                # En HL, un fill es un trade (compra o venta)
+                WhaleTransaction.objects.create(
+                    wallet=wallet_obj,
+                    tx_hash=unique_hash,
+                    timestamp=timestamp,
+                    tx_type="SWAP", # Interpretamos trade como SWAP para el PatternEngine
+                    from_asset="USDC", # HL suele ser colateralizado en USDC
+                    to_asset=fill.get('coin'),
+                    amount_in=float(fill.get('sz', 0)) * float(fill.get('px', 0)),
+                    amount_out=float(fill.get('sz', 0)),
+                    raw_data=fill
+                )
+                new_txs += 1
+            return new_txs
+        except Exception as e:
+            print(f"[Hyperliquid Tracker Error] {e}")
+            return 0
 
 class PatternEngine:
     @staticmethod
@@ -244,6 +292,19 @@ class PatternEngine:
                                 token_stats[mint] = {'buys': 0, 'volume': 0}
                             token_stats[mint]['buys'] += 1
                             token_stats[mint]['volume'] += change
+                elif wallet_obj.blockchain == 'hyperliquid':
+                    # Lógica para Hyperliquid (Trades/Fills)
+                    raw = tx.raw_data
+                    coin = raw.get('coin')
+                    if not coin: continue
+                    
+                    # En HL, interpretamos la recepción del token como compra
+                    # fill['side'] == 'B' (Buy)
+                    if raw.get('side') == 'B':
+                        if coin not in token_stats:
+                            token_stats[coin] = {'buys': 0, 'volume': 0, 'symbol': coin}
+                        token_stats[coin]['buys'] += 1
+                        token_stats[coin]['volume'] += float(raw.get('sz', 0))
                 else:
                     # Lógica para EVM (Ethereum / Base)
                     # El tracker EVM ya guarda from_asset/to_asset como el símbolo del token movido

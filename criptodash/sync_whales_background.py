@@ -49,7 +49,10 @@ def run_full_sync():
                 new_txs = tracker.sync_wallet(wallet, max_new=50)
             elif wallet.blockchain in ['ethereum', 'base']:
                 tracker = EVMWhaleTracker(wallet.blockchain)
-                new_txs = tracker.sync_wallet(wallet, max_new=100)
+                new_txs = tracker.sync_wallet(wallet, max_new=15) # Más margen en fondo
+            elif wallet.blockchain == 'hyperliquid':
+                tracker = HyperliquidWhaleTracker()
+                new_txs = tracker.sync_wallet(wallet, max_new=20)
             else:
                 print(f"  [SKIP] Red no soportada: {wallet.blockchain}")
                 continue

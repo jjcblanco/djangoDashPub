@@ -240,6 +240,7 @@ class WhaleWallet(models.Model):
         ('solana', 'Solana'),
         ('ethereum', 'Ethereum'),
         ('base', 'Base'),
+        ('hyperliquid', 'Hyperliquid'),
     ]
 
     address = models.CharField(max_length=255, unique=True)
