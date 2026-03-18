@@ -999,3 +999,58 @@ def get_whale_history(request, wallet_id):
         'blockchain': wallet.blockchain,
         'transactions': data
     })
+
+@login_required
+def export_whale_history(request, wallet_id):
+    """Exporta el historial de transacciones de una billetera a un archivo CSV."""
+    import csv
+    wallet = get_object_or_404(WhaleWallet, id=wallet_id)
+    transactions = wallet.transactions.all().order_by('-timestamp')
+    
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="whale_{wallet.address[:8]}_history.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['Timestamp', 'Type', 'From Asset', 'To Asset', 'Amount In', 'Amount Out', 'TX Hash'])
+    
+    for tx in transactions:
+        writer.writerow([
+            tx.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            tx.tx_type,
+            tx.from_asset,
+            tx.to_asset,
+            tx.amount_in,
+            tx.amount_out,
+            tx.tx_hash
+        ])
+    
+    return response
+
+@login_required
+def trigger_deep_sync(request, wallet_id):
+    """Ejecuta una sincronización profunda para una billetera (especialmente Hyperliquid)."""
+    wallet = get_object_or_404(WhaleWallet, id=wallet_id)
+    
+    from dashboard.services import SolanaWhaleTracker, EVMWhaleTracker, HyperliquidWhaleTracker, PatternEngine
+    
+    try:
+        new_txs = 0
+        if wallet.blockchain == 'solana':
+            tracker = SolanaWhaleTracker()
+            new_txs = tracker.sync_wallet(wallet, max_new=100, signatures_limit=200)
+        elif wallet.blockchain in ['ethereum', 'base']:
+            tracker = EVMWhaleTracker(wallet.blockchain)
+            new_txs = tracker.sync_wallet(wallet, max_new=100)
+        elif wallet.blockchain == 'hyperliquid':
+            tracker = HyperliquidWhaleTracker()
+            new_txs = tracker.sync_wallet(wallet, max_new=500)
+            
+        PatternEngine.analyze_wallet(wallet)
+        
+        return JsonResponse({
+            'status': 'success',
+            'new_transactions': new_txs,
+            'message': f"Sincronizados {new_txs} movimientos nuevos."
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
