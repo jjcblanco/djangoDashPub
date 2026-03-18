@@ -28,17 +28,24 @@ def whale_insights(request):
                     f.write(f"\n[{timezone.now()}] Iniciando Sincronización vía Web...\n")
             except: pass
             
-            tracker = SolanaWhaleTracker()
+            from dashboard.services import SolanaWhaleTracker, EVMWhaleTracker
+            
             for wallet in wallets:
-                if wallet.blockchain == 'solana':
+                try:
+                    # Despacho por Red
+                    if wallet.blockchain == 'solana':
+                        tracker = SolanaWhaleTracker()
+                        tracker.sync_wallet(wallet, max_new=2, signatures_limit=5)
+                    elif wallet.blockchain in ['ethereum', 'base']:
+                        tracker = EVMWhaleTracker(wallet.blockchain)
+                        tracker.sync_wallet(wallet, max_new=5) # EVM es una sola llamada, podemos pedir más
+                    
+                    PatternEngine.analyze_wallet(wallet)
+                except Exception as e:
                     try:
                         with open('whale_debug.log', 'a') as f:
-                            f.write(f"Sincronizando wallet (web limit): {wallet.address[:8]}...\n")
+                            f.write(f"Error sincronizando {wallet.address[:8]} ({wallet.blockchain}): {e}\n")
                     except: pass
-                    
-                    # Buscamos solo 5 firmas recientes (en lugar de 50) y procesamos máximo 2 nuevas
-                    tracker.sync_wallet(wallet, max_new=2, signatures_limit=5)
-                    PatternEngine.analyze_wallet(wallet)
             
             messages.success(request, "Billeteras sincronizadas y analizadas correctamente.")
             return redirect('whale_insights')

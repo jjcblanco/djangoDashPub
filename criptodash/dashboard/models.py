@@ -236,9 +236,15 @@ class WhaleWallet(models.Model):
         ('STRICT', 'Solo Estables (Whitelist)'),
     ]
 
+    BLOCKCHAIN_CHOICES = [
+        ('solana', 'Solana'),
+        ('ethereum', 'Ethereum'),
+        ('base', 'Base'),
+    ]
+
     address = models.CharField(max_length=255, unique=True)
     name = models.CharField(max_length=100, blank=True, null=True)
-    blockchain = models.CharField(max_length=50, default='solana')
+    blockchain = models.CharField(max_length=50, choices=BLOCKCHAIN_CHOICES, default='solana')
     wallet_category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='OBSERVATION')
     filter_mode = models.CharField(max_length=10, choices=FILTER_CHOICES, default='OPEN')
     target_token = models.CharField(max_length=100, blank=True, null=True, help_text="Token principal que opera (ej: JUP, PEPE)")

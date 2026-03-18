@@ -38,16 +38,23 @@ from dashboard.services import SolanaWhaleTracker, PatternEngine
 def run_full_sync():
     print(f"\n[{datetime.now()}] --- Iniciando Sincronización Completa ---")
     wallets = WhaleWallet.objects.filter(is_active=True)
-    tracker = SolanaWhaleTracker()
+    from dashboard.services import SolanaWhaleTracker, EVMWhaleTracker, PatternEngine
     
     total_new = 0
     for wallet in wallets:
-        print(f"Sincronizando: {wallet.name or wallet.address[:8]}...")
+        print(f"Sincronizando: {wallet.name or wallet.address[:8]} ({wallet.blockchain})...")
         try:
-            # En script de fondo procesamos hasta 50 firmas recientes
-            new_txs = tracker.sync_wallet(wallet, max_new=50)
+            if wallet.blockchain == 'solana':
+                tracker = SolanaWhaleTracker()
+                new_txs = tracker.sync_wallet(wallet, max_new=50)
+            elif wallet.blockchain in ['ethereum', 'base']:
+                tracker = EVMWhaleTracker(wallet.blockchain)
+                new_txs = tracker.sync_wallet(wallet, max_new=100)
+            else:
+                print(f"  [SKIP] Red no soportada: {wallet.blockchain}")
+                continue
+                
             total_new += new_txs
-            
             # Analizar patrones
             PatternEngine.analyze_wallet(wallet)
         except Exception as e:
