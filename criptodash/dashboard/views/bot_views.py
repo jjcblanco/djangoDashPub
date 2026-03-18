@@ -38,7 +38,11 @@ def whale_insights(request):
                         tracker.sync_wallet(wallet, max_new=2, signatures_limit=5)
                     elif wallet.blockchain in ['ethereum', 'base']:
                         tracker = EVMWhaleTracker(wallet.blockchain)
-                        tracker.sync_wallet(wallet, max_new=5) # EVM es una sola llamada, podemos pedir más
+                        tracker.sync_wallet(wallet, max_new=5)
+                    elif wallet.blockchain == 'hyperliquid':
+                        from dashboard.services import HyperliquidWhaleTracker
+                        tracker = HyperliquidWhaleTracker()
+                        tracker.sync_wallet(wallet, max_new=10)
                     
                     PatternEngine.analyze_wallet(wallet)
                 except Exception as e:
@@ -953,3 +957,45 @@ def search_tokens_ajax(request):
         return JsonResponse({'error': 'Error en DexScreener API'}, status=500)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+@login_required
+def get_whale_history(request, wallet_id):
+    """Retorna el historial de transacciones de una billetera en formato JSON."""
+    wallet = get_object_or_404(WhaleWallet, id=wallet_id)
+    transactions = wallet.transactions.all().order_by('-timestamp')[:50]
+    
+    data = []
+    for tx in transactions:
+        # Formatear assets para que no salgan nulos
+        if wallet.blockchain == 'solana':
+            from_asset = tx.from_asset or "???"
+            to_asset = tx.to_asset or "???"
+            # En Solana a veces el "type" es UNKNOWN hasta que PatternEngine lo procesa
+            tx_type = tx.tx_type
+        else:
+            # En EVM ya vienen limpios del tracker
+            from_asset = tx.from_asset
+            to_asset = tx.to_asset
+            tx_type = tx.tx_type
+
+        data.append({
+            'id': tx.id,
+            'timestamp': tx.timestamp.strftime('%Y-%m-%d %H:%M'),
+            'type': tx_type,
+            'from_asset': from_asset,
+            'to_asset': to_asset,
+            'amount_in': float(tx.amount_in) if tx.amount_in else 0,
+            'amount_out': float(tx.amount_out) if tx.amount_out else 0,
+            'tx_hash': tx.tx_hash,
+            'explorer_url': f"https://solscan.io/tx/{tx.tx_hash}" if wallet.blockchain == 'solana' else (
+                f"https://etherscan.io/tx/{tx.tx_hash.split('_')[0]}" if wallet.blockchain == 'ethereum' else 
+                (f"https://basescan.org/tx/{tx.tx_hash.split('_')[0]}" if wallet.blockchain == 'base' else 
+                 f"https://app.hyperliquid.xyz/explorer/address/{wallet.address}") # HL explorer por ahora a la dirección
+            )
+        })
+    
+    return JsonResponse({
+        'status': 'success',
+        'wallet_name': wallet.name or wallet.address[:8],
+        'blockchain': wallet.blockchain,
+        'transactions': data
+    })
