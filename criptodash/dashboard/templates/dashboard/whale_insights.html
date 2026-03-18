@@ -76,7 +76,8 @@
                                 class="list-group-item d-flex justify-content-between align-items-center border-0 border-bottom px-3">
                                 <div class="flex-grow-1">
                                     <div class="d-flex justify-content-between align-items-center">
-                                        <span class="fw-bold text-dark">{{ wallet.name|default:wallet.address|truncatechars:12 }}</span>
+                                        <span class="fw-bold text-dark">{{
+                                            wallet.name|default:wallet.address|truncatechars:12 }}</span>
                                         {% if wallet.target_token %}
                                         <span class="badge bg-soft-info text-info border border-info-subtle small"
                                             style="font-size: 0.65rem;">
@@ -87,7 +88,8 @@
                                         <span
                                             class="badge {% if wallet.pnl_stats.status == 'profit' %}bg-success{% elif wallet.pnl_stats.status == 'loss' %}bg-danger{% else %}bg-secondary{% endif %} ms-1"
                                             style="font-size: 0.65rem;">
-                                            {% if wallet.pnl_stats.status == 'profit' %}+{% endif %}{{ wallet.pnl_stats.roi }}%
+                                            {% if wallet.pnl_stats.status == 'profit' %}+{% endif %}{{
+                                            wallet.pnl_stats.roi }}%
                                         </span>
                                         {% endif %}
                                     </div>
@@ -208,7 +210,9 @@
                                             <div class="d-flex justify-content-between align-items-start mb-2">
                                                 <div>
                                                     <span class="badge bg-primary mb-1">{{ trade.token_symbol }}</span>
-                                                    <div class="small opacity-75">Copia de: {{ trade.wallet.name|default:trade.wallet.address|truncatechars:10 }}
+                                                    <div class="small opacity-75">Copia de: {{
+                                                        trade.wallet.name|default:trade.wallet.address|truncatechars:10
+                                                        }}
                                                     </div>
                                                 </div>
                                                 <div class="text-end">
@@ -237,7 +241,8 @@
                         <div class="card mb-3 insight-card border-0 shadow-sm">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between">
-                                    <h5 class="card-title h6 mb-1 text-dark">{{ insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
+                                    <h5 class="card-title h6 mb-1 text-dark">{{
+                                        insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
                                     <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type
                                         }}</span>
                                 </div>
@@ -384,8 +389,17 @@
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content border-0 shadow-lg">
                 <div class="modal-header bg-dark text-white border-bottom-0">
-                    <h5 class="modal-title h6"><i class="fas fa-history me-2"></i>Historial: <span
+                    <h5 class="modal-title h6"><i class="fas fa-history me-2"></i>Historial/Learning: <span
                             id="historyWalletName"></span></h5>
+                    <div class="ms-auto me-3">
+                        <button class="btn btn-outline-info btn-xs" id="btnDeepSync" title="Deep Sync (Fetch 500+ txs)">
+                            <i class="fas fa-sync-alt me-1"></i>Deep Sync
+                        </button>
+                        <button class="btn btn-outline-success btn-xs ms-2" id="btnDownloadCSV"
+                            title="Descargar Historial CSV">
+                            <i class="fas fa-download me-1"></i>CSV
+                        </button>
+                    </div>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-0">
@@ -524,6 +538,11 @@
                 nameSpan.innerText = walletName;
                 tableBody.innerHTML = '';
                 loading.classList.remove('d-none');
+
+                // Configurar IDs en botones
+                document.getElementById('btnDownloadCSV').setAttribute('onclick', `downloadCSV('${walletId}')`);
+                document.getElementById('btnDeepSync').setAttribute('onclick', `deepSyncWallet('${walletId}')`);
+
                 modal.show();
 
                 try {
@@ -566,6 +585,34 @@
                     console.error('History Fetch Error:', error);
                     loading.classList.add('d-none');
                     tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-danger small">Error al cargar el historial.</td></tr>';
+                }
+            };
+
+            window.downloadCSV = function (walletId) {
+                window.location.href = `/whale-insights/export/${walletId}/`;
+            };
+
+            window.deepSyncWallet = async function (walletId) {
+                const btn = document.getElementById('btnDeepSync');
+                const originalHtml = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Syncing...';
+
+                try {
+                    const response = await fetch(`/whale-insights/deep-sync/${walletId}/`);
+                    const data = await response.json();
+                    if (data.status === 'success') {
+                        alert(data.message);
+                        // Recargar historial para ver lo nuevo
+                        viewWhaleHistory(walletId, document.getElementById('historyWalletName').innerText);
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                } catch (error) {
+                    alert('Error de conexión al sincronizar.');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
                 }
             };
 
