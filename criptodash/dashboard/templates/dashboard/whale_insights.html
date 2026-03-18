@@ -76,7 +76,8 @@
                                 class="list-group-item d-flex justify-content-between align-items-center border-0 border-bottom px-3">
                                 <div class="flex-grow-1">
                                     <div class="d-flex justify-content-between align-items-center">
-                                        <span class="fw-bold text-dark">{{ wallet.name|default:wallet.address|truncatechars:12 }}</span>
+                                        <span class="fw-bold text-dark">{{
+                                            wallet.name|default:wallet.address|truncatechars:12 }}</span>
                                         {% if wallet.target_token %}
                                         <span class="badge bg-soft-info text-info border border-info-subtle small"
                                             style="font-size: 0.65rem;">
@@ -87,25 +88,41 @@
                                         <span
                                             class="badge {% if wallet.pnl_stats.status == 'profit' %}bg-success{% elif wallet.pnl_stats.status == 'loss' %}bg-danger{% else %}bg-secondary{% endif %} ms-1"
                                             style="font-size: 0.65rem;">
-                                            {% if wallet.pnl_stats.status == 'profit' %}+{% endif %}{{ wallet.pnl_stats.roi }}%
+                                            {% if wallet.pnl_stats.status == 'profit' %}+{% endif %}{{
+                                            wallet.pnl_stats.roi }}%
                                         </span>
                                         {% endif %}
                                     </div>
-                                    <div class="d-flex justify-content-between">
-                                        <small class="text-muted" style="font-size: 0.75rem;">
-                                            {{ wallet.blockchain|capfirst }} • {{ wallet.transactions.count }} txs •
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <small class="text-muted" style="font-size: 0.72rem;">
+                                            {{ wallet.blockchain|upper }} • {{ wallet.transactions.count }} txs •
                                             <span
                                                 class="{% if wallet.filter_mode == 'STRICT' %}text-primary fw-bold{% endif %}">
                                                 {{ wallet.get_filter_mode_display }}
                                             </span>
                                         </small>
-                                        {% if wallet.pnl_stats and wallet.pnl_stats.pnl_usdt != 0 %}
-                                        <small
-                                            class="{% if wallet.pnl_stats.status == 'profit' %}text-success{% else %}text-danger{% endif %} fw-bold"
-                                            style="font-size: 0.75rem;">
-                                            ${{ wallet.pnl_stats.pnl_usdt|floatformat:0 }}
-                                        </small>
-                                        {% endif %}
+                                        <div class="d-flex align-items-center">
+                                            {% if wallet.blockchain == 'solana' %}
+                                            <a href="https://solscan.io/account/{{ wallet.address }}" target="_blank"
+                                                class="text-primary me-2" title="Ver en Solscan"><i
+                                                    class="fas fa-search-plus fa-xs"></i></a>
+                                            {% elif wallet.blockchain == 'ethereum' %}
+                                            <a href="https://etherscan.io/address/{{ wallet.address }}" target="_blank"
+                                                class="text-secondary me-2" title="Ver en Etherscan"><i
+                                                    class="fas fa-search-plus fa-xs"></i></a>
+                                            {% elif wallet.blockchain == 'base' %}
+                                            <a href="https://basescan.org/address/{{ wallet.address }}" target="_blank"
+                                                class="text-info me-2" title="Ver en Basescan"><i
+                                                    class="fas fa-search-plus fa-xs"></i></a>
+                                            {% endif %}
+                                            {% if wallet.pnl_stats and wallet.pnl_stats.pnl_usdt != 0 %}
+                                            <small
+                                                class="{% if wallet.pnl_stats.status == 'profit' %}text-success{% else %}text-danger{% endif %} fw-bold"
+                                                style="font-size: 0.75rem;">
+                                                ${{ wallet.pnl_stats.pnl_usdt|floatformat:0 }}
+                                            </small>
+                                            {% endif %}
+                                        </div>
                                     </div>
                                 </div>
                                 <form action="{% url 'unfollow_whale' wallet.id %}" method="POST" class="ms-2"
@@ -185,7 +202,9 @@
                                             <div class="d-flex justify-content-between align-items-start mb-2">
                                                 <div>
                                                     <span class="badge bg-primary mb-1">{{ trade.token_symbol }}</span>
-                                                    <div class="small opacity-75">Copia de: {{ trade.wallet.name|default:trade.wallet.address|truncatechars:10 }}</div>
+                                                    <div class="small opacity-75">Copia de: {{
+                                                        trade.wallet.name|default:trade.wallet.address|truncatechars:10
+                                                        }}</div>
                                                 </div>
                                                 <div class="text-end">
                                                     <div class="fw-bold text-success">+2.4%</div> <!-- Demo P&L -->
@@ -213,12 +232,15 @@
                         <div class="card mb-3 insight-card border-0 shadow-sm">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between">
-                                    <h5 class="card-title h6 mb-1 text-dark">{{ insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
-                                    <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type }}</span>
+                                    <h5 class="card-title h6 mb-1 text-dark">{{
+                                        insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
+                                    <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type
+                                        }}</span>
                                 </div>
                                 <p class="card-text small text-muted mb-2">{{ insight.description }}</p>
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <small class="text-muted"><i class="far fa-clock me-1"></i>{{ insight.detected_at|timesince }} ago</small>
+                                    <small class="text-muted"><i class="far fa-clock me-1"></i>{{
+                                        insight.detected_at|timesince }} ago</small>
                                     <div class="d-flex align-items-center">
                                         <form action="{% url 'simulate_whale_trade' %}" method="POST" class="me-2">
                                             {% csrf_token %}
@@ -335,10 +357,11 @@
                             <div class="form-text small">Indica si esta ballena se especializa en algún token.</div>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Blockchain</label>
+                            <label class="form-label">Blockchain (Red)</label>
                             <select name="blockchain" class="form-select">
-                                <option value="solana" selected>Solana (Activo)</option>
-                                <option value="ethereum">Ethereum (Próximamente)</option>
+                                <option value="solana" selected>Solana</option>
+                                <option value="ethereum">Ethereum (ERC-20)</option>
+                                <option value="base">Base (L2)</option>
                             </select>
                         </div>
                     </div>

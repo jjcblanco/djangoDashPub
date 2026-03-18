@@ -7,25 +7,22 @@ from .models import WhaleWallet, WhaleTransaction, PatternInsight
 from .utils.notifications import send_telegram_message
 
 class SolanaWhaleTracker:
-    def __init__(self, rpc_url="https://api.mainnet-beta.solana.com"):
-        self.rpc_url = rpc_url
+    def __init__(self, rpc_url=None):
+        self.rpc_url = rpc_url or "https://api.mainnet-beta.solana.com"
 
     def get_transactions(self, address, limit=None):
         if limit is None:
-            limit = 50 # Default para background script
+            limit = 50 
         payload = {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "getSignaturesForAddress",
-            "params": [
-                address,
-                {"limit": limit}
-            ]
+            "params": [address, {"limit": limit}]
         }
         try:
             response = requests.post(self.rpc_url, json=payload, timeout=10)
             return response.json().get('result', [])
-        except requests.exceptions.RequestException:
+        except:
             return []
 
     def get_transaction_details(self, tx_hash):
@@ -33,51 +30,93 @@ class SolanaWhaleTracker:
             "jsonrpc": "2.0",
             "id": 1,
             "method": "getTransaction",
-            "params": [
-                tx_hash,
-                {"encoding": "json", "maxSupportedTransactionVersion": 0}
-            ]
+            "params": [tx_hash, {"encoding": "json", "maxSupportedTransactionVersion": 0}]
         }
         try:
             response = requests.post(self.rpc_url, json=payload, timeout=10)
             return response.json().get('result', {})
-        except requests.exceptions.RequestException:
+        except:
             return {}
 
     def sync_wallet(self, wallet_obj, max_new=5, signatures_limit=None):
-        """
-        Sincroniza las transacciones de una billetera.
-        max_new: Límite de transacciones nuevas a procesar para evitar timeouts en peticiones web.
-        """
         signatures = self.get_transactions(wallet_obj.address, limit=signatures_limit)
         new_txs = 0
-        
         for sig in signatures:
-            if new_txs >= max_new:
-                break
-                
+            if new_txs >= max_new: break
             tx_hash = sig['signature']
-            if WhaleTransaction.objects.filter(tx_hash=tx_hash).exists():
-                continue
-                
+            if WhaleTransaction.objects.filter(tx_hash=tx_hash).exists(): continue
             details = self.get_transaction_details(tx_hash)
-            if not details:
-                continue
-                
-            # Basic parsing (can be refined as we see more data)
+            if not details: continue
             timestamp = timezone.make_aware(datetime.fromtimestamp(sig['blockTime'])) if sig.get('blockTime') else timezone.now()
-            
             WhaleTransaction.objects.create(
-                wallet=wallet_obj,
-                tx_hash=tx_hash,
-                timestamp=timestamp,
-                tx_type="UNKNOWN", # Will be updated by PatternEngine
-                raw_data=details
+                wallet=wallet_obj, tx_hash=tx_hash, timestamp=timestamp,
+                tx_type="UNKNOWN", raw_data=details
             )
             new_txs += 1
-            # Eliminamos el sleep en la web para ganar cada milisegundo posible
-            
         return new_txs
+
+class EVMWhaleTracker:
+    """Rastreador para redes EVM (Ethereum, Base, etc) usando APIs compatibles con Etherscan."""
+    API_CONFIG = {
+        'ethereum': 'https://api.etherscan.io/api',
+        'base': 'https://api.basescan.org/api',
+    }
+
+    def __init__(self, blockchain):
+        self.blockchain = blockchain
+        self.api_url = self.API_CONFIG.get(blockchain, self.API_CONFIG['ethereum'])
+        # Podríamos cargar keys de .env aquí si existen
+        self.api_key = os.environ.get(f"{blockchain.upper()}_API_KEY", "")
+
+    def sync_wallet(self, wallet_obj, max_new=10, **kwargs):
+        """Sincroniza transferencias de tokens ERC20."""
+        # limit=50 para background, menos para web (ignorado si max_new es bajo)
+        params = {
+            'module': 'account',
+            'action': 'tokentx',
+            'address': wallet_obj.address,
+            'sort': 'desc',
+            'page': 1,
+            'offset': 50,
+            'apikey': self.api_key
+        }
+        try:
+            resp = requests.get(self.api_url, params=params, timeout=12)
+            if resp.status_code != 200: return 0
+            
+            data = resp.json()
+            if data.get('status') != '1': return 0
+            
+            transfers = data.get('result', [])
+            new_txs = 0
+            
+            for tx in transfers:
+                if new_txs >= max_new: break
+                
+                # Usamos blockNumber + hash para unicidad si hay múltiples transferencias en un hash
+                unique_hash = f"{tx['hash']}_{tx.get('logIndex', '0')}"
+                if WhaleTransaction.objects.filter(tx_hash=unique_hash).exists():
+                    continue
+                
+                # Parsear timestamp de EVM (está en format string o int según API)
+                ts_val = int(tx.get('timeStamp', time.time()))
+                timestamp = timezone.make_aware(datetime.fromtimestamp(ts_val))
+                
+                WhaleTransaction.objects.create(
+                    wallet=wallet_obj,
+                    tx_hash=unique_hash,
+                    timestamp=timestamp,
+                    tx_type="SWAP" if tx.get('to').lower() == wallet_obj.address.lower() else "TRANSFER",
+                    from_asset=tx.get('tokenSymbol'), # No lo sabemos aún con certeza, pero tokentx nos da el asset que se movió
+                    to_asset=tx.get('tokenSymbol'),
+                    amount_in=float(tx.get('value', 0)) / (10 ** int(tx.get('tokenDecimal', 18))),
+                    raw_data=tx
+                )
+                new_txs += 1
+            return new_txs
+        except Exception as e:
+            print(f"[EVM Tracker Error] {e}")
+            return 0
 
 class PatternEngine:
     @staticmethod
@@ -167,47 +206,59 @@ class PatternEngine:
             'DezXAZ8z7Pnrn9vzctrxEXpWMrNHqR1f6f69nL4XYUDx': 'BONK',
         }
         
-        # MODIFICACIÓN: Filtro de Estables vs Pumps
+        # MODIFICACIÓN: Soporte Multi-Red en Análisis
         ESTABLISHED_TOKENS = {
+            # Solana
             'So11111111111111111111111111111111111111112': 'SOL',
             'EPjFW3F2KVq2aLecqCP5i5nw53J2tOt9iies23XYwjLu': 'USDC',
             'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 'USDT',
-            'JUPyiPZp718zay7kaPn2CoJvRwvpqcRuS5B7shuYf79': 'JUP',
-            'DezXAZ8z7Pnrn9vzctrxEXpWMrNHqR1f6f69nL4XYUDx': 'BONK',
-            'mSoLzYq7M7P7BUqQEPRDe3y4tEYsgfJPsJ9Nq19yrBy': 'mSOL',
-            'jtoosevaECz9zJqN996BAtDkdV2jK9xV58hF7JidCUn': 'JTO',
-            '4k3Dyjzvzp8eMZWUXbBCjEvwSkk6M44R4B3E5K4z4m6': 'RAY',
+            # Ethereum / Base (Mints son las direcciones de contrato)
+            '0xdAC17F958D2ee523a2206206994597C13D831ec7': 'USDT',
+            '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48': 'USDC',
+            '0x4200000000000000000000000000000000000006': 'WETH', # Base
+            '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913': 'USDC', # Base
         }
 
         for tx in txs:
             try:
-                raw = tx.raw_data
-                if not raw or 'meta' not in raw: continue
-                
-                # Buscar cambios en balances de tokens
-                pre_balances = {b['mint']: b['uiTokenAmount']['uiAmount'] or 0 
-                               for b in raw['meta'].get('preTokenBalances', []) 
-                               if b.get('owner') == wallet_obj.address}
-                
-                post_balances = {b['mint']: b['uiTokenAmount']['uiAmount'] or 0 
-                                for b in raw['meta'].get('postTokenBalances', []) 
-                                if b.get('owner') == wallet_obj.address}
-                
-                for mint, post_val in post_balances.items():
-                    pre_val = pre_balances.get(mint, 0)
-                    change = post_val - pre_val
+                if wallet_obj.blockchain == 'solana':
+                    raw = tx.raw_data
+                    if not raw or 'meta' not in raw: continue
                     
-                    if change > 0: # Compra o recepción
-                        # FILTRO: Si el modo es STRICT, ignoramos si no es estables
+                    # Lógica original de Solana basada en balances
+                    pre_balances = {b['mint']: b['uiTokenAmount']['uiAmount'] or 0 
+                                   for b in raw['meta'].get('preTokenBalances', []) 
+                                   if b.get('owner') == wallet_obj.address}
+                    
+                    post_balances = {b['mint']: b['uiTokenAmount']['uiAmount'] or 0 
+                                    for b in raw['meta'].get('postTokenBalances', []) 
+                                    if b.get('owner') == wallet_obj.address}
+                    
+                    for mint, post_val in post_balances.items():
+                        pre_val = pre_balances.get(mint, 0)
+                        change = post_val - pre_val
+                        if change > 0:
+                            if wallet_obj.filter_mode == 'STRICT' and mint not in ESTABLISHED_TOKENS:
+                                continue
+                            if mint not in token_stats:
+                                token_stats[mint] = {'buys': 0, 'volume': 0}
+                            token_stats[mint]['buys'] += 1
+                            token_stats[mint]['volume'] += change
+                else:
+                    # Lógica para EVM (Ethereum / Base)
+                    # El tracker EVM ya guarda from_asset/to_asset como el símbolo del token movido
+                    raw = tx.raw_data
+                    mint = raw.get('contractAddress') # En EVM el "mint" es el contrato
+                    if not mint: continue
+                    
+                    change = tx.amount_in or 0
+                    if change > 0 and tx.tx_type == 'SWAP':
                         if wallet_obj.filter_mode == 'STRICT' and mint not in ESTABLISHED_TOKENS:
-                            # Opcional: Podríamos hacer una consulta a DexScreener para ver liquidez
-                            # pero para velocidad inicial, usamos whitelist estricta
                             continue
-
                         if mint not in token_stats:
-                            token_stats[mint] = {'buys': 0, 'volume': 0}
+                            token_stats[mint] = {'buys': 0, 'volume': 0, 'symbol': raw.get('tokenSymbol')}
                         token_stats[mint]['buys'] += 1
-                        token_stats[mint]['volume'] += change
+                        token_stats[mint]['volume'] += float(change)
             except:
                 continue
                 
@@ -278,14 +329,25 @@ class PatternEngine:
             if send_alert:
                 wallet_name = wallet_obj.name or f"Ballena {wallet_obj.address[:8]}"
                 category = wallet_obj.get_wallet_category_display()
+                
+                # Link dinámico según red
+                explorers = {
+                    'solana': f"https://solscan.io/account/{wallet_obj.address}",
+                    'ethereum': f"https://etherscan.io/address/{wallet_obj.address}",
+                    'base': f"https://basescan.org/address/{wallet_obj.address}",
+                }
+                explorer_url = explorers.get(wallet_obj.blockchain, explorers['solana'])
+                explorer_name = "Solscan" if wallet_obj.blockchain == 'solana' else "Explorer"
+
                 msg = (
                     f"🐋 <b>¡ALERTA DE BALLENA DETECTADA!</b>\n\n"
                     f"👤 <b>Billetera:</b> {wallet_name}\n"
                     f"🏷️ <b>Categoría:</b> {category}\n"
+                    f"🌐 <b>Red:</b> {wallet_obj.blockchain.upper()}\n"
                     f"🎯 <b>Token:</b> {hot_token if hot_token else 'Varios'}\n"
                     f"📈 <b>Patrón:</b> {pattern}\n"
                     f"📝 <b>Detalle:</b> {description}\n\n"
-                    f"🔗 <a href='https://solscan.io/account/{wallet_obj.address}'>Ver en Solscan</a>\n"
+                    f"🔗 <a href='{explorer_url}'>Ver en {explorer_name}</a>\n"
                     f"💡 <i>Analizado por CriptoDash PatternEngine</i>"
                 )
                 if send_telegram_message(msg):
