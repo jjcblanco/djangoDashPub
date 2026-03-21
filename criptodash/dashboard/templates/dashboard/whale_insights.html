@@ -162,8 +162,7 @@
                             class="list-group-item bg-transparent d-flex justify-content-between align-items-center border-bottom py-2">
                             <div class="flex-grow-1 me-2">
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <span class="fw-bold small">{{ whale.name|default:whale.address|truncatechars:14
-                                        }}</span>
+                                    <span class="fw-bold small">{{ whale.name|default:whale.address|truncatechars:14 }}</span>
                                     <span
                                         class="badge {% if whale.score >= 70 %}bg-success{% elif whale.score >= 40 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
                                         {{ whale.score }}%
@@ -255,9 +254,7 @@
                                             <div class="d-flex justify-content-between align-items-start mb-2">
                                                 <div>
                                                     <span class="badge bg-primary mb-1">{{ trade.token_symbol }}</span>
-                                                    <div class="small opacity-75">Copia de: {{
-                                                        trade.wallet.name|default:trade.wallet.address|truncatechars:10
-                                                        }}
+                                                    <div class="small opacity-75">Copia de: {{ trade.wallet.name|default:trade.wallet.address|truncatechars:10 }}
                                                     </div>
                                                 </div>
                                                 <div class="text-end">
@@ -286,15 +283,12 @@
                         <div class="card mb-3 insight-card border-0 shadow-sm">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between">
-                                    <h5 class="card-title h6 mb-1 text-dark">{{
-                                        insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
-                                    <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type
-                                        }}</span>
+                                    <h5 class="card-title h6 mb-1 text-dark">{{ insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
+                                    <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type }}</span>
                                 </div>
                                 <p class="card-text small text-muted mb-2">{{ insight.description }}</p>
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <small class="text-muted"><i class="far fa-clock me-1"></i>{{
-                                        insight.detected_at|timesince }} ago</small>
+                                    <small class="text-muted"><i class="far fa-clock me-1"></i>{{ insight.detected_at|timesince }} ago</small>
                                     <div class="d-flex align-items-center">
                                         <form action="{% url 'simulate_whale_trade' %}" method="POST" class="me-2">
                                             {% csrf_token %}
