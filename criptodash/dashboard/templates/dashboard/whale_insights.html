@@ -76,7 +76,8 @@
                                 class="list-group-item d-flex justify-content-between align-items-center border-0 border-bottom px-3">
                                 <div class="flex-grow-1">
                                     <div class="d-flex justify-content-between align-items-center">
-                                        <span class="fw-bold text-dark">{{ wallet.name|default:wallet.address|truncatechars:12 }}</span>
+                                        <span class="fw-bold text-dark">{{
+                                            wallet.name|default:wallet.address|truncatechars:12 }}</span>
                                         {% if wallet.target_token %}
                                         <span class="badge bg-soft-info text-info border border-info-subtle small"
                                             style="font-size: 0.65rem;">
@@ -87,7 +88,8 @@
                                         <span
                                             class="badge {% if wallet.pnl_stats.status == 'profit' %}bg-success{% elif wallet.pnl_stats.status == 'loss' %}bg-danger{% else %}bg-secondary{% endif %} ms-1"
                                             style="font-size: 0.65rem;">
-                                            {% if wallet.pnl_stats.status == 'profit' %}+{% endif %}{{ wallet.pnl_stats.roi }}%
+                                            {% if wallet.pnl_stats.status == 'profit' %}+{% endif %}{{
+                                            wallet.pnl_stats.roi }}%
                                         </span>
                                         {% endif %}
                                     </div>
@@ -148,7 +150,52 @@
                     </div>
                 </div>
             </div>
-
+            <!-- 🟢🟢🟢 NUEVO PANEL - COLOCAR AQUÍ DESPUÉS DEL CARD DE BILLETERAS 🟢🟢🟢 -->
+            <div class="card mt-3">
+                <div class="card-header bg-warning text-dark py-2">
+                    <h6 class="m-0 fw-bold"><i class="fas fa-crown me-2"></i>🏆 Top Ballenas por Confianza</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for whale in top_scored_whales %}
+                        <div
+                            class="list-group-item bg-transparent d-flex justify-content-between align-items-center border-bottom py-2">
+                            <div class="flex-grow-1 me-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="fw-bold small">{{ whale.name|default:whale.address|truncatechars:14
+                                        }}</span>
+                                    <span
+                                        class="badge {% if whale.score >= 70 %}bg-success{% elif whale.score >= 40 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                                        {{ whale.score }}%
+                                    </span>
+                                </div>
+                                <div class="progress mt-1" style="height: 4px;">
+                                    <div class="progress-bar {% if whale.score >= 70 %}bg-success{% elif whale.score >= 40 %}bg-warning{% else %}bg-secondary{% endif %}"
+                                        style="width: {{ whale.score }}%"></div>
+                                </div>
+                                <div class="d-flex justify-content-between mt-1">
+                                    <small class="text-muted" style="font-size: 0.65rem;">
+                                        <i class="fas fa-chart-line me-1"></i>{{ whale.accuracy|default:'N/A' }}%
+                                        aciertos
+                                    </small>
+                                    <small class="text-muted" style="font-size: 0.65rem;">
+                                        <i class="fas fa-clock me-1"></i>{{ whale.total_trades|default:0 }} trades
+                                    </small>
+                                </div>
+                            </div>
+                            {% if whale.score >= 70 %}
+                            <i class="fas fa-fire text-warning" title="Ballena caliente"></i>
+                            {% endif %}
+                        </div>
+                        {% empty %}
+                        <div class="text-center py-3 text-muted small">
+                            <i class="fas fa-info-circle me-1"></i>Sincroniza ballenas para ver su puntuación
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <!-- 🟢🟢🟢 FIN DEL NUEVO PANEL 🟢🟢🟢 -->
             <div class="col-md-8">
                 <div class="card shadow-sm h-100">
                     <div class="card-body">
@@ -208,7 +255,9 @@
                                             <div class="d-flex justify-content-between align-items-start mb-2">
                                                 <div>
                                                     <span class="badge bg-primary mb-1">{{ trade.token_symbol }}</span>
-                                                    <div class="small opacity-75">Copia de: {{ trade.wallet.name|default:trade.wallet.address|truncatechars:10 }}
+                                                    <div class="small opacity-75">Copia de: {{
+                                                        trade.wallet.name|default:trade.wallet.address|truncatechars:10
+                                                        }}
                                                     </div>
                                                 </div>
                                                 <div class="text-end">
@@ -237,12 +286,15 @@
                         <div class="card mb-3 insight-card border-0 shadow-sm">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between">
-                                    <h5 class="card-title h6 mb-1 text-dark">{{ insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
-                                    <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type }}</span>
+                                    <h5 class="card-title h6 mb-1 text-dark">{{
+                                        insight.wallet.name|default:insight.wallet.address|truncatechars:16 }}</h5>
+                                    <span class="badge bg-info text-dark badge-pattern">{{ insight.pattern_type
+                                        }}</span>
                                 </div>
                                 <p class="card-text small text-muted mb-2">{{ insight.description }}</p>
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <small class="text-muted"><i class="far fa-clock me-1"></i>{{ insight.detected_at|timesince }} ago</small>
+                                    <small class="text-muted"><i class="far fa-clock me-1"></i>{{
+                                        insight.detected_at|timesince }} ago</small>
                                     <div class="d-flex align-items-center">
                                         <form action="{% url 'simulate_whale_trade' %}" method="POST" class="me-2">
                                             {% csrf_token %}
