@@ -13,7 +13,8 @@ import json
 import requests
 from decimal import Decimal
 from dashboard.services import get_top_scored_whales
-
+from dashboard.models import WhaleWallet, WhaleTransaction, PatternInsight, ShadowTrade
+from dashboard.whale_scoring import WhaleScoringEngine
 
 @login_required
 def whale_insights(request):
