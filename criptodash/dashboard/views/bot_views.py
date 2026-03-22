@@ -17,6 +17,7 @@ from decimal import Decimal
 def whale_insights(request):
     """Vista para seguimiento de ballenas y análisis de patrones."""
     from django.utils import timezone
+    top_scored_whales = []
     try:
         # Mostrar todas las billeteras (activas o no, para gestión)
         wallets = WhaleWallet.objects.all()
@@ -59,6 +60,16 @@ def whale_insights(request):
         # Calcular P&L para cada billetera
         for wallet in wallets:
             wallet.pnl_stats = PatternEngine.get_wallet_pnl(wallet)
+            score = WhaleScoringEngine.calculate_score(wallet)
+            accuracy_data = PatternEngine.get_wallet_accuracy(wallet) 
+            top_scored_whales.append({
+                'id': wallet.id,
+                'name': wallet.name,
+                'address': wallet.address,
+                'score': accuracy_data.get('overall', 0) if accuracy_data else 0,
+                'accuracy': accuracy_data.get('recent', 0) if accuracy_data else None,
+                'total_trades': accuracy_data.get('total_trades', 0) if accuracy_data else 0,
+            })
             
         # Operaciones Shadow Activas
         from ..models import ShadowTrade
@@ -72,7 +83,8 @@ def whale_insights(request):
             'insights': insights,
             'shadow_trades': shadow_trades,
             'hot_tokens': hot_tokens,
-            'page_title': 'Whale Insights & Alpha'
+            'page_title': 'Whale Insights & Alpha',
+            'top_scored_whales': top_scored_whales,
         }
         return render(request, 'dashboard/whale_insights.html', context)
     except Exception as e:
