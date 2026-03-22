@@ -256,12 +256,23 @@
                                                     </div>
                                                 </div>
                                                 <div class="text-end">
-                                                    <div class="fw-bold text-success">+2.4%</div> <!-- Demo P&L -->
+                                                    {% if trade.live_pnl != None %}
+                                                    <div class="fw-bold {% if trade.live_pnl >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                        {% if trade.live_pnl >= 0 %}+{% endif %}{{ trade.live_pnl }}%
+                                                    </div>
+                                                    {% else %}
+                                                    <div class="fw-bold text-muted">--</div>
+                                                    {% endif %}
                                                     <div class="small opacity-50">{{ trade.created_at|timesince }}</div>
                                                 </div>
                                             </div>
                                             <div class="d-flex justify-content-between align-items-center mt-3">
-                                                <div class="small">In: ${{ trade.entry_price|floatformat:4 }}</div>
+                                                <div>
+                                                    <div class="small">In: ${{ trade.entry_price|floatformat:4 }}</div>
+                                                    {% if trade.current_price %}
+                                                    <div class="small opacity-75">Now: ${{ trade.current_price|floatformat:4 }}</div>
+                                                    {% endif %}
+                                                </div>
                                                 <form action="{% url 'close_shadow_trade' trade.id %}" method="POST">
                                                     {% csrf_token %}
                                                     <button type="submit" class="btn btn-danger btn-sm py-0 px-2"
