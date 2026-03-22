@@ -66,7 +66,18 @@ def whale_insights(request):
             
         # Operaciones Shadow Activas
         from ..models import ShadowTrade
+        from dashboard.services import fetch_current_price
         shadow_trades = ShadowTrade.objects.filter(status='OPEN').order_by('-created_at')
+        
+        # Calcular PnL en tiempo real para cada shadow trade
+        for trade in shadow_trades:
+            current_price = fetch_current_price(trade.token_symbol)
+            if current_price and trade.entry_price and float(trade.entry_price) > 0:
+                trade.current_price = current_price
+                trade.live_pnl = round(((current_price - float(trade.entry_price)) / float(trade.entry_price)) * 100, 2)
+            else:
+                trade.current_price = None
+                trade.live_pnl = None
         
         # Tokens Hot (Tendencias)
         hot_tokens = PatternEngine.get_hot_tokens(hours=24)
@@ -899,12 +910,19 @@ def close_shadow_trade(request, trade_id):
         from django.utils import timezone
         trade = get_object_or_404(ShadowTrade, id=trade_id)
         
-        # Simulamos un precio de salida (para la demo)
+        # Obtener precio real de mercado
         exit_val = request.POST.get('exit_price')
         if exit_val:
             exit_price = Decimal(exit_val)
         else:
-            exit_price = trade.entry_price * Decimal('1.05')
+            # Consultar precio actual en tiempo real
+            from dashboard.services import fetch_current_price
+            real_price = fetch_current_price(trade.token_symbol)
+            if real_price:
+                exit_price = Decimal(str(real_price))
+            else:
+                # Fallback: usar entry_price (PnL = 0%) si no se puede obtener precio
+                exit_price = trade.entry_price
         
         trade.exit_price = exit_price
         trade.status = 'CLOSED'
