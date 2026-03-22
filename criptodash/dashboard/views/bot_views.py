@@ -12,12 +12,14 @@ from ..services import SolanaWhaleTracker, PatternEngine
 import json
 import requests
 from decimal import Decimal
+from dashboard.services import get_top_scored_whales
+
 
 @login_required
 def whale_insights(request):
     """Vista para seguimiento de ballenas y análisis de patrones."""
     from django.utils import timezone
-    top_scored_whales = []
+    top_whales = get_top_scored_whales(limit=5, min_trades=3)
     try:
         # Mostrar todas las billeteras (activas o no, para gestión)
         wallets = WhaleWallet.objects.all()
@@ -84,7 +86,7 @@ def whale_insights(request):
             'shadow_trades': shadow_trades,
             'hot_tokens': hot_tokens,
             'page_title': 'Whale Insights & Alpha',
-            'top_scored_whales': top_scored_whales,
+            'top_scored_whales': top_whales,
         }
         return render(request, 'dashboard/whale_insights.html', context)
     except Exception as e:
