@@ -61,16 +61,8 @@ def whale_insights(request):
         # Calcular P&L para cada billetera
         for wallet in wallets:
             wallet.pnl_stats = PatternEngine.get_wallet_pnl(wallet)
-            score = WhaleScoringEngine.calculate_score(wallet)
-            accuracy_data = PatternEngine.get_wallet_accuracy(wallet) 
-            top_scored_whales.append({
-                'id': wallet.id,
-                'name': wallet.name,
-                'address': wallet.address,
-                'score': accuracy_data.get('overall', 0) if accuracy_data else 0,
-                'accuracy': accuracy_data.get('recent', 0) if accuracy_data else None,
-                'total_trades': accuracy_data.get('total_trades', 0) if accuracy_data else 0,
-            })
+            score_data = WhaleScoringEngine.calculate_score(wallet)
+            wallet.score_data = score_data
             
         # Operaciones Shadow Activas
         from ..models import ShadowTrade
