@@ -448,3 +448,43 @@ class PatternEngine:
             })
             
         return sorted(hot_list, key=lambda x: x['count'], reverse=True)[:5]
+# En services.py - agregar al final
+
+from .whale_scoring import WhaleScoringEngine, WhalePerformanceTracker
+
+def get_whale_score(wallet_obj):
+    """
+    Helper para obtener score de una ballena.
+    """
+    engine = WhaleScoringEngine()
+    return engine.calculate_score(wallet_obj)
+
+def get_top_scored_whales(limit=5, min_trades=3):
+    """
+    Helper para obtener top ballenas por score.
+    """
+    return WhaleScoringEngine.get_top_whales(limit=limit, min_trades=min_trades)
+
+def update_all_whale_scores():
+    """
+    Actualiza scores para todas las ballenas activas.
+    Útil para ejecutar en cron.
+    """
+    from .models import WhaleWallet
+    
+    wallets = WhaleWallet.objects.filter(is_active=True)
+    results = []
+    
+    for wallet in wallets:
+        score_data = WhaleScoringEngine.calculate_score(wallet)
+        results.append({
+            'wallet_id': wallet.id,
+            'name': wallet.name,
+            'score': score_data['score'],
+            'category': score_data['category']['name']
+        })
+    
+    # Ordenar por score
+    results.sort(key=lambda x: x['score'], reverse=True)
+    
+    return results
