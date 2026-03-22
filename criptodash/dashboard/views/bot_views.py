@@ -32,7 +32,8 @@ def whale_insights(request):
             except: pass
             
             from dashboard.services import SolanaWhaleTracker, EVMWhaleTracker
-            
+            from dashboard.whale_scoring import WhaleScoringEngine
+
             for wallet in wallets:
                 try:
                     # Despacho por Red
