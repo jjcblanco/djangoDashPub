@@ -9,15 +9,27 @@ Esto genera el dataset para aprender de las condiciones en que operan.
 import ccxt
 import pandas as pd
 import numpy as np
+import time
 from django.conf import settings
 
+# Instancia global para reutilizar conexiones
+_BINANCE_EXCHANGE = None
 
 def _get_binance():
     """Obtiene una instancia de ccxt.binance sin API key (solo datos públicos)."""
-    return ccxt.binance({
-        'options': {'adjustForTimeDifference': True},
-        'enableRateLimit': True,
-    })
+    global _BINANCE_EXCHANGE
+    if _BINANCE_EXCHANGE is None:
+        _BINANCE_EXCHANGE = ccxt.binance({
+            'options': {'adjustForTimeDifference': True},
+            'enableRateLimit': True,
+            'timeout': 10000, # 10 segundos
+        })
+    return _BINANCE_EXCHANGE
+
+# Cache simple en memoria para evitar llamadas redundantes en el mismo ciclo de sync
+# {symbol: (timestamp, data)}
+_CONTEXT_CACHE = {}
+_CACHE_TTL = 300 # 5 minutos
 
 
 def fetch_market_context(symbol, timeframe='4h', limit=100):
@@ -34,6 +46,13 @@ def fetch_market_context(symbol, timeframe='4h', limit=100):
     """
     symbol_upper = symbol.upper().strip()
     
+    # 1. Verificar Cache
+    now = time.time()
+    if symbol_upper in _CONTEXT_CACHE:
+        ts, data = _CONTEXT_CACHE[symbol_upper]
+        if now - ts < _CACHE_TTL:
+            return data
+
     # Ignorar stablecoins (no tienen indicadores útiles)
     if symbol_upper in ('USDC', 'USDT', 'DAI', 'BUSD', 'FDUSD'):
         return None
@@ -56,6 +75,9 @@ def fetch_market_context(symbol, timeframe='4h', limit=100):
         context['pair'] = pair
         context['timeframe'] = timeframe
         context['candles_used'] = len(df)
+        
+        # Guardar en Cache
+        _CONTEXT_CACHE[symbol_upper] = (now, context)
         
         return context
         

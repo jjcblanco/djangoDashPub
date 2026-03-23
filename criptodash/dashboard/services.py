@@ -194,10 +194,12 @@ class HyperliquidWhaleTracker:
             return 0
 
 class PatternEngine:
+    _TOKEN_SYMBOL_CACHE = {}
+
     @staticmethod
     def get_token_symbol(mint):
         """Busca el símbolo de un token dinámicamente usando la API de Jupiter."""
-        # Caché estática básica
+        # 1. Caché estática básica (Tokens comunes)
         TOKEN_MAP = {
             'So11111111111111111111111111111111111111112': 'SOL',
             'EPjFW3F2KVq2aLecqCP5i5nw53J2tOt9iies23XYwjLu': 'USDC',
@@ -209,6 +211,10 @@ class PatternEngine:
         if mint in TOKEN_MAP:
             return TOKEN_MAP[mint]
             
+        # 2. Verificar caché en memoria
+        if mint in PatternEngine._TOKEN_SYMBOL_CACHE:
+            return PatternEngine._TOKEN_SYMBOL_CACHE[mint]
+            
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         try:
             # Opción 1: Jupiter API
@@ -217,7 +223,9 @@ class PatternEngine:
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get('symbol'):
-                    return data['symbol']
+                    symbol = data['symbol']
+                    PatternEngine._TOKEN_SYMBOL_CACHE[mint] = symbol
+                    return symbol
             
             # Opción 2: DexScreener API
             url_dex = f"https://api.dexscreener.com/latest/dex/tokens/{mint}"
@@ -226,7 +234,9 @@ class PatternEngine:
                 data_dex = resp_dex.json()
                 pairs = data_dex.get('pairs', [])
                 if pairs:
-                    return pairs[0].get('baseToken', {}).get('symbol', mint[:8] + "...")
+                    symbol = pairs[0].get('baseToken', {}).get('symbol', mint[:8] + "...")
+                    PatternEngine._TOKEN_SYMBOL_CACHE[mint] = symbol
+                    return symbol
         except Exception as e:
             try:
                 with open('whale_debug.log', 'a') as f:
@@ -574,13 +584,27 @@ COINGECKO_ID_MAP = {
     'PURR': 'purr-2',
 }
 
+# Cache de precios para evitar saturar APIs en bucles
+_PRICE_CACHE = {}
+
 def fetch_current_price(symbol):
     """
-    Obtiene el precio actual en USD de un token usando CoinGecko.
+    Obtiene el precio actual en USD de un token usando CoinGecko o cache.
     Retorna float o None si no se puede obtener.
     """
+    import time # Added import for time.time()
+    import requests # Added import for requests.get()
+
+    if not symbol: return None
     symbol_upper = symbol.upper().strip()
     
+    # 1. Verificar Cache (TTL 60s)
+    now = time.time()
+    if symbol_upper in _PRICE_CACHE:
+        ts, cached_price = _PRICE_CACHE[symbol_upper]
+        if now - ts < 60:
+            return cached_price
+            
     # Stablecoins → siempre $1
     if symbol_upper in ('USDC', 'USDT', 'DAI', 'BUSD', 'TUSD', 'FDUSD'):
         return 1.0
@@ -592,12 +616,14 @@ def fetch_current_price(symbol):
     
     try:
         url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, timeout=5) # Reducido timeout de 10 a 5
         if resp.status_code == 200:
             data = resp.json()
             if coin_id in data and 'usd' in data[coin_id]:
-                return float(data[coin_id]['usd'])
+                price = float(data[coin_id]['usd'])
+                _PRICE_CACHE[symbol_upper] = (now, price)
+                return price
     except Exception as e:
         print(f"[Price Fetch Error] {symbol}: {e}")
     
-    return None
+    return None
