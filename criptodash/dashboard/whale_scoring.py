@@ -96,6 +96,33 @@ class WhaleScoringEngine:
             'breakdown': breakdown,
             'sufficient_data': scores['historical_accuracy'] > 0 or scores['recent_performance'] > 0
         }
+
+    @classmethod
+    def get_top_whales(cls, limit=5, min_trades=3):
+        """
+        Retorna las ballenas mejor puntuadas que tengan al menos X trades históricos.
+        """
+        wallets = WhaleWallet.objects.filter(is_active=True)
+        results = []
+        
+        for wallet in wallets:
+            # Usamos shadow trades cerrados para validar performance real
+            trades_count = wallet.shadow_trades.filter(status='CLOSED').count()
+            
+            if trades_count >= min_trades:
+                score_data = cls.calculate_score(wallet)
+                results.append({
+                    'id': wallet.id,
+                    'address': wallet.address,
+                    'name': wallet.name,
+                    'score': score_data['score'],
+                    'accuracy': score_data['breakdown']['historical_accuracy']['raw'],
+                    'total_trades': trades_count
+                })
+        
+        # Ordenar por score descendente
+        results.sort(key=lambda x: x['score'], reverse=True)
+        return results[:limit]
     
     @staticmethod
     def _calc_historical_accuracy(wallet_obj):
