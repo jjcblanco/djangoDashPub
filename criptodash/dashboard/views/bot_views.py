@@ -1000,6 +1000,8 @@ def get_whale_history(request, wallet_id):
             to_asset = tx.to_asset
             tx_type = tx.tx_type
 
+        mkt_ctx = tx.raw_data.get('market_context', {}) if isinstance(tx.raw_data, dict) else {}
+        
         data.append({
             'id': tx.id,
             'timestamp': tx.timestamp.strftime('%Y-%m-%d %H:%M'),
@@ -1009,6 +1011,7 @@ def get_whale_history(request, wallet_id):
             'amount_in': float(tx.amount_in) if tx.amount_in else 0,
             'amount_out': float(tx.amount_out) if tx.amount_out else 0,
             'tx_hash': tx.tx_hash,
+            'market_context': mkt_ctx,
             'explorer_url': f"https://solscan.io/tx/{tx.tx_hash}" if wallet.blockchain == 'solana' else (
                 f"https://etherscan.io/tx/{tx.tx_hash.split('_')[0]}" if wallet.blockchain == 'ethereum' else 
                 (f"https://basescan.org/tx/{tx.tx_hash.split('_')[0]}" if wallet.blockchain == 'base' else 
@@ -1034,9 +1037,14 @@ def export_whale_history(request, wallet_id):
     response['Content-Disposition'] = f'attachment; filename="whale_{wallet.address[:8]}_history.csv"'
     
     writer = csv.writer(response)
-    writer.writerow(['Timestamp', 'Type', 'From Asset', 'To Asset', 'Amount In', 'Amount Out', 'TX Hash'])
+    writer.writerow([
+        'Timestamp', 'Type', 'From Asset', 'To Asset', 'Amount In', 'Amount Out', 'TX Hash',
+        'RSI_14', 'MACD', 'MACD_Signal', 'Price_vs_SMA50', 'Price_vs_SMA200', 'BB_Position', 'Vol_Ratio', 'Uptrend'
+    ])
     
     for tx in transactions:
+        mkt_ctx = tx.raw_data.get('market_context', {}) if isinstance(tx.raw_data, dict) else {}
+        
         writer.writerow([
             tx.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
             tx.tx_type,
@@ -1044,7 +1052,15 @@ def export_whale_history(request, wallet_id):
             tx.to_asset,
             tx.amount_in,
             tx.amount_out,
-            tx.tx_hash
+            tx.tx_hash,
+            mkt_ctx.get('rsi_14', ''),
+            mkt_ctx.get('macd', ''),
+            mkt_ctx.get('macd_signal', ''),
+            mkt_ctx.get('price_vs_sma50', ''),
+            mkt_ctx.get('price_vs_sma200', ''),
+            mkt_ctx.get('bb_position', ''),
+            mkt_ctx.get('volume_ratio', ''),
+            mkt_ctx.get('in_uptrend', '')
         ])
     
     return response

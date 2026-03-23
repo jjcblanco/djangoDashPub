@@ -102,6 +102,19 @@ class EVMWhaleTracker:
                 ts_val = int(tx.get('timeStamp', time.time()))
                 timestamp = timezone.make_aware(datetime.fromtimestamp(ts_val))
                 
+                raw_with_context = dict(tx)
+                
+                # Capturar contexto de mercado (indicadores técnicos)
+                try:
+                    from dashboard.whale_intelligence import fetch_market_context
+                    token_symbol = tx.get('tokenSymbol')
+                    if token_symbol:
+                        mkt_ctx = fetch_market_context(token_symbol)
+                        if mkt_ctx:
+                            raw_with_context['market_context'] = mkt_ctx
+                except Exception as e:
+                    print(f"Error ctx EVM: {e}")
+                
                 WhaleTransaction.objects.create(
                     wallet=wallet_obj,
                     tx_hash=unique_hash,
@@ -110,7 +123,7 @@ class EVMWhaleTracker:
                     from_asset=tx.get('tokenSymbol'), # No lo sabemos aún con certeza, pero tokentx nos da el asset que se movió
                     to_asset=tx.get('tokenSymbol'),
                     amount_in=float(tx.get('value', 0)) / (10 ** int(tx.get('tokenDecimal', 18))),
-                    raw_data=tx
+                    raw_data=raw_with_context
                 )
                 new_txs += 1
             return new_txs
@@ -149,16 +162,29 @@ class HyperliquidWhaleTracker:
                 timestamp = timezone.make_aware(datetime.fromtimestamp(fill['time'] / 1000.0))
                 
                 # En HL, un fill es un trade (compra o venta)
+                raw_with_context = dict(fill)
+                
+                # Capturar contexto de mercado (indicadores técnicos)
+                try:
+                    from dashboard.whale_intelligence import fetch_market_context
+                    coin = fill.get('coin')
+                    if coin:
+                        mkt_ctx = fetch_market_context(coin)
+                        if mkt_ctx:
+                            raw_with_context['market_context'] = mkt_ctx
+                except Exception:
+                    pass  # No bloquear sync si falla el contexto
+                
                 WhaleTransaction.objects.create(
                     wallet=wallet_obj,
                     tx_hash=unique_hash,
                     timestamp=timestamp,
-                    tx_type="SWAP", # Interpretamos trade como SWAP para el PatternEngine
-                    from_asset="USDC", # HL suele ser colateralizado en USDC
+                    tx_type="SWAP",
+                    from_asset="USDC",
                     to_asset=fill.get('coin'),
                     amount_in=float(fill.get('sz', 0)) * float(fill.get('px', 0)),
                     amount_out=float(fill.get('sz', 0)),
-                    raw_data=fill
+                    raw_data=raw_with_context
                 )
                 new_txs += 1
             return new_txs
@@ -288,6 +314,27 @@ class PatternEngine:
                         if change > 0:
                             if wallet_obj.filter_mode == 'STRICT' and mint not in ESTABLISHED_TOKENS:
                                 continue
+                                
+                            # Identificar símbolo
+                            token_symbol = PatternEngine.get_token_symbol(mint)
+                            
+                            # Intentar capturar contexto de mercado si no lo tiene
+                            if 'market_context' not in raw:
+                                try:
+                                    if token_symbol and not token_symbol.endswith("..."):
+                                        from dashboard.whale_intelligence import fetch_market_context
+                                        mkt_ctx = fetch_market_context(token_symbol)
+                                        if mkt_ctx:
+                                            raw['market_context'] = mkt_ctx
+                                            tx.raw_data = raw
+                                            # Actualizar también los campos base si estaban vacíos
+                                            if tx.tx_type == "UNKNOWN":
+                                                tx.tx_type = "SWAP"
+                                                tx.to_asset = token_symbol
+                                            tx.save()
+                                except Exception as e:
+                                    print(f"Error ctx Solana: {e}")
+                                    
                             if mint not in token_stats:
                                 token_stats[mint] = {'buys': 0, 'volume': 0}
                             token_stats[mint]['buys'] += 1
