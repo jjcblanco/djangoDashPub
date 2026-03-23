@@ -609,6 +609,37 @@
                             } else {
                                 assetRow = `<span class="fw-bold">${tx.from_asset || tx.to_asset}</span>`;
                             }
+                            
+                            // Contexto de Mercado (Whale Intelligence)
+                            let ctxHtml = '';
+                            if (tx.market_context && Object.keys(tx.market_context).length > 0) {
+                                const ctx = tx.market_context;
+                                let badges = '';
+                                
+                                // RSI Badge
+                                if (ctx.rsi_14 !== null) {
+                                    let rsiColor = 'bg-secondary';
+                                    if (ctx.rsi_14 < 35) rsiColor = 'bg-success'; // Sobrevendido (buena compra)
+                                    else if (ctx.rsi_14 > 65) rsiColor = 'bg-danger'; // Sobrecomprado
+                                    badges += `<span class="badge ${rsiColor} me-1 mt-1" style="font-size:0.6rem;" title="RSI de 14 períodos">RSI: ${ctx.rsi_14}</span>`;
+                                }
+                                
+                                // MACD Badge
+                                if (ctx.macd_cross) {
+                                    let arrow = ctx.macd_cross === 'bullish' ? '↗' : '↘';
+                                    let macdColor = ctx.macd_cross === 'bullish' ? 'text-success' : 'text-danger';
+                                    badges += `<span class="badge bg-light border ${macdColor} me-1 mt-1" style="font-size:0.6rem;" title="Cruce MACD">MACD ${arrow}</span>`;
+                                }
+                                
+                                // Volume Spike Badge
+                                if (ctx.volume_ratio && ctx.volume_ratio > 1.8) {
+                                    badges += `<span class="badge bg-warning text-dark me-1 mt-1" style="font-size:0.6rem;" title="Volumen ${ctx.volume_ratio}x por encima del promedio"><i class="fas fa-fire"></i> Vol x${ctx.volume_ratio}</span>`;
+                                }
+                                
+                                if (badges) {
+                                    ctxHtml = `<div class="mt-1 d-flex flex-wrap">${badges}</div>`;
+                                }
+                            }
 
                             const amount = tx.amount_in || tx.amount_out;
                             const amountHtml = amount > 0 ? `<span class="fw-bold">${amount.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>` : '-';
@@ -617,7 +648,10 @@
                                 <tr>
                                     <td class="ps-3 text-muted" style="font-size: 0.7rem;">${tx.timestamp}</td>
                                     <td><span class="badge ${badgeClass}" style="font-size: 0.65rem;">${tx.type}</span></td>
-                                    <td>${assetRow}</td>
+                                    <td>
+                                        ${assetRow}
+                                        ${ctxHtml}
+                                    </td>
                                     <td>${amountHtml}</td>
                                     <td class="text-end pe-3">
                                         <a href="${tx.explorer_url}" target="_blank" class="text-primary"><i class="fas fa-external-link-alt fa-xs"></i></a>
