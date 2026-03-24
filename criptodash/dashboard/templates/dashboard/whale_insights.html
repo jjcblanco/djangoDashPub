@@ -775,10 +775,16 @@
                         `;
                         content.innerHTML = html;
                     } else {
-                        content.innerHTML = `<div class="text-muted"><i class="fas fa-info-circle me-1"></i> ${data.message}</div>`;
+                        let msg = data.message || 'Error desconocido';
+                        if (data.debug_info) {
+                            console.error('SERVER DEBUG:', data.debug_info);
+                            msg += `<br><small class="text-muted mt-2 d-block" style="font-size:0.5rem; max-height:100px; overflow:auto;">${data.debug_info}</small>`;
+                        }
+                        content.innerHTML = `<div class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i> ${msg}</div>`;
                     }
                 } catch (error) {
-                    content.innerHTML = '<div class="text-danger">Error al cargar el análisis.</div>';
+                    console.error('Fetch Error:', error);
+                    content.innerHTML = '<div class="text-danger">Error al cargar el análisis. Verifica la conexión.</div>';
                 }
             };
         });
