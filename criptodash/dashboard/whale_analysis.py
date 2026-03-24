@@ -25,7 +25,7 @@ class WhaleAnalysisEngine:
             tx = WhaleTransaction.objects.filter(
                 wallet=trade.wallet,
                 to_asset=trade.token_symbol,
-                timestamp__lte=trade.entry_at
+                timestamp__lte=trade.created_at
             ).order_by('-timestamp').first()
             
             if tx and tx.raw_data and 'market_context' in tx.raw_data:
