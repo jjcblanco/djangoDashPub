@@ -45,7 +45,8 @@ from .bot_views import (
     search_tokens_ajax,
     get_whale_history,
     export_whale_history,
-    trigger_deep_sync
+    trigger_deep_sync,
+    get_whale_insights
 )
 
 # Importar vistas de datos
@@ -109,6 +110,7 @@ __all__ = [
     'get_whale_history',
     'export_whale_history',
     'trigger_deep_sync',
+    'get_whale_insights',
 
     # Dash app
     'app',
