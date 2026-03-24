@@ -1103,10 +1103,10 @@ def get_whale_insights(request, wallet_id):
     # Obtener análisis de correlación
     analysis = WhaleAnalysisEngine.analyze_success_correlation(wallet_id=wallet.id)
     
-    if not analysis:
+    if not analysis or 'error' in analysis:
         return JsonResponse({
             'status': 'error', 
-            'message': 'Datos insuficientes para generar insights.'
+            'message': analysis.get('error', 'Datos insuficientes para generar insights.') if analysis else 'Datos insuficientes.'
         })
         
     return JsonResponse({
