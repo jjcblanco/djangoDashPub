@@ -437,7 +437,7 @@
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content border-0 shadow-lg">
                 <div class="modal-header bg-dark text-white border-bottom-0">
-                    <h5 class="modal-title h6"><i class="fas fa-history me-2"></i>Historial/Learning: <span
+                    <h5 class="modal-title h6"><i class="fas fa-history me-2"></i>Historial/Learning <span class="badge bg-primary" style="font-size: 0.5rem;">v2.0</span>: <span
                             id="historyWalletName"></span></h5>
                     <div class="ms-auto me-3">
                         <button class="btn btn-outline-info btn-xs" id="btnDeepSync" title="Deep Sync (Fetch 500+ txs)">
@@ -446,6 +446,10 @@
                         <button class="btn btn-outline-success btn-xs ms-2" id="btnDownloadCSV"
                             title="Descargar Historial CSV">
                             <i class="fas fa-download me-1"></i>CSV
+                        </button>
+                        <button class="btn btn-warning btn-xs ms-2 text-dark fw-bold" id="btnShowAnalysis"
+                            title="Ver Análisis de Éxito (Patrones)">
+                            <i class="fas fa-brain me-1"></i>Alpha Analysis
                         </button>
                     </div>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -467,6 +471,13 @@
                             </tbody>
                         </table>
                     </div>
+                    <div id="analysisSection" class="d-none m-3 p-3 rounded" style="background: #f8f9ff; border: 1px solid #e0e6ff;">
+                        <h6 class="small fw-bold text-primary mb-3"><i class="fas fa-chart-line me-2"></i>Matriz de Éxito por Par</h6>
+                        <div id="analysisContent" class="small">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+
                     <div id="historyLoading" class="text-center py-5 d-none">
                         <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
                         <p class="small text-muted mt-2">Cargando movimientos...</p>
@@ -590,7 +601,11 @@
                 // Configurar IDs en botones
                 document.getElementById('btnDownloadCSV').setAttribute('onclick', `downloadCSV('${walletId}')`);
                 document.getElementById('btnDeepSync').setAttribute('onclick', `deepSyncWallet('${walletId}')`);
+                document.getElementById('btnShowAnalysis').setAttribute('onclick', `loadWhaleAnalysis('${walletId}')`);
 
+                // Reset de sección de análisis
+                document.getElementById('analysisSection').classList.add('d-none');
+                
                 modal.show();
 
                 try {
@@ -720,6 +735,51 @@
                 navigator.clipboard.writeText(text).then(() => {
                     alert('Copiado al portapapeles: ' + text);
                 });
+            };
+            window.loadWhaleAnalysis = async function(walletId) {
+                const section = document.getElementById('analysisSection');
+                const content = document.getElementById('analysisContent');
+                
+                section.classList.remove('d-none');
+                content.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Analyzing...</div>';
+                
+                try {
+                    const response = await fetch(`/whale-insights/analysis/${walletId}/`);
+                    const data = await response.json();
+                    
+                    if (data.status === 'success') {
+                        const a = data.analysis;
+                        let html = `
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="fw-bold mb-2">Puntos Dulces (Win Rate p/RSI):</div>
+                                    <ul class="list-unstyled mb-0">
+                                        ${a.rsi_correlation.map(r => `
+                                            <li class="d-flex justify-content-between mb-1">
+                                                <span>${r.range}:</span>
+                                                <span class="badge ${r.win_rate > 50 ? 'bg-success' : 'bg-secondary'}">${r.win_rate}% WR</span>
+                                            </li>
+                                        `).join('')}
+                                    </ul>
+                                </div>
+                                <div class="col-md-6 border-start ps-3">
+                                    <div class="fw-bold mb-2">Recomendación Alpha:</div>
+                                    <div class="p-2 rounded bg-white shadow-sm border">
+                                        <i class="fas fa-magic text-warning me-2"></i><strong>${a.best_indicator}</strong>
+                                    </div>
+                                    <div class="mt-2 text-muted" style="font-size: 0.65rem;">
+                                        Basado en ${a.total_samples} trades analizados.
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        content.innerHTML = html;
+                    } else {
+                        content.innerHTML = `<div class="text-muted"><i class="fas fa-info-circle me-1"></i> ${data.message}</div>`;
+                    }
+                } catch (error) {
+                    content.innerHTML = '<div class="text-danger">Error al cargar el análisis.</div>';
+                }
             };
         });
     </script>
