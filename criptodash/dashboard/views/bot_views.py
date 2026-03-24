@@ -111,13 +111,21 @@ def follow_whale(request):
         name = request.POST.get('name')
         blockchain = request.POST.get('blockchain', 'solana')
         
+        # Normalizar dirección
+        if address:
+            address = address.strip()
+            # EVM chains are case-insensitive
+            if blockchain in ['ethereum', 'base']:
+                address = address.lower()
+        
         if not address:
             messages.error(request, "La dirección es obligatoria.")
             return redirect('whale_insights')
             
         # Evitar duplicados
         if WhaleWallet.objects.filter(address=address).exists():
-            messages.warning(request, f"La billetera {address} ya está siendo seguida.")
+            existing = WhaleWallet.objects.get(address=address)
+            messages.warning(request, f"La billetera {address} ya está siendo seguida como '{existing.name or 'Sin nombre'}'.")
             return redirect('whale_insights')
             
         WhaleWallet.objects.create(
