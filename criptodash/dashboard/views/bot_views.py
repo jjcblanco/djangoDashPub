@@ -1097,19 +1097,28 @@ def trigger_deep_sync(request, wallet_id):
 
 @login_required
 def get_whale_insights(request, wallet_id):
-    """Retorna insights avanzados de éxito para una ballena."""
-    wallet = get_object_or_404(WhaleWallet, id=wallet_id)
-    
-    # Obtener análisis de correlación
-    analysis = WhaleAnalysisEngine.analyze_success_correlation(wallet_id=wallet.id)
-    
-    if not analysis or 'error' in analysis:
-        return JsonResponse({
-            'status': 'error', 
-            'message': analysis.get('error', 'Datos insuficientes para generar insights.') if analysis else 'Datos insuficientes.'
-        })
+    """Retorna insights avanzados de éxito para una ballena con reporte de errores."""
+    import traceback
+    try:
+        wallet = get_object_or_404(WhaleWallet, id=wallet_id)
         
-    return JsonResponse({
-        'status': 'success',
-        'analysis': analysis
-    })
+        # Obtener análisis de correlación
+        analysis = WhaleAnalysisEngine.analyze_success_correlation(wallet_id=wallet.id)
+        
+        if not analysis or 'error' in analysis:
+            return JsonResponse({
+                'status': 'error', 
+                'message': analysis.get('error', 'Datos insuficientes para generar insights.') if analysis else 'Datos insuficientes.'
+            })
+            
+        return JsonResponse({
+            'status': 'success',
+            'analysis': analysis
+        })
+    except Exception as e:
+        error_msg = traceback.format_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': f"Internal error: {str(e)}",
+            'debug_info': error_msg
+        }, status=500)
