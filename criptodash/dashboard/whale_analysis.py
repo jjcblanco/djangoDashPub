@@ -15,19 +15,24 @@ class WhaleAnalysisEngine:
         Analiza qué indicadores tuvieron mejores resultados.
         Filtra por wallet_id o symbol si se proporcionan.
         """
-        # Obtenemos shadow trades cerrados que tengan contexto de mercado
-        trades = ShadowTrade.objects.filter(status='CLOSED').select_related('wallet')
+        # AHORA: Incluimos trades abiertos para dar feedback temprano
+        trades = ShadowTrade.objects.filter(wallet_id=wallet_id).select_related('wallet')
         
-        if wallet_id:
-            trades = trades.filter(wallet_id=wallet_id)
         if symbol:
             trades = trades.filter(token_symbol=symbol)
             
         data = []
+        missing_context_count = 0
+        
         for trade in trades:
+            # PNL: Si está cerrado usamos el real, si está abierto estimamos
+            if trade.status == 'CLOSED':
+                pnl = float(trade.pnl_percent or 0)
+            else:
+                # Estimación simple (esto se podría mejorar con fetch_current_price)
+                pnl = float(trade.pnl_percent or 0) # El tracker de PnL ya actualiza este campo periódicamente
+            
             # Buscamos la transacción original para ver el contexto
-            # En la Fase 2 real, vincularemos ShadowTrade con Transaction directamente.
-            # Por ahora, buscamos la transacción más cercana en el tiempo para ese token y wallet.
             tx = WhaleTransaction.objects.filter(
                 wallet=trade.wallet,
                 to_asset=trade.token_symbol,
@@ -38,16 +43,22 @@ class WhaleAnalysisEngine:
                 ctx = tx.raw_data['market_context']
                 data.append({
                     'symbol': trade.token_symbol,
-                    'pnl': float(trade.pnl_percent or 0),
+                    'pnl': pnl,
                     'rsi': ctx.get('rsi_14'),
                     'vol_ratio': ctx.get('volume_ratio'),
                     'macd_cross': ctx.get('macd_cross'),
                     'bb_pos': ctx.get('bb_position'),
                     'in_uptrend': ctx.get('in_uptrend')
                 })
+            else:
+                missing_context_count += 1
         
         if not data:
-            return None
+            if trades.count() == 0:
+                return {'error': 'Aún no tienes Shadow Trades registrados para esta ballena.'}
+            if missing_context_count > 0:
+                return {'error': f'Se encontraron {missing_context_count} trades, pero ninguno tiene "Market Context". Asegúrate de que las monedas estén en Binance.'}
+            return {'error': 'Datos insuficientes para generar el análisis.'}
             
         df = pd.DataFrame(data)
         
