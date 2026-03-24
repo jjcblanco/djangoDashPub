@@ -13,6 +13,7 @@ import json
 import requests
 from dashboard.services import get_top_scored_whales
 from dashboard.whale_scoring import WhaleScoringEngine
+from dashboard.whale_analysis import WhaleAnalysisEngine
 
 @login_required
 def whale_insights(request):
@@ -1093,3 +1094,22 @@ def trigger_deep_sync(request, wallet_id):
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+@login_required
+def get_whale_insights(request, wallet_id):
+    """Retorna insights avanzados de éxito para una ballena."""
+    wallet = get_object_or_404(WhaleWallet, id=wallet_id)
+    
+    # Obtener análisis de correlación
+    analysis = WhaleAnalysisEngine.analyze_success_correlation(wallet_id=wallet.id)
+    
+    if not analysis:
+        return JsonResponse({
+            'status': 'error', 
+            'message': 'Datos insuficientes para generar insights.'
+        })
+        
+    return JsonResponse({
+        'status': 'success',
+        'analysis': analysis
+    })

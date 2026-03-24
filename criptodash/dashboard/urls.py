@@ -43,6 +43,7 @@ urlpatterns = [
     path('whale-insights/history/<int:wallet_id>/', views.get_whale_history, name='get_whale_history'),
     path('whale-insights/export/<int:wallet_id>/', views.export_whale_history, name='export_whale_history'),
     path('whale-insights/deep-sync/<int:wallet_id>/', views.trigger_deep_sync, name='trigger_deep_sync'),
+    path('whale-insights/analysis/<int:wallet_id>/', views.get_whale_insights, name='get_whale_insights'),
     path('bots/<int:bot_id>/detail/', views.bot_detail, name='bot_detail'),
     path('bots/kill-switch/', views.trigger_kill_switch, name='trigger_kill_switch'),
     path('bots/risk-settings/', views.update_risk_settings, name='update_risk_settings'),
