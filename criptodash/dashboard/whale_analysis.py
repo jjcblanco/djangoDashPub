@@ -1,21 +1,14 @@
-"""
-Whale Analysis Engine - Fase 2 de Whale Intelligence.
-Calcula la correlación entre indicadores técnicos y el éxito de los trades.
-"""
-
 from django.db.models import Avg, Count, Q
 from .models import WhaleWallet, WhaleTransaction, ShadowTrade
-import pandas as pd
-import numpy as np
+import json
 
 class WhaleAnalysisEngine:
     @staticmethod
     def analyze_success_correlation(wallet_id=None, symbol=None):
         """
-        Analiza qué indicadores tuvieron mejores resultados.
-        Filtra por wallet_id o symbol si se proporcionan.
+        Analiza qué indicadores tuvieron mejores resultados sin depender de pandas.
         """
-        # AHORA: Incluimos trades abiertos para dar feedback temprano
+        # Incluimos trades para dar feedback temprano
         trades = ShadowTrade.objects.filter(wallet_id=wallet_id).select_related('wallet')
         
         if symbol:
@@ -25,12 +18,8 @@ class WhaleAnalysisEngine:
         missing_context_count = 0
         
         for trade in trades:
-            # PNL: Si está cerrado usamos el real, si está abierto estimamos
-            if trade.status == 'CLOSED':
-                pnl = float(trade.pnl_percent or 0)
-            else:
-                # Estimación simple (esto se podría mejorar con fetch_current_price)
-                pnl = float(trade.pnl_percent or 0) # El tracker de PnL ya actualiza este campo periódicamente
+            # PNL actual (el tracker de PnL mantiene esto actualizado)
+            pnl = float(trade.pnl_percent or 0)
             
             # Buscamos la transacción original para ver el contexto
             tx = WhaleTransaction.objects.filter(
@@ -57,50 +46,69 @@ class WhaleAnalysisEngine:
             if trades.count() == 0:
                 return {'error': 'Aún no tienes Shadow Trades registrados para esta ballena.'}
             if missing_context_count > 0:
-                return {'error': f'Se encontraron {missing_context_count} trades, pero ninguno tiene "Market Context". Asegúrate de que las monedas estén en Binance.'}
+                return {'error': f'Se encontraron {missing_context_count} trades, pero ninguno tiene historial de indicadores (Market Context).'}
             return {'error': 'Datos insuficientes para generar el análisis.'}
             
-        df = pd.DataFrame(data)
+        # --- Análisis Manual (Sin Pandas) ---
         
-        # Análisis por rangos de RSI
+        # 1. Definir Rangos de RSI
+        rsi_ranges = {
+            'Oversold (<30)': [],
+            'Low (30-45)': [],
+            'Mid (45-60)': [],
+            'High (60-75)': [],
+            'Overbought (>75)': []
+        }
+        
+        for d in data:
+            rsi = d['rsi']
+            if rsi is None: continue
+            
+            if rsi < 30: rsi_ranges['Oversold (<30)'].append(d['pnl'])
+            elif rsi < 45: rsi_ranges['Low (30-45)'].append(d['pnl'])
+            elif rsi < 60: rsi_ranges['Mid (45-60)'].append(d['pnl'])
+            elif rsi < 75: rsi_ranges['High (60-75)'].append(d['pnl'])
+            else: rsi_ranges['Overbought (>75)'].append(d['pnl'])
+            
         rsi_analysis = []
-        bins = [0, 30, 45, 60, 75, 100]
-        labels = ['Oversold (<30)', 'Low (30-45)', 'Mid (45-60)', 'High (60-75)', 'Overbought (>75)']
-        df['rsi_range'] = pd.cut(df['rsi'], bins=bins, labels=labels)
-        
-        for name, group in df.groupby('rsi_range', observed=True):
-            win_rate = (group['pnl'] > 0).mean() * 100
-            avg_pnl = group['pnl'].mean()
+        for label, pnls in rsi_ranges.items():
+            if not pnls: continue
+            win_rate = (sum(1 for p in pnls if p > 0) / len(pnls)) * 100
+            avg_pnl = sum(pnls) / len(pnls)
             rsi_analysis.append({
-                'range': name,
-                'count': len(group),
+                'range': label,
+                'count': len(pnls),
                 'win_rate': round(win_rate, 1),
                 'avg_pnl': round(avg_pnl, 2)
             })
             
-        # Análisis por tendencia
-        uptrend_analysis = df.groupby('in_uptrend', observed=True)['pnl'].agg(['count', 'mean']).to_dict('index')
+        # 2. Análisis de Tendencia
+        uptrend_pnls = [d['pnl'] for d in data if d.get('in_uptrend') is True]
+        stats_uptrend = {
+            'count': len(uptrend_pnls),
+            'mean': round(sum(uptrend_pnls)/len(uptrend_pnls), 2) if uptrend_pnls else 0
+        }
         
         return {
-            'total_samples': len(df),
+            'total_samples': len(data),
             'rsi_correlation': rsi_analysis,
-            'uptrend_stats': uptrend_analysis,
-            'best_indicator': WhaleAnalysisEngine._identify_best_pattern(df)
+            'uptrend_stats': {True: stats_uptrend},
+            'best_indicator': WhaleAnalysisEngine._identify_best_pattern(data)
         }
 
     @staticmethod
-    def _identify_best_pattern(df):
-        """Identifica el patrón con mayor Win Rate y N suficiente."""
+    def _identify_best_pattern(data):
+        """Identifica el patrón con mayor Win Rate (Pure Python)."""
         # Candidato 1: RSI bajo
-        oversold = df[df['rsi'] < 40]
+        oversold = [d['pnl'] for d in data if d['rsi'] is not None and d['rsi'] < 40]
         if len(oversold) >= 3:
-            wr = (oversold['pnl'] > 0).mean()
+            wr = sum(1 for p in oversold if p > 0) / len(oversold)
             if wr > 0.6: return f"RSI Bajo (<40) con {round(wr*100)}% Win Rate"
             
         # Candidato 2: Volumen alto
-        high_vol = df[df['vol_ratio'] > 2.0]
+        high_vol = [d['pnl'] for d in data if d['vol_ratio'] is not None and d['vol_ratio'] > 2.0]
         if len(high_vol) >= 3:
-            wr = (high_vol['pnl'] > 0).mean()
+            wr = sum(1 for p in high_vol if p > 0) / len(high_vol)
             if wr > 0.6: return f"Pico de Volumen (>2x) con {round(wr*100)}% Win Rate"
             
         return "Datos insuficientes para patrón estadístico"
