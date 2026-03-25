@@ -19,10 +19,14 @@ from dashboard.whale_analysis import WhaleAnalysisEngine
 def whale_insights(request):
     """Vista para seguimiento de ballenas y análisis de patrones."""
     from django.utils import timezone
+    from django.db.models import Count
     top_whales = get_top_scored_whales(limit=5, min_trades=3)
     try:
-        # Mostrar todas las billeteras (activas o no, para gestión)
-        wallets = WhaleWallet.objects.all()
+        # Mostrar todas las billeteras con sus totales de datos para dimensionar
+        wallets = WhaleWallet.objects.annotate(
+            tx_count=Count('transactions', distinct=True),
+            trade_count=Count('shadow_trades', distinct=True)
+        ).order_by('-created_at')
         
         # Sincronizar billeteras si se solicita
         if request.GET.get('sync') == '1':
