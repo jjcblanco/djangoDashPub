@@ -93,7 +93,9 @@
                                     </div>
                                     <div class="d-flex justify-content-between align-items-center">
                                         <small class="text-muted" style="font-size: 0.72rem;">
-                                            {{ wallet.blockchain|upper }} • {{ wallet.transactions.count }} txs •
+                                            {{ wallet.blockchain|upper }} • 
+                                            <span class="fw-bold">{{ wallet.tx_count }}</span> txs • 
+                                            <span class="fw-bold text-info">{{ wallet.trade_count }}</span> simul •
                                             <span
                                                 class="{% if wallet.filter_mode == 'STRICT' %}text-primary fw-bold{% endif %}">
                                                 {{ wallet.get_filter_mode_display }}

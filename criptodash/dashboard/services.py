@@ -4,7 +4,7 @@ import json
 import time
 from datetime import datetime
 from django.utils import timezone
-from .models import WhaleWallet, WhaleTransaction, PatternInsight
+from .models import WhaleWallet, WhaleTransaction, PatternInsight, ShadowTrade
 from .utils.notifications import send_telegram_message
 
 class SolanaWhaleTracker:
@@ -350,36 +350,98 @@ class PatternEngine:
                                 token_stats[mint] = {'buys': 0, 'volume': 0}
                             token_stats[mint]['buys'] += 1
                             token_stats[mint]['volume'] += change
+
+                            # --- AUTOMATIZACIÓN: Crear ShadowTrade ---
+                            PatternEngine._automated_shadow_trade(wallet_obj, token_symbol, tx)
+
                 elif wallet_obj.blockchain == 'hyperliquid':
                     # Lógica para Hyperliquid (Trades/Fills)
                     raw = tx.raw_data
                     coin = raw.get('coin')
                     if not coin: continue
                     
-                    # En HL, interpretamos la recepción del token como compra
-                    # fill['side'] == 'B' (Buy)
                     if raw.get('side') == 'B':
                         if coin not in token_stats:
                             token_stats[coin] = {'buys': 0, 'volume': 0, 'symbol': coin}
                         token_stats[coin]['buys'] += 1
                         token_stats[coin]['volume'] += float(raw.get('sz', 0))
+
+                        # --- AUTOMATIZACIÓN: Crear ShadowTrade ---
+                        PatternEngine._automated_shadow_trade(wallet_obj, coin, tx)
+
                 else:
                     # Lógica para EVM (Ethereum / Base)
-                    # El tracker EVM ya guarda from_asset/to_asset como el símbolo del token movido
                     raw = tx.raw_data
-                    mint = raw.get('contractAddress') # En EVM el "mint" es el contrato
+                    mint = raw.get('contractAddress')
                     if not mint: continue
                     
                     change = tx.amount_in or 0
                     if change > 0 and tx.tx_type == 'SWAP':
+                        symbol = raw.get('tokenSymbol')
                         if wallet_obj.filter_mode == 'STRICT' and mint not in ESTABLISHED_TOKENS:
                             continue
                         if mint not in token_stats:
-                            token_stats[mint] = {'buys': 0, 'volume': 0, 'symbol': raw.get('tokenSymbol')}
+                            token_stats[mint] = {'buys': 0, 'volume': 0, 'symbol': symbol}
                         token_stats[mint]['buys'] += 1
                         token_stats[mint]['volume'] += float(change)
+
+                        # --- AUTOMATIZACIÓN: Crear ShadowTrade ---
+                        PatternEngine._automated_shadow_trade(wallet_obj, symbol, tx)
             except:
                 continue
+                
+        # ... resto del método analyze_wallet ...
+        # (Añadir al final de la clase)
+
+    @staticmethod
+    def _automated_shadow_trade(wallet, symbol, tx):
+        """Crea una simulación automática si no existe una reciente para este par."""
+        from django.db.models import Q
+        from datetime import timedelta
+        
+        # 1. Ignorar Stablecoins conocidos
+        STABLES = ['USDC', 'USDT', 'DAI', 'PYUSD', 'UST']
+        if not symbol or symbol.upper() in STABLES: return
+        
+        # 2. Evitar duplicados (mismo token, misma wallet, misma hora aprox)
+        # Buscamos si ya se creó una simulacion para este token en la última hora por esta wallet
+        exists = ShadowTrade.objects.filter(
+            wallet=wallet,
+            token_symbol=symbol,
+            created_at__gte=tx.timestamp - timedelta(hours=1),
+            created_at__lte=tx.timestamp + timedelta(hours=1)
+        ).exists()
+        
+        if exists: return
+        
+        # 3. Determinar precio de entrada
+        entry_price = 0
+        try:
+            # Intentar sacar de raw_data (HL o DexScreener ctx)
+            if 'priceUsd' in tx.raw_data:
+                entry_price = float(tx.raw_data['priceUsd'])
+            elif 'px' in tx.raw_data: # Hyperliquid
+                entry_price = float(tx.raw_data['px'])
+            else:
+                # Fallback: Precio actual de mercado
+                price = fetch_current_price(symbol)
+                entry_price = float(price) if price else 0
+        except: pass
+        
+        if entry_price <= 0: return # No simular si no tenemos precio (evita ruidos)
+        
+        # 4. Crear la simulación (ShadowTrade)
+        ShadowTrade.objects.create(
+            wallet=wallet,
+            token_symbol=symbol,
+            entry_price=entry_price,
+            amount=1.0, # Cantidad unitaria para simulación estadística
+            status='OPEN',
+            # Forzamos la fecha para que coincida con la transaccion analizada
+            # NOTA: created_at es auto_now_add, así que ShadowTrade se guardará con la fecha del server
+            # pero podemos usar el timestamp de la transacción para el registro inicial si fuera editable.
+        )
+        print(f"DEBUG: ShadowTrade AUTO creado para {wallet.name or wallet.address[:8]} en {symbol}")
                 
         # Encontrar el token más "caliente" (más compras)
         hot_token = None
