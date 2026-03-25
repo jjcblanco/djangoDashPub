@@ -297,11 +297,11 @@ class PatternEngine:
             'So11111111111111111111111111111111111111112': 'SOL',
             'EPjFW3F2KVq2aLecqCP5i5nw53J2tOt9iies23XYwjLu': 'USDC',
             'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 'USDT',
-            # Ethereum / Base (Mints son las direcciones de contrato)
+            # Ethereum / Base
             '0xdAC17F958D2ee523a2206206994597C13D831ec7': 'USDT',
             '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48': 'USDC',
-            '0x4200000000000000000000000000000000000006': 'WETH', # Base
-            '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913': 'USDC', # Base
+            '0x4200000000000000000000000000000000000006': 'WETH',
+            '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913': 'USDC',
         }
 
         for tx in txs:
@@ -323,10 +323,13 @@ class PatternEngine:
                         pre_val = pre_balances.get(mint, 0)
                         change = post_val - pre_val
                         if change > 0:
-                            if wallet_obj.filter_mode == 'STRICT' and mint not in ESTABLISHED_TOKENS:
-                                continue
+                            # Filtrado STRICT Dinamico o Estático
+                            if wallet_obj.filter_mode == 'STRICT':
+                                if mint not in ESTABLISHED_TOKENS:
+                                    # Si no es establecido, verificar reputación dinámica
+                                    if not PatternEngine.is_token_reputable(None, mint, 'solana'):
+                                        continue
                                 
-                            # Identificar símbolo
                             token_symbol = PatternEngine.get_token_symbol(mint)
                             
                             # Intentar capturar contexto de mercado si no lo tiene
@@ -343,8 +346,7 @@ class PatternEngine:
                                                 tx.tx_type = "SWAP"
                                                 tx.to_asset = token_symbol
                                             tx.save()
-                                except Exception as e:
-                                    print(f"Error ctx Solana: {e}")
+                                except: pass
                                     
                             if mint not in token_stats:
                                 token_stats[mint] = {'buys': 0, 'volume': 0}
@@ -355,38 +357,32 @@ class PatternEngine:
                             PatternEngine._automated_shadow_trade(wallet_obj, token_symbol, tx)
 
                 elif wallet_obj.blockchain == 'hyperliquid':
-                    # Lógica para Hyperliquid (Trades/Fills)
                     raw = tx.raw_data
                     coin = raw.get('coin')
-                    if not coin: continue
-                    
-                    if raw.get('side') == 'B':
+                    if coin and raw.get('side') == 'B':
                         if coin not in token_stats:
                             token_stats[coin] = {'buys': 0, 'volume': 0, 'symbol': coin}
                         token_stats[coin]['buys'] += 1
                         token_stats[coin]['volume'] += float(raw.get('sz', 0))
-
-                        # --- AUTOMATIZACIÓN: Crear ShadowTrade ---
                         PatternEngine._automated_shadow_trade(wallet_obj, coin, tx)
 
-                else:
-                    # Lógica para EVM (Ethereum / Base)
+                else: # EVM
                     raw = tx.raw_data
                     mint = raw.get('contractAddress')
-                    if not mint: continue
-                    
-                    change = tx.amount_in or 0
-                    if change > 0 and tx.tx_type == 'SWAP':
-                        symbol = raw.get('tokenSymbol')
-                        if wallet_obj.filter_mode == 'STRICT' and mint not in ESTABLISHED_TOKENS:
-                            continue
-                        if mint not in token_stats:
-                            token_stats[mint] = {'buys': 0, 'volume': 0, 'symbol': symbol}
-                        token_stats[mint]['buys'] += 1
-                        token_stats[mint]['volume'] += float(change)
-
-                        # --- AUTOMATIZACIÓN: Crear ShadowTrade ---
-                        PatternEngine._automated_shadow_trade(wallet_obj, symbol, tx)
+                    if mint:
+                        change = tx.amount_in or 0
+                        if change > 0 and tx.tx_type == 'SWAP':
+                            symbol = raw.get('tokenSymbol')
+                            if wallet_obj.filter_mode == 'STRICT':
+                                if mint not in ESTABLISHED_TOKENS:
+                                    if not PatternEngine.is_token_reputable(symbol, mint, wallet_obj.blockchain):
+                                        continue
+                            
+                            if mint not in token_stats:
+                                token_stats[mint] = {'buys': 0, 'volume': 0, 'symbol': symbol}
+                            token_stats[mint]['buys'] += 1
+                            token_stats[mint]['volume'] += float(change)
+                            PatternEngine._automated_shadow_trade(wallet_obj, symbol, tx)
             except:
                 continue
                 
