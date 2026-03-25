@@ -126,10 +126,9 @@ def follow_whale(request):
             messages.error(request, "La dirección es obligatoria.")
             return redirect('whale_insights')
             
-        # Evitar duplicados
-        if WhaleWallet.objects.filter(address=address).exists():
-            existing = WhaleWallet.objects.get(address=address)
-            messages.warning(request, f"La billetera {address} ya está siendo seguida como '{existing.name or 'Sin nombre'}'.")
+        # Evitar duplicados (ahora permite la misma dirección en distintas redes)
+        if WhaleWallet.objects.filter(address=address, blockchain=blockchain).exists():
+            messages.warning(request, f"La billetera {address} ya está siendo seguida en la red {blockchain.upper()}.")
             return redirect('whale_insights')
             
         WhaleWallet.objects.create(

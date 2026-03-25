@@ -243,7 +243,7 @@ class WhaleWallet(models.Model):
         ('hyperliquid', 'Hyperliquid'),
     ]
 
-    address = models.CharField(max_length=255, unique=True)
+    address = models.CharField(max_length=255)
     name = models.CharField(max_length=100, blank=True, null=True)
     blockchain = models.CharField(max_length=50, choices=BLOCKCHAIN_CHOICES, default='solana')
     wallet_category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='OBSERVATION')
@@ -252,6 +252,9 @@ class WhaleWallet(models.Model):
     notes = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [['address', 'blockchain']]
 
     def __str__(self):
         return f"{self.name or self.address[:8]} ({self.blockchain})"
