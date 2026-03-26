@@ -28,37 +28,16 @@ def whale_insights(request):
             trade_count=Count('shadow_trades', distinct=True)
         ).order_by('-created_at')
         
-        # Sincronizar billeteras si se solicita
+        # Sincronizar billeteras si se solicita (Envío a Celery Background Task)
         if request.GET.get('sync') == '1':
+            from dashboard.tasks import sync_all_whales_task
             try:
-                with open('whale_debug.log', 'a') as f:
-                    f.write(f"\n[{timezone.now()}] Iniciando Sincronización vía Web...\n")
-            except: pass
+                # Encolar la tarea
+                sync_all_whales_task.delay()
+                messages.success(request, "Sincronización masiva iniciada en segundo plano. Los datos se actualizarán pronto sin colgar la web.")
+            except Exception as e:
+                messages.error(request, f"Error al encolar tarea de sincronización: {e}. ¿Está corriendo Redis/Celery?")
             
-            from dashboard.services import SolanaWhaleTracker, EVMWhaleTracker
-
-            for wallet in wallets:
-                try:
-                    # Despacho por Red
-                    if wallet.blockchain == 'solana':
-                        tracker = SolanaWhaleTracker()
-                        tracker.sync_wallet(wallet, max_new=2, signatures_limit=5)
-                    elif wallet.blockchain in ['ethereum', 'base']:
-                        tracker = EVMWhaleTracker(wallet.blockchain)
-                        tracker.sync_wallet(wallet, max_new=5)
-                    elif wallet.blockchain == 'hyperliquid':
-                        from dashboard.services import HyperliquidWhaleTracker
-                        tracker = HyperliquidWhaleTracker()
-                        tracker.sync_wallet(wallet, max_new=10)
-                    
-                    PatternEngine.analyze_wallet(wallet)
-                except Exception as e:
-                    try:
-                        with open('whale_debug.log', 'a') as f:
-                            f.write(f"Error sincronizando {wallet.address[:8]} ({wallet.blockchain}): {e}\n")
-                    except: pass
-            
-            messages.success(request, "Billeteras sincronizadas y analizadas correctamente.")
             return redirect('whale_insights')
 
         insights = PatternInsight.objects.all().order_by('-detected_at')[:20]
@@ -1081,27 +1060,16 @@ def export_whale_history(request, wallet_id):
 def trigger_deep_sync(request, wallet_id):
     """Ejecuta una sincronización profunda para una billetera (especialmente Hyperliquid)."""
     wallet = get_object_or_404(WhaleWallet, id=wallet_id)
-    
-    from dashboard.services import SolanaWhaleTracker, EVMWhaleTracker, HyperliquidWhaleTracker, PatternEngine
+    from dashboard.tasks import sync_wallet_task
     
     try:
-        new_txs = 0
-        if wallet.blockchain == 'solana':
-            tracker = SolanaWhaleTracker()
-            new_txs = tracker.sync_wallet(wallet, max_new=100, signatures_limit=200)
-        elif wallet.blockchain in ['ethereum', 'base']:
-            tracker = EVMWhaleTracker(wallet.blockchain)
-            new_txs = tracker.sync_wallet(wallet, max_new=100)
-        elif wallet.blockchain == 'hyperliquid':
-            tracker = HyperliquidWhaleTracker()
-            new_txs = tracker.sync_wallet(wallet, max_new=500)
-            
-        PatternEngine.analyze_wallet(wallet)
+        # Encolar la tarea en background
+        sync_wallet_task.delay(wallet.id, deep_sync=True)
         
         return JsonResponse({
             'status': 'success',
-            'new_transactions': new_txs,
-            'message': f"Sincronizados {new_txs} movimientos nuevos."
+            'new_transactions': 0,
+            'message': f"Sincronización profunda iniciada en segundo plano para {wallet.name or wallet.address[:8]}."
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
