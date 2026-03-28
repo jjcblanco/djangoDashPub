@@ -42,20 +42,35 @@ def whale_insights(request):
 
         insights = PatternInsight.objects.all().order_by('-detected_at')[:20]
         
-        # Calcular P&L para cada billetera
+        from django.core.cache import cache
+        
+        # Calcular P&L para cada billetera (CACHED 15 mins)
         for wallet in wallets:
-            wallet.pnl_stats = PatternEngine.get_wallet_pnl(wallet)
-            score_data = WhaleScoringEngine.calculate_score(wallet)
-            wallet.score_data = score_data
+            cache_key = f"wallet_score_{wallet.id}"
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                wallet.pnl_stats = cached_data.get('pnl')
+                wallet.score_data = cached_data.get('score')
+            else:
+                wallet.pnl_stats = PatternEngine.get_wallet_pnl(wallet)
+                wallet.score_data = WhaleScoringEngine.calculate_score(wallet)
+                cache.set(cache_key, {'pnl': wallet.pnl_stats, 'score': wallet.score_data}, 60 * 15)
             
         # Operaciones Shadow Activas
         from ..models import ShadowTrade
         from dashboard.services import fetch_current_price
         shadow_trades = ShadowTrade.objects.filter(status='OPEN').order_by('-created_at')
         
-        # Calcular PnL en tiempo real para cada shadow trade
+        # Calcular PnL en tiempo real para cada shadow trade (CACHED 5 mins para no bloquear fetch_current_price)
         for trade in shadow_trades:
-            current_price = fetch_current_price(trade.token_symbol)
+            price_cache_key = f"live_price_{trade.token_symbol}"
+            current_price = cache.get(price_cache_key)
+            
+            if not current_price:
+                current_price = fetch_current_price(trade.token_symbol)
+                if current_price:
+                    cache.set(price_cache_key, current_price, 60 * 5)
+            
             if current_price and trade.entry_price and float(trade.entry_price) > 0:
                 trade.current_price = current_price
                 trade.live_pnl = round(((current_price - float(trade.entry_price)) / float(trade.entry_price)) * 100, 2)
@@ -63,8 +78,11 @@ def whale_insights(request):
                 trade.current_price = None
                 trade.live_pnl = None
         
-        # Tokens Hot (Tendencias)
-        hot_tokens = PatternEngine.get_hot_tokens(hours=24)
+        # Tokens Hot (Tendencias) (CACHED 15 mins)
+        hot_tokens = cache.get("hot_tokens_24h")
+        if not hot_tokens:
+            hot_tokens = PatternEngine.get_hot_tokens(hours=24)
+            cache.set("hot_tokens_24h", hot_tokens, 60 * 15)
             
         context = {
             'wallets': wallets,
