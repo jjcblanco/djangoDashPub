@@ -20,8 +20,15 @@ def whale_insights(request):
     """Vista para seguimiento de ballenas y análisis de patrones."""
     from django.utils import timezone
     from django.db.models import Count
-    top_whales = get_top_scored_whales(limit=5, min_trades=3)
+    from django.core.cache import cache
+    
     try:
+        # Cachear la consulta pesada de top whales
+        top_whales = cache.get("top_scored_whales")
+        if not top_whales:
+            top_whales = get_top_scored_whales(limit=5, min_trades=3)
+            cache.set("top_scored_whales", top_whales, 60 * 15)  # 15 mins cache
+        
         # Mostrar todas las billeteras con sus totales de datos para dimensionar
         wallets = WhaleWallet.objects.annotate(
             tx_count=Count('transactions', distinct=True),
