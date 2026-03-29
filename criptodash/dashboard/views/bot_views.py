@@ -23,17 +23,14 @@ def whale_insights(request):
     from django.core.cache import cache
     
     try:
-        # Cachear la consulta pesada de top whales
-        top_whales = cache.get("top_scored_whales")
-        if not top_whales:
-            top_whales = get_top_scored_whales(limit=5, min_trades=3)
-            cache.set("top_scored_whales", top_whales, 60 * 15)  # 15 mins cache
+        # BYPASS TEMPORAL: No calcular el top global en vivo porque colapsa la RAM si hay muchas ballenas
+        top_whales = []
         
-        # Mostrar todas las billeteras con sus totales de datos para dimensionar
+        # BYPASS TEMPORAL: Mostrar solo las 10 billeteras más recientes para no saturar memoria en el For Loop
         wallets = WhaleWallet.objects.annotate(
             tx_count=Count('transactions', distinct=True),
             trade_count=Count('shadow_trades', distinct=True)
-        ).order_by('-created_at')
+        ).order_by('-created_at')[:10]
         
         # Sincronizar billeteras si se solicita (Envío a Celery Background Task)
         if request.GET.get('sync') == '1':
@@ -49,9 +46,7 @@ def whale_insights(request):
 
         insights = PatternInsight.objects.all().order_by('-detected_at')[:20]
         
-        from django.core.cache import cache
-        
-        # Calcular P&L para cada billetera (CACHED 15 mins)
+        # Calcular P&L para cada billetera 
         for wallet in wallets:
             cache_key = f"wallet_score_{wallet.id}"
             cached_data = cache.get(cache_key)
@@ -59,9 +54,9 @@ def whale_insights(request):
                 wallet.pnl_stats = cached_data.get('pnl')
                 wallet.score_data = cached_data.get('score')
             else:
-                wallet.pnl_stats = PatternEngine.get_wallet_pnl(wallet)
-                wallet.score_data = WhaleScoringEngine.calculate_score(wallet)
-                cache.set(cache_key, {'pnl': wallet.pnl_stats, 'score': wallet.score_data}, 60 * 15)
+                # BYPASS TEMPORAL: No calcular score pesado on-the-fly para no crashear
+                wallet.pnl_stats = {'total_pnl': 0, 'win_rate': 0, 'status': 'Cargando...'}
+                wallet.score_data = {'score': 0, 'tier': 'Calculando...', 'category': {'name': 'Pendiente', 'color': 'gray'}}
             
         # Operaciones Shadow Activas
         from ..models import ShadowTrade
