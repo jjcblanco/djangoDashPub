@@ -83,13 +83,8 @@
                                             <i class="fas fa-coins me-1"></i>{{ wallet.target_token }}
                                         </span>
                                         {% endif %}
-                                        {% if wallet.pnl_stats %}
-                                        <span
-                                            class="badge {% if wallet.pnl_stats.status == 'profit' %}bg-success{% elif wallet.pnl_stats.status == 'loss' %}bg-danger{% else %}bg-secondary{% endif %} ms-1"
-                                            style="font-size: 0.65rem;">
-                                            {% if wallet.pnl_stats.status == 'profit' %}+{% endif %}{{ wallet.pnl_stats.roi }}%
-                                        </span>
-                                        {% endif %}
+                                        <!-- PnL badge: inicialmente oculto, se carga por AJAX -->
+                                        <span data-wallet-pnl="{{ wallet.id }}" class="badge bg-secondary ms-1" style="font-size: 0.65rem; display:none;">...</span>
                                     </div>
                                     <div class="d-flex justify-content-between align-items-center">
                                         <small class="text-muted" style="font-size: 0.72rem;">
@@ -124,10 +119,12 @@
                                         {% endif %}
                                         {% if wallet.pnl_stats and wallet.pnl_stats.pnl_usdt != 0 %}
                                         <small
+                                            data-wallet-usd="{{ wallet.id }}"
                                             class="{% if wallet.pnl_stats.status == 'profit' %}text-success{% else %}text-danger{% endif %} fw-bold"
-                                            style="font-size: 0.75rem;">
-                                            ${{ wallet.pnl_stats.pnl_usdt|floatformat:0 }}
+                                            style="font-size: 0.75rem; display:none;">
                                         </small>
+                                        {% else %}
+                                        <small data-wallet-usd="{{ wallet.id }}" class="fw-bold" style="font-size: 0.75rem; display:none;"></small>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -251,29 +248,14 @@
                             </div>
                             <hr class="opacity-10">
                         </div>
-                        {% if hot_tokens %}
-                        <div class="mb-4">
+                        <!-- Hot Tokens: Se carga vía AJAX después del pageload -->
+                        <div id="hot-tokens-section" style="display:none;" class="mb-4">
                             <h6 class="text-muted small fw-bold mb-3"><i
                                     class="fas fa-fire text-danger me-1"></i>TRENDING
                                 NOW (HOT TOKENS)</h6>
-                            <div class="d-flex flex-wrap gap-2">
-                                {% for token in hot_tokens %}
-                                <div class="badge bg-soft-danger text-danger border border-danger-subtle p-2 d-flex align-items-center"
-                                    style="border-radius: 8px;">
-                                    <div class="me-2">
-                                        <i class="fas fa-chart-line"></i>
-                                    </div>
-                                    <div>
-                                        <div class="fw-bold" style="font-size: 0.8rem;">{{ token.symbol }}</div>
-                                        <div class="small opacity-75" style="font-size: 0.6rem;">{{ token.count }}
-                                            ballenas</div>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
+                            <div class="d-flex flex-wrap gap-2" id="hot-tokens-container"></div>
                             <hr class="opacity-10 mt-3">
                         </div>
-                        {% endif %}
 
                         {% if shadow_trades %}
                         <div class="mb-4">
@@ -292,22 +274,14 @@
                                                     </div>
                                                 </div>
                                                 <div class="text-end">
-                                                    {% if trade.live_pnl != None %}
-                                                    <div class="fw-bold {% if trade.live_pnl >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                                        {% if trade.live_pnl >= 0 %}+{% endif %}{{ trade.live_pnl }}%
-                                                    </div>
-                                                    {% else %}
-                                                    <div class="fw-bold text-muted">--</div>
-                                                    {% endif %}
+                                                    <div data-trade-pnl="{{ trade.id }}" class="fw-bold text-muted">--</div>
                                                     <div class="small opacity-50">{{ trade.created_at|timesince }}</div>
                                                 </div>
                                             </div>
                                             <div class="d-flex justify-content-between align-items-center mt-3">
                                                 <div>
                                                     <div class="small">In: ${{ trade.entry_price|floatformat:4 }}</div>
-                                                    {% if trade.current_price %}
-                                                    <div class="small opacity-75">Now: ${{ trade.current_price|floatformat:4 }}</div>
-                                                    {% endif %}
+                                                    <div class="small opacity-75" data-trade-price="{{ trade.id }}" style="display:none;"></div>
                                                 </div>
                                                 <form action="{% url 'close_shadow_trade' trade.id %}" method="POST">
                                                     {% csrf_token %}
@@ -824,6 +798,82 @@
                 }
             };
         });
+    </script>
+
+    <script>
+    // ============================================================
+    // CARGA ASÍNCRONA POST-PAGELOAD - Precios, Scores y Hot Tokens
+    // Separado del page load para evitar el timeout de mod_fcgid
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+
+        // 1. CARGAR PRECIOS EN VIVO de Shadow Trades
+        fetch("{% url 'whale_live_prices' %}")
+            .then(r => r.json())
+            .then(data => {
+                if (data.status !== 'ok') return;
+                data.trades.forEach(trade => {
+                    // Buscar el elemento del PnL por trade_id
+                    const pnlEl = document.querySelector(`[data-trade-pnl="${trade.trade_id}"]`);
+                    const priceEl = document.querySelector(`[data-trade-price="${trade.trade_id}"]`);
+                    if (pnlEl && trade.live_pnl !== null) {
+                        const sign = trade.live_pnl >= 0 ? '+' : '';
+                        pnlEl.textContent = `${sign}${trade.live_pnl}%`;
+                        pnlEl.className = `fw-bold ${trade.live_pnl >= 0 ? 'text-success' : 'text-danger'}`;
+                    }
+                    if (priceEl && trade.current_price) {
+                        priceEl.textContent = `Now: $${parseFloat(trade.current_price).toFixed(4)}`;
+                        priceEl.style.display = 'block';
+                    }
+                });
+            })
+            .catch(e => console.warn('Live prices AJAX error:', e));
+
+        // 2. CARGAR HOT TOKENS
+        fetch("{% url 'whale_hot_tokens_ajax' %}")
+            .then(r => r.json())
+            .then(data => {
+                if (data.status !== 'ok' || !data.hot_tokens.length) return;
+                const container = document.getElementById('hot-tokens-container');
+                if (!container) return;
+                container.innerHTML = data.hot_tokens.map(token => `
+                    <div class="badge bg-soft-danger text-danger border border-danger-subtle p-2 d-flex align-items-center" style="border-radius: 8px;">
+                        <div class="me-2"><i class="fas fa-chart-line"></i></div>
+                        <div>
+                            <div class="fw-bold" style="font-size: 0.8rem;">${token.symbol}</div>
+                            <div class="small opacity-75" style="font-size: 0.6rem;">${token.count} ballenas</div>
+                        </div>
+                    </div>
+                `).join('');
+                document.getElementById('hot-tokens-section').style.display = '';
+            })
+            .catch(e => console.warn('Hot tokens AJAX error:', e));
+
+        // 3. CARGAR SCORES de Ballenas (en background, no urgente)
+        fetch("{% url 'whale_scores_ajax' %}")
+            .then(r => r.json())
+            .then(data => {
+                if (data.status !== 'ok') return;
+                data.wallets.forEach(w => {
+                    if (!w.pnl) return;
+                    const pnlBadge = document.querySelector(`[data-wallet-pnl="${w.wallet_id}"]`);
+                    const pnlUsd = document.querySelector(`[data-wallet-usd="${w.wallet_id}"]`);
+                    if (pnlBadge && w.pnl.roi !== undefined) {
+                        const isProfit = w.pnl.status === 'profit';
+                        const sign = isProfit ? '+' : '';
+                        pnlBadge.textContent = `${sign}${w.pnl.roi}%`;
+                        pnlBadge.className = `badge ${isProfit ? 'bg-success' : (w.pnl.status === 'loss' ? 'bg-danger' : 'bg-secondary')} ms-1`;
+                        pnlBadge.style.fontSize = '0.65rem';
+                        pnlBadge.style.display = '';
+                    }
+                    if (pnlUsd && w.pnl.pnl_usdt) {
+                        pnlUsd.textContent = `$${Math.round(w.pnl.pnl_usdt)}`;
+                        pnlUsd.style.display = '';
+                    }
+                });
+            })
+            .catch(e => console.warn('Scores AJAX error:', e));
+    });
     </script>
 </body>
 
