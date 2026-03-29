@@ -112,3 +112,146 @@ class WhaleAnalysisEngine:
             if wr > 0.6: return f"Pico de Volumen (>2x) con {round(wr*100)}% Win Rate"
             
         return "Datos insuficientes para patrón estadístico"
+
+    @staticmethod
+    def suggest_bot_params(wallet_id, token_symbol=None):
+        """
+        Analiza el historial de una ballena y sugiere parámetros para crear un bot.
+        Devuelve parámetros para GRID y DayTrading basados en datos reales.
+        """
+        from .models import WhaleTransaction
+
+        txs = WhaleTransaction.objects.filter(
+            wallet_id=wallet_id,
+            tx_type='BUY'
+        ).order_by('-timestamp')
+
+        if token_symbol:
+            txs = txs.filter(to_asset__iexact=token_symbol)
+
+        if not txs.exists():
+            return {'error': 'No hay transacciones de compra registradas para esta ballena. Sincronizá primero.'}
+
+        # Extraer precios de entrada desde raw_data
+        entry_prices = []
+        rsi_values = []
+        holding_hours = []
+        tokens_freq = {}
+
+        for tx in txs[:50]:  # Limitar a 50 más recientes
+            rd = tx.raw_data or {}
+            # Precio de entrada
+            price = None
+            if 'priceUsd' in rd:
+                try:
+                    price = float(rd['priceUsd'])
+                except Exception:
+                    pass
+            elif 'px' in rd:
+                try:
+                    price = float(rd['px'])
+                except Exception:
+                    pass
+
+            if price and price > 0:
+                entry_prices.append(price)
+
+            # RSI del momento de la compra
+            ctx = rd.get('market_context', {})
+            if ctx.get('rsi_14'):
+                try:
+                    rsi_values.append(float(ctx['rsi_14']))
+                except Exception:
+                    pass
+
+            # Frecuencia de tokens
+            sym = tx.to_asset
+            if sym:
+                tokens_freq[sym] = tokens_freq.get(sym, 0) + 1
+
+        # Holding time desde Shadow Trades cerrados
+        closed_trades = ShadowTrade.objects.filter(
+            wallet_id=wallet_id, status='CLOSED'
+        )
+        if token_symbol:
+            closed_trades = closed_trades.filter(token_symbol__iexact=token_symbol)
+
+        for st in closed_trades:
+            if st.closed_at and st.created_at:
+                delta = (st.closed_at - st.created_at).total_seconds() / 3600
+                if 0 < delta < 720:  # Entre 0 y 30 días
+                    holding_hours.append(delta)
+
+        # ---- Calcular parámetros ----
+        # GRID
+        if entry_prices:
+            sorted_prices = sorted(entry_prices)
+            n = len(sorted_prices)
+            # Percentil 10 → lower, Percentil 90 → upper
+            lower = sorted_prices[max(0, int(n * 0.10))]
+            upper = sorted_prices[min(n - 1, int(n * 0.90))]
+            # Si el rango es muy pequeño (ej: stablecoin), ampliar 5%
+            if upper <= lower * 1.02:
+                lower *= 0.95
+                upper *= 1.05
+            avg_price = sum(entry_prices) / len(entry_prices)
+            # Stop loss sugerido: 8% por debajo del lower
+            stop_loss = round(lower * 0.92, 6)
+            grid_levels = min(10, max(5, n // 2))
+        else:
+            lower = upper = avg_price = stop_loss = 0
+            grid_levels = 5
+
+        # DayTrading timeframe
+        if holding_hours:
+            avg_hold = sum(holding_hours) / len(holding_hours)
+        else:
+            avg_hold = 24  # default 1 día
+
+        if avg_hold <= 4:
+            timeframe = '1h'
+            tf_label = '1h (operaciones rápidas)'
+        elif avg_hold <= 24:
+            timeframe = '4h'
+            tf_label = '4h (operaciones intradía)'
+        elif avg_hold <= 72:
+            timeframe = '1d'
+            tf_label = '1d (swing trading)'
+        else:
+            timeframe = '1d'
+            tf_label = '1d (posiciones largas)'
+
+        # RSI promedio de entrada
+        avg_rsi = round(sum(rsi_values) / len(rsi_values), 1) if rsi_values else 45.0
+
+        # Token más frecuente
+        top_token = max(tokens_freq, key=tokens_freq.get) if tokens_freq else (token_symbol or 'N/A')
+        top_token_count = tokens_freq.get(top_token, 0)
+
+        return {
+            'wallet_id': wallet_id,
+            'top_token': top_token,
+            'top_token_count': top_token_count,
+            'total_txs_analyzed': len(entry_prices),
+            'avg_entry_price': round(avg_price, 6) if entry_prices else 0,
+            'avg_hold_hours': round(avg_hold, 1),
+            'timeframe_label': tf_label,
+            'grid': {
+                'lower_price': round(lower, 6),
+                'upper_price': round(upper, 6),
+                'grid_levels': grid_levels,
+                'global_stop_loss': stop_loss,
+                'description': f"Basado en {len(entry_prices)} precios de entrada históricos"
+            },
+            'daytrading': {
+                'timeframe': timeframe,
+                'min_strength': 3,
+                'min_adx': 20,
+                'risk_per_trade_pct': 2.0,
+                'atr_mult_sl': 1.5,
+                'atr_mult_tp': 3.0,
+                'cooldown_bars': 3,
+                'rsi_context': avg_rsi,
+                'description': f"Timeframe sugerido: {tf_label}. RSI promedio de entrada de la ballena: {avg_rsi}"
+            }
+        }
