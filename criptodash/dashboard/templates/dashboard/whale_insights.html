@@ -1013,7 +1013,7 @@
         document.getElementById('btnSubmitBot').style.display = 'none';
 
         // Fetch Sugerencias
-        fetch(`/dashboard/whale-insights/suggest-bot/${walletId}/`)
+        fetch(`/whale-insights/suggest-bot/${walletId}/`)
             .then(r => r.json())
             .then(res => {
                 document.getElementById('modalLoading').style.display = 'none';
