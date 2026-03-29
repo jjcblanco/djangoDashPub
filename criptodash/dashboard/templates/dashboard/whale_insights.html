@@ -139,6 +139,7 @@
                                         <i class="fas fa-trash-alt fa-sm"></i>
                                     </button>
                                 </form>
+                                <span data-wallet-sync="{{ wallet.id }}" class="ms-2 small text-muted" style="font-size: 0.65rem;"></span>
                             </li>
                             {% endfor %}
                             {% empty %}
@@ -872,6 +873,21 @@
                     if (pnlUsd && w.pnl.pnl_usdt) {
                         pnlUsd.textContent = `$${Math.round(w.pnl.pnl_usdt)}`;
                         pnlUsd.style.display = '';
+                    }
+
+                    // Actualizar estado de sincronización
+                    const syncEl = document.querySelector(`[data-wallet-sync="${w.wallet_id}"]`);
+                    if (syncEl) {
+                        if (w.sync_status === 'SYNCING') {
+                            syncEl.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sincronizando...';
+                            syncEl.className = 'ms-2 small text-primary fw-bold';
+                        } else if (w.sync_status === 'ERROR') {
+                            syncEl.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i>Error';
+                            syncEl.className = 'ms-2 small text-danger';
+                        } else {
+                            syncEl.textContent = `Sinc: ${w.last_sync || 'Nunca'}`;
+                            syncEl.className = 'ms-2 small text-muted opacity-75';
+                        }
                     }
                 });
             })

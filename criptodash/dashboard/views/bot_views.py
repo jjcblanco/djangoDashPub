@@ -1177,10 +1177,13 @@ def whale_scores_ajax(request):
             cached = {'pnl': pnl, 'score': score}
             cache.set(cache_key, cached, 60 * 15)
         
+        wallet_obj = WhaleWallet.objects.get(id=w['id'])
         result.append({
             'wallet_id': w['id'],
             'pnl': cached.get('pnl'),
             'score': cached.get('score'),
+            'sync_status': wallet_obj.sync_status,
+            'last_sync': wallet_obj.last_sync.strftime("%d/%m %H:%M") if wallet_obj.last_sync else "Nunca"
         })
     
     return JsonResponse({'status': 'ok', 'wallets': result})
