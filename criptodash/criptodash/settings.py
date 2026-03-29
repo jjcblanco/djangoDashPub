@@ -253,4 +253,12 @@ CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localho
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
+CELERY_TIMEZONE = TIME_ZONE
+
+# Programación de tareas automáticas (Celery Beat)
+CELERY_BEAT_SCHEDULE = {
+    'sync-all-whales-every-15-min': {
+        'task': 'dashboard.tasks.sync_all_whales_task',
+        'schedule': 900.0,  # 15 minutos (900 segundos)
+    },
+}
