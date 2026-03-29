@@ -1,5 +1,6 @@
 from celery import shared_task
 import logging
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,10 @@ def sync_wallet_task(wallet_id, deep_sync=False):
         wallet = WhaleWallet.objects.get(id=wallet_id)
         if not wallet.is_active:
             return f"Wallet {wallet_id} is inactive."
+            
+        # Marcar como sincronizando
+        wallet.sync_status = 'SYNCING'
+        wallet.save()
             
         new_txs = 0
         limit = 500 if deep_sync else 100
@@ -34,9 +39,23 @@ def sync_wallet_task(wallet_id, deep_sync=False):
         # El análisis es costoso, por eso va en Celery
         PatternEngine.analyze_wallet(wallet)
         
+        # Marcar como finalizado con éxito
+        wallet.sync_status = 'IDLE'
+        wallet.last_sync = timezone.now()
+        wallet.save()
+        
         logger.info(f"Successfully synced {new_txs} txs for wallet {wallet_id} ({wallet.blockchain}).")
         return new_txs
     except Exception as e:
+        # Intentar marcar error si la wallet existe
+        try:
+            from dashboard.models import WhaleWallet
+            w = WhaleWallet.objects.get(id=wallet_id)
+            w.sync_status = 'ERROR'
+            w.save()
+        except:
+            pass
+            
         logger.error(f"Error syncing wallet {wallet_id}: {str(e)}")
         raise e
 
