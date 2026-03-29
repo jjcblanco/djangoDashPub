@@ -60,31 +60,16 @@ def whale_insights(request):
             
         # Operaciones Shadow Activas
         from ..models import ShadowTrade
-        from dashboard.services import fetch_current_price
         shadow_trades = ShadowTrade.objects.filter(status='OPEN').order_by('-created_at')
         
-        # Calcular PnL en tiempo real para cada shadow trade (CACHED 5 mins para no bloquear fetch_current_price)
+        # BYPASS: Los precios en vivo se cargan vía AJAX (evitar timeout mod_fcgid)
+        # fetch_current_price() baja por HTTP a CoinGecko y puede tardar >30s en producción
         for trade in shadow_trades:
-            price_cache_key = f"live_price_{trade.token_symbol}"
-            current_price = cache.get(price_cache_key)
-            
-            if not current_price:
-                current_price = fetch_current_price(trade.token_symbol)
-                if current_price:
-                    cache.set(price_cache_key, current_price, 60 * 5)
-            
-            if current_price and trade.entry_price and float(trade.entry_price) > 0:
-                trade.current_price = current_price
-                trade.live_pnl = round(((current_price - float(trade.entry_price)) / float(trade.entry_price)) * 100, 2)
-            else:
-                trade.current_price = None
-                trade.live_pnl = None
+            trade.current_price = None
+            trade.live_pnl = None
         
-        # Tokens Hot (Tendencias) (CACHED 15 mins)
-        hot_tokens = cache.get("hot_tokens_24h")
-        if not hot_tokens:
-            hot_tokens = PatternEngine.get_hot_tokens(hours=24)
-            cache.set("hot_tokens_24h", hot_tokens, 60 * 15)
+        # Tokens Hot: también removido del page-load síncrono (puede tardar por queries pesadas)
+        hot_tokens = []
             
         context = {
             'wallets': wallets,
