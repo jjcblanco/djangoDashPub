@@ -709,6 +709,13 @@
                 const originalHtml = btn.innerHTML;
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Syncing...';
+                
+                // Feedback inmediato en la lista principal
+                const syncEl = document.querySelector(`[data-wallet-sync="${walletId}"]`);
+                if (syncEl) {
+                    syncEl.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sincronizando...';
+                    syncEl.className = 'ms-2 small text-primary fw-bold';
+                }
 
                 try {
                     const response = await fetch(`/whale-insights/deep-sync/${walletId}/`);
