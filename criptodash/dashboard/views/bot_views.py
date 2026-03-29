@@ -101,7 +101,7 @@ def whale_insights(request):
                 f.write(f"\n--- {timezone.now()} ---\n{error_msg}\n")
         except:
             pass
-        return HttpResponse(f"<h3>Error 500 en Whale Insights</h3><pre>{error_msg}</pre>", status=500)
+        return HttpResponse(f"<h3>Error (Capturado) en Whale Insights</h3><pre>{error_msg}</pre>", status=200)
 
 @login_required
 @require_POST
