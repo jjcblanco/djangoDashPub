@@ -46,7 +46,10 @@ from .bot_views import (
     get_whale_history,
     export_whale_history,
     trigger_deep_sync,
-    get_whale_insights
+    get_whale_insights,
+    whale_live_prices,
+    whale_scores_ajax,
+    whale_hot_tokens_ajax,
 )
 
 # Importar vistas de datos

@@ -1106,3 +1106,95 @@ def get_whale_insights(request, wallet_id):
             'message': f"Internal error: {str(e)}",
             'debug_info': error_msg
         }, status=500)
+
+
+# ============================================================
+# AJAX ENDPOINTS - Carga asíncrona para no bloquear el servidor
+# ============================================================
+
+@login_required
+def whale_live_prices(request):
+    """Retorna precios en vivo de los Shadow Trades abiertos. Llamado vía AJAX post-pageload."""
+    from django.core.cache import cache
+    from ..models import ShadowTrade
+    from dashboard.services import fetch_current_price
+    
+    shadow_trades = ShadowTrade.objects.filter(status='OPEN').values('id', 'token_symbol', 'entry_price')
+    result = []
+    
+    for trade in shadow_trades:
+        symbol = trade['token_symbol']
+        cache_key = f"live_price_{symbol}"
+        current_price = cache.get(cache_key)
+        
+        if not current_price:
+            try:
+                current_price = fetch_current_price(symbol)
+                if current_price:
+                    cache.set(cache_key, current_price, 60 * 5)
+            except Exception:
+                current_price = None
+        
+        entry = float(trade['entry_price']) if trade['entry_price'] else 0
+        live_pnl = None
+        if current_price and entry > 0:
+            live_pnl = round(((current_price - entry) / entry) * 100, 2)
+        
+        result.append({
+            'trade_id': trade['id'],
+            'symbol': symbol,
+            'current_price': current_price,
+            'live_pnl': live_pnl,
+        })
+    
+    return JsonResponse({'status': 'ok', 'trades': result})
+
+
+@login_required
+def whale_scores_ajax(request):
+    """Retorna scores y PnL de todas las billeteras seguidas. Llamado vía AJAX post-pageload."""
+    from django.core.cache import cache
+    
+    wallets = WhaleWallet.objects.all().values('id', 'name', 'address')
+    result = []
+    
+    for w in wallets:
+        cache_key = f"wallet_score_{w['id']}"
+        cached = cache.get(cache_key)
+        
+        if not cached:
+            wallet_obj = WhaleWallet.objects.get(id=w['id'])
+            try:
+                pnl = PatternEngine.get_wallet_pnl(wallet_obj)
+            except Exception:
+                pnl = {'roi': 0, 'status': 'neutral', 'pnl_usdt': 0}
+            try:
+                score = WhaleScoringEngine.calculate_score(wallet_obj)
+            except Exception:
+                score = {'score': 0, 'category': {'name': 'Sin datos', 'color': 'gray'}}
+            cached = {'pnl': pnl, 'score': score}
+            cache.set(cache_key, cached, 60 * 15)
+        
+        result.append({
+            'wallet_id': w['id'],
+            'pnl': cached.get('pnl'),
+            'score': cached.get('score'),
+        })
+    
+    return JsonResponse({'status': 'ok', 'wallets': result})
+
+
+@login_required
+def whale_hot_tokens_ajax(request):
+    """Retorna los tokens calientes. Llamado vía AJAX post-pageload."""
+    from django.core.cache import cache
+    
+    hot_tokens = cache.get("hot_tokens_24h")
+    if not hot_tokens:
+        try:
+            hot_tokens = PatternEngine.get_hot_tokens(hours=24)
+            cache.set("hot_tokens_24h", hot_tokens, 60 * 15)
+        except Exception:
+            hot_tokens = []
+    
+    return JsonResponse({'status': 'ok', 'hot_tokens': hot_tokens})
