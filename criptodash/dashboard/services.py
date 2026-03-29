@@ -399,13 +399,12 @@ class PatternEngine:
         STABLES = ['USDC', 'USDT', 'DAI', 'PYUSD', 'UST']
         if not symbol or symbol.upper() in STABLES: return
         
-        # 2. Evitar duplicados (mismo token, misma wallet, misma hora aprox)
-        # Buscamos si ya se creó una simulacion para este token en la última hora por esta wallet
+        # 2. Evitar duplicados: verificar si ya hay un trade OPEN para este wallet+token
+        # NOTA: No comparar tiempos porque created_at (server time) y tx.timestamp (on-chain time) pueden desfasarse
         exists = ShadowTrade.objects.filter(
             wallet=wallet,
             token_symbol=symbol,
-            created_at__gte=tx.timestamp - timedelta(hours=1),
-            created_at__lte=tx.timestamp + timedelta(hours=1)
+            status='OPEN'
         ).exists()
         
         if exists: return
