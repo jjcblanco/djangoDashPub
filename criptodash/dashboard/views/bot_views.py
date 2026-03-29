@@ -21,6 +21,7 @@ def whale_insights(request):
     from django.utils import timezone
     from django.db.models import Count
     from django.core.cache import cache
+    from ..models import TradingPair
     
     try:
         # BYPASS TEMPORAL: No calcular el top global en vivo porque colapsa la RAM si hay muchas ballenas
@@ -78,6 +79,7 @@ def whale_insights(request):
             'hot_tokens': hot_tokens,
             'page_title': 'Whale Insights & Alpha',
             'top_scored_whales': top_whales,
+            'pairs': TradingPair.objects.all(),
         }
         return render(request, 'dashboard/whale_insights.html', context)
     except Exception as e:
@@ -1198,3 +1200,33 @@ def whale_hot_tokens_ajax(request):
             hot_tokens = []
     
     return JsonResponse({'status': 'ok', 'hot_tokens': hot_tokens})
+
+
+@login_required
+def suggest_bot_from_whale(request, wallet_id):
+    """
+    Analiza el historial de una ballena y sugiere parámetros para crear un bot.
+    Devuelve JSON con parámetros sugeridos para GRID y DayTrading.
+    """
+    from ..whale_analysis import WhaleAnalysisEngine
+    
+    token_symbol = request.GET.get('token', None)
+    
+    try:
+        wallet = WhaleWallet.objects.get(id=wallet_id)
+        result = WhaleAnalysisEngine.suggest_bot_params(wallet_id, token_symbol=token_symbol)
+        
+        if 'error' in result:
+            return JsonResponse({'status': 'error', 'message': result['error']})
+        
+        # Añadir nombre sugerido para el bot
+        name_token = result.get('top_token', token_symbol or 'TOKEN')
+        result['suggested_name'] = f"Whale Bot - {wallet.name or wallet.address[:8]} ({name_token})"
+        result['wallet_name'] = wallet.name or wallet.address[:12]
+        
+        return JsonResponse({'status': 'ok', 'data': result})
+    except WhaleWallet.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Billetera no encontrada'}, status=404)
+    except Exception as e:
+        import traceback
+        return JsonResponse({'status': 'error', 'message': str(e), 'trace': traceback.format_exc()}, status=500)

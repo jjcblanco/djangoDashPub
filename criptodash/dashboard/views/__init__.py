@@ -50,6 +50,7 @@ from .bot_views import (
     whale_live_prices,
     whale_scores_ajax,
     whale_hot_tokens_ajax,
+    suggest_bot_from_whale,
 )
 
 # Importar vistas de datos

@@ -100,6 +100,10 @@
                                             onclick="viewWhaleHistory('{{ wallet.id }}', '{{ wallet.name|default:wallet.address|truncatechars:12 }}')">
                                             <i class="fas fa-history fa-xs"></i>
                                         </button>
+                                        <button class="btn btn-link text-success p-0 me-2" title="Crear Bot desde esta Ballena"
+                                            onclick="openCreateBotModal('{{ wallet.id }}', '{{ wallet.name|default:wallet.address|truncatechars:12 }}')">
+                                            <i class="fas fa-robot fa-xs"></i>
+                                        </button>
                                         {% if wallet.blockchain == 'solana' %}
                                         <a href="https://solscan.io/account/{{ wallet.address }}" target="_blank"
                                             class="text-primary me-2" title="Ver en Solscan"><i
@@ -862,8 +866,7 @@
                         const isProfit = w.pnl.status === 'profit';
                         const sign = isProfit ? '+' : '';
                         pnlBadge.textContent = `${sign}${w.pnl.roi}%`;
-                        pnlBadge.className = `badge ${isProfit ? 'bg-success' : (w.pnl.status === 'loss' ? 'bg-danger' : 'bg-secondary')} ms-1`;
-                        pnlBadge.style.fontSize = '0.65rem';
+                                           pnlBadge.style.fontSize = '0.65rem';
                         pnlBadge.style.display = '';
                     }
                     if (pnlUsd && w.pnl.pnl_usdt) {
@@ -875,6 +878,188 @@
             .catch(e => console.warn('Scores AJAX error:', e));
     });
     </script>
-</body>
 
+    <!-- Modal: Crear Bot desde Ballena -->
+    <div class="modal fade" id="createBotModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+                <div class="modal-header bg-dark text-white border-0" style="border-radius: 15px 15px 0 0;">
+                    <h5 class="modal-title"><i class="fas fa-robot me-2"></i>Crear Bot desde Ballena</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form action="{% url 'create_bot' %}" method="POST">
+                    {% csrf_token %}
+                    <div class="modal-body p-4">
+                        <div id="modalLoading" class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <p class="mt-3 text-muted">Analizando historial de la ballena...</p>
+                        </div>
+                        <div id="modalContent" style="display: none;">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small">Nombre del Bot</label>
+                                    <input type="text" name="name" id="botName" class="form-control" placeholder="Nombre descriptivo" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small">Par de Trading (Binance)</label>
+                                    <select name="pair" id="botPair" class="form-select" required>
+                                        {% for p in pairs %}
+                                        <option value="{{ p.id }}">{{ p.symbol }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small">Estrategia</label>
+                                    <select name="strategy_type" id="strategyType" class="form-select" onchange="toggleStrategyFields()">
+                                        <option value="GRID">GRID (Rango lateral)</option>
+                                        <option value="DAYTRADING">Day Trading (Tendencia)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small">Capital Asignado (USDT)</label>
+                                    <input type="number" name="balance" class="form-control" value="100" min="10" step="1" required>
+                                </div>
+                            </div>
+
+                            <!-- Campos GRID -->
+                            <div id="gridFields" class="mt-4 p-3 bg-light rounded shadow-sm border">
+                                <h6 class="border-bottom pb-2 mb-3"><i class="fas fa-th me-2"></i>Parámetros GRID Sugeridos</h6>
+                                <div class="alert alert-info py-2" style="font-size: 0.8rem;">
+                                    <i class="fas fa-info-circle me-1"></i> <span id="gridDesc">Sugerido por análisis estadístico</span>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small">Precio Superior</label>
+                                        <input type="number" name="upper_price" id="upperPrice" step="any" class="form-control">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small">Precio Inferior</label>
+                                        <input type="number" name="lower_price" id="lowerPrice" step="any" class="form-control">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small">Niveles de Malla</label>
+                                        <input type="number" name="grid_levels" id="gridLevels" class="form-control">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small">Monto por Nivel</label>
+                                        <input type="number" name="amount_per_level" value="10" class="form-control">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Campos DAYTRADING -->
+                            <div id="daytradingFields" class="mt-4 p-3 bg-light rounded shadow-sm border" style="display: none;">
+                                <h6 class="border-bottom pb-2 mb-3"><i class="fas fa-bolt me-2"></i>Parámetros DAY TRADING Sugeridos</h6>
+                                <div class="alert alert-info py-2" style="font-size: 0.8rem;">
+                                    <i class="fas fa-info-circle me-1"></i> <span id="dtDesc">Sugerido por Holding Time</span>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small">Timeframe</label>
+                                        <select name="timeframe" id="botTimeframe" class="form-select">
+                                            <option value="1m">1m</option>
+                                            <option value="5m">5m</option>
+                                            <option value="15m">15m</option>
+                                            <option value="1h" selected>1h</option>
+                                            <option value="4h">4h</option>
+                                            <option value="1d">1d</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small">Riesgo por trade (%)</label>
+                                        <input type="number" name="risk_per_trade_pct" value="2.0" step="0.1" class="form-control">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 p-3 bg-secondary bg-opacity-10 rounded">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="is_live" id="isLive">
+                                    <label class="form-check-label fw-bold" for="isLive">Modo REAL (Binance)</label>
+                                    <small class="d-block text-muted">Si está desactivado, operará en modo Simulación (Paper).</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="modalError" class="alert alert-warning" style="display: none;"></div>
+                    </div>
+                    <div class="modal-footer border-0">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" id="btnSubmitBot" class="btn btn-primary px-4" style="display: none;">Crear Bot</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function toggleStrategyFields() {
+        const type = document.getElementById('strategyType').value;
+        const gf = document.getElementById('gridFields');
+        const dtf = document.getElementById('daytradingFields');
+        if(gf) gf.style.display = (type === 'GRID') ? 'block' : 'none';
+        if(dtf) dtf.style.display = (type === 'DAYTRADING') ? 'block' : 'none';
+    }
+
+    function openCreateBotModal(walletId, walletName) {
+        const modalEl = document.getElementById('createBotModal');
+        if(!modalEl) return;
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
+        // Reset UI
+        document.getElementById('modalLoading').style.display = 'block';
+        document.getElementById('modalContent').style.display = 'none';
+        document.getElementById('modalError').style.display = 'none';
+        document.getElementById('btnSubmitBot').style.display = 'none';
+
+        // Fetch Sugerencias
+        fetch(`/dashboard/whale-insights/suggest-bot/${walletId}/`)
+            .then(r => r.json())
+            .then(res => {
+                document.getElementById('modalLoading').style.display = 'none';
+                if (res.status === 'error') {
+                    document.getElementById('modalError').innerText = res.message;
+                    document.getElementById('modalError').style.display = 'block';
+                    return;
+                }
+
+                const data = res.data;
+                document.getElementById('modalContent').style.display = 'block';
+                document.getElementById('btnSubmitBot').style.display = 'block';
+
+                document.getElementById('botName').value = res.suggested_name || '';
+                
+                const pairSelect = document.getElementById('botPair');
+                if (pairSelect && data.top_token) {
+                    for (let i = 0; i < pairSelect.options.length; i++) {
+                        if (pairSelect.options[i].text.includes(data.top_token)) {
+                            pairSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+
+                if (data.grid) {
+                    document.getElementById('upperPrice').value = data.grid.upper_price || '';
+                    document.getElementById('lowerPrice').value = data.grid.lower_price || '';
+                    document.getElementById('gridLevels').value = data.grid.grid_levels || 5;
+                    document.getElementById('gridDesc').innerText = data.grid.description || '';
+                }
+
+                if (data.daytrading) {
+                    document.getElementById('botTimeframe').value = data.daytrading.timeframe || '1h';
+                    document.getElementById('dtDesc').innerText = data.daytrading.description || '';
+                }
+
+                toggleStrategyFields();
+            })
+            .catch(err => {
+                console.error('Bot suggestion error:', err);
+                document.getElementById('modalLoading').style.display = 'none';
+                document.getElementById('modalError').innerText = "Error al conectar con el motor de análisis.";
+                document.getElementById('modalError').style.display = 'block';
+            });
+    }
+    </script>
+</body>
 </html>
