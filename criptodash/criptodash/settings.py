@@ -261,4 +261,8 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'dashboard.tasks.sync_all_whales_task',
         'schedule': 900.0,  # 15 minutos (900 segundos)
     },
-}
+}
+
+# Ejecución síncrona en desarrollo (sin worker)
+CELERY_TASK_ALWAYS_EAGER = DEBUG
+CELERY_TASK_EAGER_PROPAGATES = DEBUG

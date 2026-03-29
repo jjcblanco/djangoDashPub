@@ -14,6 +14,7 @@ def sync_wallet_task(wallet_id, deep_sync=False):
     
     try:
         wallet = WhaleWallet.objects.get(id=wallet_id)
+        wallet.refresh_from_db()
         if not wallet.is_active:
             return f"Wallet {wallet_id} is inactive."
             
