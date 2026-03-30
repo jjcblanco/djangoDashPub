@@ -353,6 +353,8 @@ class PatternEngine:
                                 PatternEngine._automated_shadow_trade(wallet_obj, token_symbol, tx)
                             else:
                                 token_stats[mint]['sells'] += 1
+                                # Al vender, cerrar el shadow trade abierto para esta ballena+token
+                                PatternEngine._close_shadow_trade(wallet_obj, token_symbol, tx)
 
                     # Detectar cambios en SOL (Base)
                     try:
@@ -414,6 +416,71 @@ class PatternEngine:
 
         return f"Análisis completado para {wallet_obj.address[:8]}"
                 
+    @staticmethod
+    def _close_shadow_trade(wallet, symbol, tx):
+        """Busca un trade abierto para este token y lo cierra calculando PnL."""
+        trade = ShadowTrade.objects.filter(
+            wallet=wallet,
+            token_symbol=symbol,
+            status='OPEN'
+        ).order_by('-created_at').first()
+        
+        if not trade: return
+        
+        # Obtener precio de salida (exit)
+        exit_price = 0
+        try:
+            if 'priceUsd' in tx.raw_data:
+                exit_price = float(tx.raw_data['priceUsd'])
+            elif 'px' in tx.raw_data:
+                exit_price = float(tx.raw_data['px'])
+            else:
+                from .services import fetch_current_price
+                price = fetch_current_price(symbol)
+                exit_price = float(price) if price else trade.entry_price
+        except: exit_price = trade.entry_price
+        
+        trade.exit_price = exit_price
+        trade.status = 'CLOSED'
+        trade.closed_at = tx.timestamp
+        
+        if float(trade.entry_price) > 0:
+            trade.pnl_percent = round(((float(exit_price) - float(trade.entry_price)) / float(trade.entry_price)) * 100, 2)
+        
+        trade.save()
+        PatternEngine._update_whale_dna(wallet)
+
+    @staticmethod
+    def _update_whale_dna(wallet):
+        """Agrega estadísticas de trades cerrados al perfil DNA de la ballena."""
+        trades = ShadowTrade.objects.filter(wallet=wallet, status='CLOSED').order_by('-closed_at')[:20]
+        if not trades: return
+        
+        dna = wallet.trading_dna or {}
+        wins = [t for t in trades if t.pnl_percent > 0]
+        dna['win_rate'] = round((len(wins) / len(trades)) * 100, 1) if trades else 0
+        dna['avg_pnl'] = round(sum([t.pnl_percent for t in trades]) / len(trades), 2) if trades else 0
+        
+        hold_times = []
+        for t in trades:
+            if t.closed_at and t.created_at:
+                diff = (t.closed_at - t.created_at).total_seconds() / 3600
+                if diff > 0: hold_times.append(diff)
+        
+        if hold_times:
+            dna['avg_hold_hours'] = round(sum(hold_times) / len(hold_times), 1)
+        
+        if dna.get('avg_hold_hours', 0) < 1: dna['style'] = "Sniper"
+        elif dna.get('avg_hold_hours', 0) < 24: dna['style'] = "Day Trader"
+        else: dna['style'] = "Swing Trader"
+            
+        rsi_entries = [t.market_context['rsi_14'] for t in trades if t.market_context and 'rsi_14' in t.market_context and t.market_context['rsi_14']]
+        if rsi_entries:
+            dna['preferred_rsi'] = f"{round(min(rsi_entries))}-{round(max(rsi_entries))}"
+
+        wallet.trading_dna = dna
+        wallet.save()
+                
         # ... resto del método analyze_wallet ...
         # (Añadir al final de la clase)
 
@@ -453,16 +520,18 @@ class PatternEngine:
         
         if entry_price <= 0: return # No simular si no tenemos precio (evita ruidos)
         
-        # 4. Crear la simulación (ShadowTrade)
+        # 4. Capturar Contexto de Mercado (DNA)
+        from .whale_intelligence import fetch_market_context
+        context = fetch_market_context(symbol)
+
+        # 5. Crear la simulación (ShadowTrade)
         ShadowTrade.objects.create(
             wallet=wallet,
             token_symbol=symbol,
             entry_price=entry_price,
             amount=1.0, # Cantidad unitaria para simulación estadística
             status='OPEN',
-            # Forzamos la fecha para que coincida con la transaccion analizada
-            # NOTA: created_at es auto_now_add, así que ShadowTrade se guardará con la fecha del server
-            # pero podemos usar el timestamp de la transacción para el registro inicial si fuera editable.
+            market_context=context # Snapshot para aprender
         )
         print(f"DEBUG: ShadowTrade AUTO creado para {wallet.name or wallet.address[:8]} en {symbol}")
                 

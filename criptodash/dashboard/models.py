@@ -254,6 +254,7 @@ class WhaleWallet(models.Model):
     sync_status = models.CharField(max_length=20, default='IDLE', help_text="Estado de la sincronización en background")
     last_sync = models.DateTimeField(null=True, blank=True)
     top_tokens = models.JSONField(default=dict, blank=True)  # {'SOL': 10, 'BONK': 5}
+    trading_dna = models.JSONField(default=dict, blank=True)  # {'avg_holding': 4.5, 'rsi_pref': [30,45]}
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -301,6 +302,7 @@ class ShadowTrade(models.Model):
     amount = models.DecimalField(max_digits=30, decimal_places=10, help_text="Cantidad simulada en el token")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OPEN')
     pnl_percent = models.FloatField(default=0.0)
+    market_context = models.JSONField(null=True, blank=True) # RSI, MACD at entry
     created_at = models.DateTimeField(auto_now_add=True)
     closed_at = models.DateTimeField(null=True, blank=True)
 

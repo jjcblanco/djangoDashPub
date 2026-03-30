@@ -1185,6 +1185,7 @@ def whale_scores_ajax(request):
             'sync_status': wallet_obj.sync_status,
             'last_sync': wallet_obj.last_sync.strftime("%d/%m %H:%M") if wallet_obj.last_sync else "Nunca",
             'top_tokens': wallet_obj.top_tokens or {},
+            'dna': wallet_obj.trading_dna or {},
         })
     
     return JsonResponse({'status': 'ok', 'wallets': result})
