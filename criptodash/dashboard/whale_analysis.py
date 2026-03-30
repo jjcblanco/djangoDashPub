@@ -122,15 +122,18 @@ class WhaleAnalysisEngine:
         from .models import WhaleTransaction
 
         txs = WhaleTransaction.objects.filter(
-            wallet_id=wallet_id,
-            tx_type='BUY'
+            wallet_id=wallet_id
+        ).filter(
+            Q(tx_type='BUY') | Q(tx_type='SWAP') | Q(tx_type='UNKNOWN')
         ).order_by('-timestamp')
 
         if token_symbol:
             txs = txs.filter(to_asset__iexact=token_symbol)
 
+        # Si aún no hay transacciones o el filtro por token las vació, 
+        # intentar buscar BUYS genéricas si no se especificó un token
         if not txs.exists():
-            return {'error': 'No hay transacciones de compra registradas para esta ballena. Sincronizá primero.'}
+            return {'error': 'No hay transacciones de compra o intercambio registradas para esta ballena. Asegúrate de haber realizado un Deep Sync para procesar el historial.'}
 
         # Extraer precios de entrada desde raw_data
         entry_prices = []

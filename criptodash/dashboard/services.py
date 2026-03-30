@@ -308,9 +308,7 @@ class PatternEngine:
             try:
                 if wallet_obj.blockchain == 'solana':
                     raw = tx.raw_data
-                    if not raw or 'meta' not in raw: continue
-                    
-                    # Lógica original de Solana basada en balances
+                    if not raw or 'meta' not in raw: c                    # Mapeo de balances para el dueño de la billetera
                     pre_balances = {b['mint']: b['uiTokenAmount']['uiAmount'] or 0 
                                    for b in raw['meta'].get('preTokenBalances', []) 
                                    if b.get('owner') == wallet_obj.address}
@@ -319,42 +317,54 @@ class PatternEngine:
                                     for b in raw['meta'].get('postTokenBalances', []) 
                                     if b.get('owner') == wallet_obj.address}
                     
-                    for mint, post_val in post_balances.items():
+                    # Detectar cambios en tokens (BUY / SELL)
+                    all_mints = set(pre_balances.keys()) | set(post_balances.keys())
+                    for mint in all_mints:
                         pre_val = pre_balances.get(mint, 0)
+                        post_val = post_balances.get(mint, 0)
                         change = post_val - pre_val
-                        if change > 0:
+                        
+                        if abs(change) > 0:
                             # Filtrado STRICT Dinamico o Estático
                             if wallet_obj.filter_mode == 'STRICT':
                                 if mint not in ESTABLISHED_TOKENS:
-                                    # Si no es establecido, verificar reputación dinámica
                                     if not PatternEngine.is_token_reputable(None, mint, 'solana'):
                                         continue
                                 
                             token_symbol = PatternEngine.get_token_symbol(mint)
                             
-                            # Intentar capturar contexto de mercado si no lo tiene
-                            if 'market_context' not in raw:
-                                try:
-                                    if token_symbol and not token_symbol.endswith("..."):
-                                        from dashboard.whale_intelligence import fetch_market_context
-                                        mkt_ctx = fetch_market_context(token_symbol)
-                                        if mkt_ctx:
-                                            raw['market_context'] = mkt_ctx
-                                            tx.raw_data = raw
-                                            # Actualizar también los campos base si estaban vacíos
-                                            if tx.tx_type == "UNKNOWN":
-                                                tx.tx_type = "SWAP"
-                                                tx.to_asset = token_symbol
-                                            tx.save()
-                                except: pass
-                                    
+                            # Actualizar TRX
+                            if tx.tx_type == "UNKNOWN":
+                                tx.tx_type = "BUY" if change > 0 else "SELL"
+                                if change > 0:
+                                    tx.to_asset = token_symbol
+                                    tx.amount_out = change
+                                else:
+                                    tx.from_asset = token_symbol
+                                    tx.amount_in = abs(change)
+                                tx.save()
+                                        
                             if mint not in token_stats:
-                                token_stats[mint] = {'buys': 0, 'volume': 0}
-                            token_stats[mint]['buys'] += 1
-                            token_stats[mint]['volume'] += change
+                                token_stats[mint] = {'buys': 0, 'sells': 0, 'volume': 0}
+                            
+                            if change > 0:
+                                token_stats[mint]['buys'] += 1
+                                token_stats[mint]['volume'] += change
+                                PatternEngine._automated_shadow_trade(wallet_obj, token_symbol, tx)
+                            else:
+                                token_stats[mint]['sells'] += 1
 
-                            # --- AUTOMATIZACIÓN: Crear ShadowTrade ---
-                            PatternEngine._automated_shadow_trade(wallet_obj, token_symbol, tx)
+                    # Detectar cambios en SOL (Base)
+                    try:
+                        # Index 0 suele ser el fee payer (ballena)
+                        pre_sol = raw['meta'].get('preBalances', [0])[0] / 1e9
+                        post_sol = raw['meta'].get('postBalances', [0])[0] / 1e9
+                        sol_change = post_sol - pre_sol
+                        if abs(sol_change) > 0.001: # Ignorar solo el fee pequeño
+                            if tx.tx_type == "UNKNOWN":
+                                tx.tx_type = "SWAP" # Si solo se movio SOL
+                                tx.save()
+                    except: pass
 
                 elif wallet_obj.blockchain == 'hyperliquid':
                     raw = tx.raw_data
