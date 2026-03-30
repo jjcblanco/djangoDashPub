@@ -395,6 +395,24 @@ class PatternEngine:
                             PatternEngine._automated_shadow_trade(wallet_obj, symbol, tx)
             except:
                 continue
+
+        # --- Guardar Top Tokens ---
+        if token_stats:
+            # Ordenar por número de compras descendente
+            sorted_tokens = sorted(
+                token_stats.items(), 
+                key=lambda x: x[1].get('buys', 0), 
+                reverse=True
+            )
+            top_3 = {}
+            for mint, stats in sorted_tokens[:3]:
+                symbol = PatternEngine.get_token_symbol(mint) if wallet_obj.blockchain == 'solana' else stats.get('symbol', '???')
+                top_3[symbol] = stats.get('buys', 0)
+            
+            wallet_obj.top_tokens = top_3
+            wallet_obj.save()
+
+        return f"Análisis completado para {wallet_obj.address[:8]}"
                 
         # ... resto del método analyze_wallet ...
         # (Añadir al final de la clase)

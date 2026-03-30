@@ -77,8 +77,15 @@
                                 <div class="flex-grow-1">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span class="fw-bold text-dark">{{ wallet.name|default:wallet.address|truncatechars:12 }}</span>
+                                        <div class="d-flex flex-wrap gap-1 ms-2" data-wallet-tokens="{{ wallet.id }}">
+                                            {% if wallet.top_tokens %}
+                                                {% for token, count in wallet.top_tokens.items %}
+                                                    <span class="badge bg-secondary opacity-50 small" style="font-size: 0.6rem;">{{ token }}</span>
+                                                {% endfor %}
+                                            {% endif %}
+                                        </div>
                                         {% if wallet.target_token %}
-                                        <span class="badge bg-soft-info text-info border border-info-subtle small"
+                                        <span class="badge bg-soft-info text-info border border-info-subtle small ms-auto"
                                             style="font-size: 0.65rem;">
                                             <i class="fas fa-coins me-1"></i>{{ wallet.target_token }}
                                         </span>
@@ -895,6 +902,16 @@
                             syncEl.textContent = `Sinc: ${w.last_sync || 'Nunca'}`;
                             syncEl.className = 'ms-2 small text-muted opacity-75';
                         }
+                    }
+
+                    // Actualizar Badges de Tokens
+                    const tokensEl = document.querySelector(`[data-wallet-tokens="${w.wallet_id}"]`);
+                    if (tokensEl && w.top_tokens) {
+                        let badgesHtml = '';
+                        Object.keys(w.top_tokens).forEach(symbol => {
+                            badgesHtml += `<span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 me-1" style="font-size: 0.65rem;">${symbol}</span>`;
+                        });
+                        if (badgesHtml) tokensEl.innerHTML = badgesHtml;
                     }
                 });
             })

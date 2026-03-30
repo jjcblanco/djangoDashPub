@@ -253,6 +253,7 @@ class WhaleWallet(models.Model):
     is_active = models.BooleanField(default=True)
     sync_status = models.CharField(max_length=20, default='IDLE', help_text="Estado de la sincronización en background")
     last_sync = models.DateTimeField(null=True, blank=True)
+    top_tokens = models.JSONField(default=dict, blank=True)  # {'SOL': 10, 'BONK': 5}
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
