@@ -38,6 +38,19 @@
             font-size: 0.8rem;
             padding: 0.4em 0.8em;
         }
+
+        .dna-badge {
+            cursor: pointer;
+            transition: 0.3s;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+        }
+
+        .dna-badge:hover {
+            transform: scale(1.1);
+            filter: brightness(1.2);
+        }
     </style>
 </head>
 
@@ -84,6 +97,13 @@
                                                 {% endfor %}
                                             {% endif %}
                                         </div>
+                                        <span data-wallet-dna-icon="{{ wallet.id }}" 
+                                              class="badge dna-badge ms-auto" 
+                                              style="font-size: 0.65rem; display: {% if wallet.trading_dna %}inline-block{% else %}none{% endif %};"
+                                              onclick="showWhaleDNA('{{ wallet.id }}')"
+                                              title="Ver Estrategia Deducida (DNA)">
+                                            <i class="fas fa-brain me-1"></i>DNA
+                                        </span>
                                         {% if wallet.target_token %}
                                         <span class="badge bg-soft-info text-info border border-info-subtle small ms-auto"
                                             style="font-size: 0.65rem;">
@@ -913,6 +933,14 @@
                         });
                         if (badgesHtml) tokensEl.innerHTML = badgesHtml;
                     }
+
+                    // Actualizar Icono DNA
+                    const dnaIcon = document.querySelector(`[data-wallet-dna-icon="${w.wallet_id}"]`);
+                    if (dnaIcon && w.dna && Object.keys(w.dna).length > 0) {
+                        dnaIcon.style.display = 'inline-block';
+                        // Guardar datos en el elemento para el modal
+                        dnaIcon.dataset.dna = JSON.stringify(w.dna);
+                    }
                 });
             })
             .catch(e => console.warn('Scores AJAX error:', e));
@@ -1101,5 +1129,72 @@
             });
     }
     </script>
+    <script>
+    function showWhaleDNA(walletId) {
+        const el = document.querySelector(`[data-wallet-dna-icon="${walletId}"]`);
+        if (!el || !el.dataset.dna) return;
+        
+        const dna = JSON.parse(el.dataset.dna);
+        const modal = new bootstrap.Modal(document.getElementById('whaleDNAModal'));
+        
+        document.getElementById('dnaWinRate').textContent = `${dna.win_rate || 0}%`;
+        document.getElementById('dnaAvgPnL').textContent = `${dna.avg_pnl || 0}%`;
+        document.getElementById('dnaStyle').textContent = dna.style || 'Desconocido';
+        document.getElementById('dnaHoldTime').textContent = `${dna.avg_hold_hours || 0} h`;
+        document.getElementById('dnaRSI').textContent = dna.preferred_rsi || 'Cualquiera';
+        
+        modal.show();
+    }
+    </script>
+
+    <!-- Modal: Whale DNA -->
+    <div class="modal fade" id="whaleDNAModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 20px; background: #fbfbfb;">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold text-dark"><i class="fas fa-dna me-2 text-primary"></i>Whale DNA Profile</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4 text-center">
+                    <div class="mb-4">
+                        <i class="fas fa-brain fa-3x text-primary opacity-25"></i>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="p-3 bg-white rounded shadow-sm border">
+                                <small class="text-muted d-block mb-1">WIN RATE ESTIMADO</small>
+                                <h4 class="fw-bold text-success mb-0" id="dnaWinRate">--%</h4>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 bg-white rounded shadow-sm border">
+                                <small class="text-muted d-block mb-1">PnL PROMEDIO</small>
+                                <h4 class="fw-bold text-primary mb-0" id="dnaAvgPnL">--%</h4>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="p-3 bg-white rounded shadow-sm border text-start">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="small fw-bold text-muted"><i class="fas fa-bolt me-2 text-warning"></i>ESTILO</span>
+                                    <span class="badge bg-dark" id="dnaStyle">--</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="small fw-bold text-muted"><i class="fas fa-clock me-2 text-info"></i>HOLDING TIME</span>
+                                    <span class="fw-bold" id="dnaHoldTime">--</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="small fw-bold text-muted"><i class="fas fa-chart-area me-2 text-danger"></i>RSI FAVORITO</span>
+                                    <span class="fw-bold text-danger" id="dnaRSI">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 alert alert-light border small text-muted">
+                        <i class="fas fa-info-circle me-1"></i> Estos patrones se deducen analizando los últimos 20 trades de la ballena. Úsalos para configurar tus bots.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
