@@ -733,7 +733,7 @@ def bot_detail(request, bot_id):
     from collections import defaultdict
 
     bot = get_object_or_404(LiveBot, id=bot_id)
-    all_trades = list(LiveTrade.objects.filter(bot=bot).order_or_404("entry_time"))
+    all_trades = list(LiveTrade.objects.filter(bot=bot).order_by("entry_time"))
     closed_trades = [t for t in all_trades if t.status in ("CLOSED", "CLOSED_EMERGENCY") and t.pnl is not None]
     open_trades = [t for t in all_trades if t.status == "OPEN"]
 
