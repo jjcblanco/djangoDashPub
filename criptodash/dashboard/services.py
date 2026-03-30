@@ -2,10 +2,13 @@ import requests
 import os
 import json
 import time
+import logging
 from datetime import datetime
 from django.utils import timezone
 from .models import WhaleWallet, WhaleTransaction, PatternInsight, ShadowTrade
 from .utils.notifications import send_telegram_message
+
+logger = logging.getLogger(__name__)
 
 class SolanaWhaleTracker:
     def __init__(self, rpc_url=None):
@@ -114,7 +117,7 @@ class EVMWhaleTracker:
                         if mkt_ctx:
                             raw_with_context['market_context'] = mkt_ctx
                 except Exception as e:
-                    print(f"Error ctx EVM: {e}")
+                    logger.warning(f"[EVM] No se pudo capturar contexto de mercado para {tx.get('tokenSymbol')}: {e}")
                 
                 WhaleTransaction.objects.create(
                     wallet=wallet_obj,
@@ -129,7 +132,7 @@ class EVMWhaleTracker:
                 new_txs += 1
             return new_txs
         except Exception as e:
-            print(f"[EVM Tracker Error] {e}")
+            logger.error(f"[EVM Tracker] Error sincronizando wallet {wallet_obj.address[:10]}: {e}")
             return 0
 class HyperliquidWhaleTracker:
     """Rastreador para la red Hyperliquid L1 usando su API de Info."""
@@ -190,7 +193,7 @@ class HyperliquidWhaleTracker:
                 new_txs += 1
             return new_txs
         except Exception as e:
-            print(f"[Hyperliquid Tracker Error] {e}")
+            logger.error(f"[Hyperliquid Tracker] Error sincronizando wallet {wallet_obj.address[:10]}: {e}")
             return 0
 
 class PatternEngine:
@@ -275,9 +278,14 @@ class PatternEngine:
 
     @staticmethod
     def analyze_wallet(wallet_obj):
-        """Analiza las transacciones de una billetera para detectar patrones y tokens específicos."""
-        txs = wallet_obj.transactions.order_by('-timestamp')[:50]
-        if txs.count() < 2:
+        """Analiza las últimas N transacciones de una billetera para detectar patrones y tokens.
+        
+        Se limita a las últimas 50 txs para evitar que wallets con miles de transacciones
+        colapsen la RAM del worker de Celery. Aumentar el límite con precaución.
+        """
+        MAX_TXS = 50
+        txs = list(wallet_obj.transactions.order_by('-timestamp')[:MAX_TXS])
+        if len(txs) < 2:
             return "Datos insuficientes (necesita al menos 2 transacciones)"
             
         token_stats = {} # {token_mint: {'buys': 0, 'volume': 0}}
@@ -366,7 +374,8 @@ class PatternEngine:
                             if tx.tx_type == "UNKNOWN":
                                 tx.tx_type = "SWAP" # Si solo se movio SOL
                                 tx.save()
-                    except: pass
+                    except Exception:
+                        pass  # Cambios en SOL base pueden fallar en txs no estándar
 
                 elif wallet_obj.blockchain == 'hyperliquid':
                     raw = tx.raw_data
@@ -395,7 +404,8 @@ class PatternEngine:
                             token_stats[mint]['buys'] += 1
                             token_stats[mint]['volume'] += float(change)
                             PatternEngine._automated_shadow_trade(wallet_obj, symbol, tx)
-            except:
+            except Exception as e:
+                logger.warning(f"[analyze_wallet] Error procesando tx {tx.tx_hash[:16]} de {wallet_obj.address[:8]}: {e}")
                 continue
 
         # --- Guardar Top Tokens ---
@@ -533,7 +543,7 @@ class PatternEngine:
             status='OPEN',
             market_context=context # Snapshot para aprender
         )
-        print(f"DEBUG: ShadowTrade AUTO creado para {wallet.name or wallet.address[:8]} en {symbol}")
+        logger.info(f"ShadowTrade AUTO creado para {wallet.name or wallet.address[:8]} en {symbol} @ {entry_price}")
                 
         # Encontrar el token más "caliente" (más compras)
         hot_token = None

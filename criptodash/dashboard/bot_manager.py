@@ -231,7 +231,8 @@ class BotManager:
                 try:
                     exchange.cancel_order(trade.order_id, bot.pair.symbol)
                     if trade.exit_order_id: exchange.cancel_order(trade.exit_order_id, bot.pair.symbol)
-                except: pass
+                except Exception as e:
+                    logger.error(f"STOP LOSS GLOBAL: Error cancelando orden {trade.order_id} para bot {bot.id}: {e}. ¡Verificar posición manualmente en Binance!")
             
             if trade.status == 'OPEN':
                 BotManager._close_trade(trade, current_price, "GLOBAL_STOP_LOSS")
