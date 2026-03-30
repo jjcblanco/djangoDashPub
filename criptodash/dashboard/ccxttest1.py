@@ -5,6 +5,9 @@
 import ccxt
 import json
 import math
+import logging
+
+logger = logging.getLogger(__name__)
 
 # mis libs
 from django.conf import settings
@@ -44,7 +47,7 @@ def _ensure_binance_initialized():
     global _binance_initialized
     if not _binance_initialized:
         binance.load_markets()
-        print("Markets loaded:", len(binance.markets))
+        logger.info(f"Binance markets loaded: {len(binance.markets)} pairs.")
         _binance_initialized = True
 # balance =binance.fetch_balance()
 #print(type(balance))
@@ -430,16 +433,14 @@ def save_signals_to_db(df, pair_symbol, timeframe='1h'):
                     timeframe=timeframe,
                     defaults=defaults
                 )
-                print(f"DEBUG DB: Saving {signal_type} for {pair_symbol} at {row['timestamp']} (Created: {created})")
+                logger.debug(f"Signal DB: {signal_type} para {pair_symbol} en {row['timestamp']} (Nuevo: {created})")
                 if created:
                     signals_created += 1
 
-        print(f"Saved {signals_created} new signals to database for {pair_symbol}")
+        logger.info(f"Señales guardadas: {signals_created} nuevas para {pair_symbol}")
 
     except Exception as e:
-        print(f"Error saving signals to database: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error guardando señales en DB para {pair_symbol}: {e}", exc_info=True)
 
 def ensure_pair(symbol, pair_type='spot', exchange=None):
     pair, created = Pair.objects.get_or_create(

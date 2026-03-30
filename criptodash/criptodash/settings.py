@@ -265,4 +265,21 @@ CELERY_BEAT_SCHEDULE = {
 
 # Ejecución síncrona en desarrollo (sin worker)
 CELERY_TASK_ALWAYS_EAGER = DEBUG
-CELERY_TASK_EAGER_PROPAGATES = DEBUG
+CELERY_TASK_EAGER_PROPAGATES = DEBUG
+
+# ======================================
+# BINANCE API KEYS (Cargar desde .env)
+# ======================================
+# Agrega esto a tu .env del VPS:
+#   BINANCE_APIKEY=tu_api_key_aqui
+#   BINANCE_SECRET=tu_secret_aqui
+BINANCE_APIKEY = config('BINANCE_APIKEY', default=None)
+BINANCE_SECRET = config('BINANCE_SECRET', default=None)
+
+# Alerta en logs si no están configuradas
+if not BINANCE_APIKEY or not BINANCE_SECRET:
+    import logging
+    logging.getLogger(__name__).warning(
+        "ADVERTENCIA: BINANCE_APIKEY o BINANCE_SECRET no están configurados en .env. "
+        "Los bots live no podrán conectarse a Binance."
+    )

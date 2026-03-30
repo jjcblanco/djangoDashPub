@@ -67,12 +67,35 @@ def sync_all_whales_task():
     Ideal para ser llamado por Celery Beat o un Cronjob cada X minutos.
     """
     from dashboard.models import WhaleWallet
-    active_wallets = WhaleWallet.objects.filter(is_active=True)
+    from datetime import timedelta
+    
+    # --- Recuperación de wallets bloqueadas en SYNCING ---
+    # Si un wallet lleva más de 30 min en SYNCING, el worker probablemente murió.
+    # Lo reseteamos a IDLE para que pueda volver a sincronizarse en el próximo ciclo.
+    SYNCING_TIMEOUT_MINUTES = 30
+    stale_threshold = timezone.now() - timedelta(minutes=SYNCING_TIMEOUT_MINUTES)
+    stale_count = WhaleWallet.objects.filter(
+        sync_status='SYNCING',
+        last_sync__lt=stale_threshold  # last_sync es la última vez que terminó con éxito
+    ).update(sync_status='IDLE')
+    
+    # También recuperar los que nunca se sincronizaron (last_sync=None) y llevan rato SYNCING
+    # Esto ocurre si el worker murió justo en la primera sync
+    also_stale = WhaleWallet.objects.filter(
+        sync_status='SYNCING',
+        last_sync__isnull=True
+    ).update(sync_status='IDLE')
+    
+    total_recovered = stale_count + also_stale
+    if total_recovered > 0:
+        logger.warning(f"Recuperadas {total_recovered} wallets bloqueadas en SYNCING (timeout > {SYNCING_TIMEOUT_MINUTES} min).")
+    
+    # --- Encolar sincronización de todas las wallets activas ---
+    active_wallets = WhaleWallet.objects.filter(is_active=True, sync_status='IDLE')
     count = 0
     for wallet in active_wallets:
-        # Encolamos cada ballena de forma independiente para paralelizar
         sync_wallet_task.delay(wallet.id)
         count += 1
     
-    logger.info(f"Queued background sync for {count} active whales.")
+    logger.info(f"Encolada sincronización en background para {count} ballenas activas.")
     return count
