@@ -963,6 +963,22 @@
                             <p class="mt-3 text-muted">Analizando historial de la ballena...</p>
                         </div>
                         <div id="modalContent" style="display: none;">
+                            <!-- 🎯 Alpha Score / Confianza -->
+                            <div class="alert bg-soft-primary border border-primary-subtle d-flex align-items-center mb-4" style="border-radius: 12px;">
+                                <div class="me-3 p-2 bg-primary text-white rounded-circle">
+                                    <i class="fas fa-brain"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="small text-muted fw-bold">CONFIANZA DEL ALGORITMO (WHALE ALPHA)</div>
+                                    <div class="d-flex align-items-center">
+                                        <h4 class="mb-0 fw-bold text-primary" id="botAlphaScore">--%</h4>
+                                        <div class="progress ms-3 flex-grow-1" style="height: 6px; max-width: 150px;">
+                                            <div id="botAlphaBar" class="progress-bar bg-primary" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <label class="form-label fw-bold small">Nombre del Bot</label>
@@ -1117,6 +1133,27 @@
                 if (data.daytrading) {
                     document.getElementById('botTimeframe').value = data.daytrading.timeframe || '1h';
                     document.getElementById('dtDesc').innerText = data.daytrading.description || '';
+                }
+
+                // Alpha Score
+                if (data.alpha_score !== undefined) {
+                    const score = Math.round(data.alpha_score * 100);
+                    const scoreEl = document.getElementById('botAlphaScore');
+                    const barEl = document.getElementById('botAlphaBar');
+                    if(scoreEl) scoreEl.innerText = `${score}%`;
+                    if(barEl) barEl.style.width = `${score}%`;
+                    
+                    // Cambiar color según riesgo
+                    if (score >= 80) {
+                        barEl.className = 'progress-bar bg-success';
+                        scoreEl.className = 'mb-0 fw-bold text-success';
+                    } else if (score >= 50) {
+                        barEl.className = 'progress-bar bg-warning';
+                        scoreEl.className = 'mb-0 fw-bold text-warning';
+                    } else {
+                        barEl.className = 'progress-bar bg-danger';
+                        scoreEl.className = 'mb-0 fw-bold text-danger';
+                    }
                 }
 
                 toggleStrategyFields();

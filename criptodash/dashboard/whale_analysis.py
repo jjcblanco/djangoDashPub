@@ -266,34 +266,30 @@ class WhaleAnalysisEngine:
         # RSI promedio de entrada
         avg_rsi = round(sum(rsi_values) / len(rsi_values), 1) if rsi_values else 45.0
 
-        # Token más frecuente
-        top_token = max(tokens_freq, key=tokens_freq.get) if tokens_freq else (token_symbol or 'N/A')
-        top_token_count = tokens_freq.get(top_token, 0)
+        # ---- Alpha Score (Inteligencia Predictiva) ----
+        # Intentar obtener un score predictivo para el activo sugerido
+        alpha_score = 0.5
+        top_token = token_symbol
+        if not top_token and tokens_freq:
+            top_token = max(tokens_freq, key=tokens_freq.get)
+
+        if top_token:
+            from .whale_intelligence import fetch_market_context
+            context = fetch_market_context(top_token)
+            alpha_score = WhaleAnalysisEngine.get_predictive_score(wallet_id, top_token, context)
 
         return {
-            'wallet_id': wallet_id,
-            'top_token': top_token,
-            'top_token_count': top_token_count,
-            'total_txs_analyzed': len(entry_prices),
-            'avg_entry_price': round(avg_price, 6) if entry_prices else 0,
-            'avg_hold_hours': round(avg_hold, 1),
-            'timeframe_label': tf_label,
+            'top_token': top_token or 'SOL',
             'grid': {
-                'lower_price': round(lower, 6),
                 'upper_price': round(upper, 6),
+                'lower_price': round(lower, 6),
                 'grid_levels': grid_levels,
-                'global_stop_loss': stop_loss,
-                'description': f"Basado en {len(entry_prices)} precios de entrada históricos"
+                'stop_loss': stop_loss,
+                'description': f"Basado en {len(entry_prices)} precios de entrada detectados."
             },
             'daytrading': {
                 'timeframe': timeframe,
-                'min_strength': 3,
-                'min_adx': 20,
-                'risk_per_trade_pct': 2.0,
-                'atr_mult_sl': 1.5,
-                'atr_mult_tp': 3.0,
-                'cooldown_bars': 3,
-                'rsi_context': avg_rsi,
-                'description': f"Timeframe sugerido: {tf_label}. RSI promedio de entrada de la ballena: {avg_rsi}"
-            }
+                'description': f"Hold medio: {round(avg_hold, 1)}h ({tf_label})"
+            },
+            'alpha_score': alpha_score
         }
