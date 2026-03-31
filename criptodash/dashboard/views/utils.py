@@ -5,8 +5,58 @@ Este módulo contiene funciones de utilidad que son usadas por múltiples vistas
 como generación de gráficos y cálculo de estadísticas.
 """
 
+import logging
 import pandas as pd
 import plotly.graph_objects as go
+from functools import wraps
+from django.core.cache import cache
+from django.http import JsonResponse
+
+logger = logging.getLogger(__name__)
+
+
+def ajax_rate_limit(max_calls=30, period_seconds=60):
+    """
+    Decorador de rate limiting para endpoints AJAX usando Django Cache.
+    No requiere dependencias extra (usa el cache backend ya configurado).
+
+    Uso:
+        @login_required
+        @ajax_rate_limit(max_calls=10, period_seconds=60)
+        def mi_endpoint(request):
+            ...
+
+    Si se excede el límite, devuelve HTTP 429 con JSON de error.
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            # Identificar al usuario (autenticado) o por IP (anónimo)
+            user_id = request.user.id if request.user.is_authenticated else request.META.get('REMOTE_ADDR', 'anon')
+            view_name = view_func.__name__
+            cache_key = f"rl:{view_name}:{user_id}"
+
+            # Obtener o inicializar el contador
+            call_data = cache.get(cache_key)
+            if call_data is None:
+                cache.set(cache_key, {'count': 1, 'reset_at': period_seconds}, period_seconds)
+            else:
+                count = call_data['count'] + 1
+                if count > max_calls:
+                    logger.warning(
+                        f"[RateLimit] Usuario {user_id} excedió el límite en '{view_name}' "
+                        f"({count}/{max_calls} en {period_seconds}s)"
+                    )
+                    return JsonResponse({
+                        'error': 'Too Many Requests',
+                        'message': f'Límite de {max_calls} peticiones por {period_seconds}s superado. Intentá de nuevo en {period_seconds}s.',
+                        'retry_after': period_seconds,
+                    }, status=429)
+                cache.set(cache_key, {'count': count}, timeout=None)  # mantiene el TTL original
+
+            return view_func(request, *args, **kwargs)
+        return wrapper
+    return decorator
 
 
 def generar_datos_grafico_desde_señales(señales, fecha_inicio, fecha_fin):

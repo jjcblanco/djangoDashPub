@@ -114,6 +114,45 @@ class WhaleAnalysisEngine:
         return "Datos insuficientes para patrón estadístico"
 
     @staticmethod
+    def get_predictive_score(wallet_id, symbol, current_context):
+        """
+        Devuelve un score de confianza (0-1) basado en si el contexto actual
+        coincide con los mejores trades históricos de esta ballena.
+        """
+        if not current_context or not isinstance(current_context, dict):
+            return 0.5 # Neutral si no hay contexto
+            
+        analysis = WhaleAnalysisEngine.analyze_success_correlation(wallet_id=wallet_id)
+        if 'error' in analysis:
+            return 0.5 
+            
+        score = 0.5
+        factors = 0
+        
+        # 1. RSI Match
+        current_rsi = current_context.get('rsi_14')
+        if current_rsi and analysis.get('rsi_correlation'):
+            for r in analysis['rsi_correlation']:
+                # Extraer rango numérico de la etiqueta
+                try:
+                    if 'Oversold' in r['range'] and current_rsi < 35:
+                        if r['win_rate'] > 60: score += 0.2; factors += 1
+                    elif 'High' in r['range'] and current_rsi > 65:
+                        if r['win_rate'] > 60: score += 0.2; factors += 1
+                except: pass
+                
+        # 2. Trend Match
+        current_trend = current_context.get('in_uptrend')
+        if current_trend is not None and analysis.get('uptrend_stats'):
+            stats = analysis['uptrend_stats'].get(current_trend)
+            if stats and stats['mean'] > 0: # PnL promedio positivo en esta tendencia
+                score += 0.15; factors += 1
+                
+        # Normalizar score entre 0.1 y 0.95
+        final_score = max(0.1, min(0.95, score))
+        return final_score
+
+    @staticmethod
     def suggest_bot_params(wallet_id, token_symbol=None):
         """
         Analiza el historial de una ballena y sugiere parámetros para crear un bot.
