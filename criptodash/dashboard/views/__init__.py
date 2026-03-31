@@ -23,7 +23,7 @@ from .trading_views import (
 # Importar vistas de backtest
 from .backtest_views import backtest_view
 
-# Importar vistas de bot
+# Importar vistas de bot finales
 from .bot_views import (
     bot_dashboard,
     create_bot,
@@ -37,20 +37,28 @@ from .bot_views import (
     test_telegram_view,
     bot_detail,
     edit_bot,
+)
+
+# Importar vistas de ballenas (NUEVO)
+from .whale_views import (
     whale_insights,
     follow_whale,
     unfollow_whale,
-    simulate_whale_trade,
-    close_shadow_trade,
     search_tokens_ajax,
     get_whale_history,
     export_whale_history,
     trigger_deep_sync,
     get_whale_insights,
-    whale_live_prices,
     whale_scores_ajax,
     whale_hot_tokens_ajax,
     suggest_bot_from_whale,
+)
+
+# Importar vistas de simulaciones / shadow trading (NUEVO)
+from .shadow_views import (
+    simulate_whale_trade,
+    close_shadow_trade,
+    whale_live_prices,
 )
 
 # Importar vistas de datos
@@ -115,6 +123,12 @@ __all__ = [
     'export_whale_history',
     'trigger_deep_sync',
     'get_whale_insights',
+    'whale_live_prices',
+    'whale_scores_ajax',
+    'whale_hot_tokens_ajax',
+    'suggest_bot_from_whale',
+    'simulate_whale_trade',
+    'close_shadow_trade',
 
     # Dash app
     'app',

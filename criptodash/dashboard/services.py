@@ -495,17 +495,59 @@ class PatternEngine:
         # (Añadir al final de la clase)
 
     @staticmethod
+    def verify_token_security(symbol, tx_raw_data=None):
+        """
+        Verifica si el token es 'seguro' basándose en liquidez y FDV.
+        """
+        # Stablecoins son seguros por definición en este contexto
+        STABLES = ['USDC', 'USDT', 'DAI', 'PYUSD', 'UST']
+        if not symbol or symbol.upper() in STABLES: return True
+        
+        try:
+            # Filtros básicos: Liquidez > $30k, FDV > $100k
+            liquidity = float(tx_raw_data.get('liquidity', 0)) if tx_raw_data else 0
+            fdv = float(tx_raw_data.get('fdv', 0)) if tx_raw_data else 0
+            
+            if liquidity > 0 and liquidity < 30000: return False
+            if fdv > 0 and fdv < 100000: return False
+            
+            return True
+        except:
+            return True
+
+    @staticmethod
+    def _check_cohort_consensus(symbol, exclude_wallet_id):
+        """
+        Verifica cuántas ballenas distintas han comprado este token en las últimas 12 horas.
+        """
+        from datetime import timedelta
+        since = timezone.now() - timedelta(hours=12)
+        
+        cohort_count = WhaleTransaction.objects.filter(
+            to_asset=symbol,
+            timestamp__gte=since,
+            tx_type__in=['BUY', 'SWAP']
+        ).exclude(wallet_id=exclude_wallet_id).values('wallet').distinct().count()
+        
+        return cohort_count
+
+    @staticmethod
     def _automated_shadow_trade(wallet, symbol, tx):
         """Crea una simulación automática si no existe una reciente para este par."""
         from django.db.models import Q
         from datetime import timedelta
+        from .whale_analysis import WhaleAnalysisEngine
         
         # 1. Ignorar Stablecoins conocidos
         STABLES = ['USDC', 'USDT', 'DAI', 'PYUSD', 'UST']
         if not symbol or symbol.upper() in STABLES: return
         
-        # 2. Evitar duplicados: verificar si ya hay un trade OPEN para este wallet+token
-        # NOTA: No comparar tiempos porque created_at (server time) y tx.timestamp (on-chain time) pueden desfasarse
+        # 2. Verificar Seguridad del Token
+        if not PatternEngine.verify_token_security(symbol, tx.raw_data):
+            logger.info(f"Token {symbol} descartado por baja seguridad/liquidez.")
+            return
+
+        # 3. Evitar duplicados
         exists = ShadowTrade.objects.filter(
             wallet=wallet,
             token_symbol=symbol,
@@ -530,61 +572,50 @@ class PatternEngine:
         
         if entry_price <= 0: return # No simular si no tenemos precio (evita ruidos)
         
-        # 4. Capturar Contexto de Mercado (DNA)
+        # 5. Capturar Contexto y Score Predictivo
         from .whale_intelligence import fetch_market_context
         context = fetch_market_context(symbol)
+        
+        predictive_score = WhaleAnalysisEngine.get_predictive_score(wallet.id, symbol, context)
 
-        # 5. Crear la simulación (ShadowTrade)
+        # 6. Crear la simulación (ShadowTrade)
         ShadowTrade.objects.create(
             wallet=wallet,
             token_symbol=symbol,
             entry_price=entry_price,
-            amount=1.0, # Cantidad unitaria para simulación estadística
+            amount=1.0, 
             status='OPEN',
-            market_context=context # Snapshot para aprender
+            market_context=context 
         )
-        logger.info(f"ShadowTrade AUTO creado para {wallet.name or wallet.address[:8]} en {symbol} @ {entry_price}")
-                
-        # Encontrar el token más "caliente" (más compras)
-        hot_token = None
-        max_buys = 0
-        hot_token_mint = None
+        logger.info(f"ShadowTrade AUTO creado para {wallet.name or wallet.address[:8]} en {symbol} @ {entry_price} (Score: {predictive_score})")
+
+        # 7. Detección de Consenso de Cohorte
+        cohort_others = PatternEngine._check_cohort_consensus(symbol, wallet.id)
+        # 8. Generar Insight
+        confidence = predictive_score
+        pattern = "ACTIVIDAD"
         
-        if token_stats:
-            hot_token_mint = max(token_stats, key=lambda k: token_stats[k]['buys'])
-            max_buys = token_stats[hot_token_mint]['buys']
-            hot_token = PatternEngine.get_token_symbol(hot_token_mint)
-            
-        confidence = 0.5
-        pattern = "OBSERVACIÓN"
-        description = "La billetera está bajo observación inicial."
-        
-        if hot_token:
-            if max_buys > 15:
-                pattern = "ACUMULACIÓN AGRESIVA"
-                description = f"Esta ballena está acumulando fuertemente el token {hot_token}."
-                confidence = 0.9
-            elif max_buys > 5:
-                pattern = "ACUMULACIÓN (DCA)"
-                description = f"Patrón de compras progresivas detectado en {hot_token}."
-                confidence = 0.75
-            else:
-                description = f"Actividad reciente detectada en el token {hot_token}."
-        elif wallet_obj.filter_mode == 'STRICT':
-             description = "Actividad detectada, pero ignorada por filtros de seguridad (Pump Tokens)."
-             pattern = "FILTRADO"
-             confidence = 0.1
-                
+        if is_consensus:
+             pattern = "CONSENSO DE COHORTE"
+             description = f"¡ALERTA ALPHA! {cohort_others + 1} ballenas han operado {symbol} recientemente."
+             confidence = min(0.95, confidence + 0.2)
+        else:
+             pattern = "ACTIVIDAD INDIVIDUAL"
+             description = f"La ballena inició una posición en {symbol}."
+             if confidence > 0.7:
+                 pattern = "MOVIMIENTO ESTRATÉGICO"
+                 description = f"Movimiento de alta confianza detectado en {symbol}."
+
         # Guardar el insight
-        # Aseguramos que hot_token no sea None para poder filtrar
         meta_data = {
-            'hot_token_mint': hot_token_mint if hot_token else "Unknown",
-            'hot_token_symbol': hot_token if hot_token else "Unknown",
-            'buys_count': max_buys
+            'hot_token_symbol': symbol,
+            'is_consensus': is_consensus,
+            'cohort_size': cohort_others + 1,
+            'predictive_score': predictive_score
         }
         
         insight, created = PatternInsight.objects.update_or_create(
-            wallet=wallet_obj,
+            wallet=wallet,
             pattern_type=pattern,
             defaults={
                 'description': description,
@@ -594,45 +625,40 @@ class PatternEngine:
             }
         )
         
-        # Enviar alerta de Telegram si la confianza es alta y es nuevo o han pasado más de 6 horas
-        if confidence >= 0.75:
+        # 9. Alerta Inteligente
+        if confidence >= 0.7 or is_consensus:
             send_alert = False
-            if created:
+            if created or is_consensus: 
                 send_alert = True
             else:
-                # Evitar spam: solo si el patrón cambió o ha pasado tiempo
                 last_alert = insight.meta_data.get('last_alert_at') if insight.meta_data else None
                 if not last_alert:
                     send_alert = True
                 else:
-                    last_alert_dt = datetime.fromisoformat(last_alert)
-                    if (timezone.now() - last_alert_dt).total_seconds() > 21600: # 6 horas
-                        send_alert = True
+                    from datetime import datetime
+                    try:
+                        last_alert_dt = datetime.fromisoformat(last_alert)
+                        if (timezone.now() - last_alert_dt).total_seconds() > 14400: # 4 horas
+                            send_alert = True
+                    except: send_alert = True
             
             if send_alert:
-                wallet_name = wallet_obj.name or f"Ballena {wallet_obj.address[:8]}"
-                category = wallet_obj.get_wallet_category_display()
+                wallet_name = wallet.name or f"Ballena {wallet.address[:8]}"
+                category = wallet.get_wallet_category_display()
+                prob_txt = f"{round(confidence * 100)}%"
                 
-                # Link dinámico según red
-                explorers = {
-                    'solana': f"https://solscan.io/account/{wallet_obj.address}",
-                    'ethereum': f"https://etherscan.io/address/{wallet_obj.address}",
-                    'base': f"https://basescan.org/address/{wallet_obj.address}",
-                }
-                explorer_url = explorers.get(wallet_obj.blockchain, explorers['solana'])
-                explorer_name = "Solscan" if wallet_obj.blockchain == 'solana' else "Explorer"
-
                 msg = (
-                    f"🐋 <b>¡ALERTA DE BALLENA DETECTADA!</b>\n\n"
-                    f"👤 <b>Billetera:</b> {wallet_name}\n"
-                    f"🏷️ <b>Categoría:</b> {category}\n"
-                    f"🌐 <b>Red:</b> {wallet_obj.blockchain.upper()}\n"
-                    f"🎯 <b>Token:</b> {hot_token if hot_token else 'Varios'}\n"
+                    f"{'🔥' if is_consensus else '🐋'} <b>{'¡ALERTA DE CONSENSO!' if is_consensus else 'ALERTA DE BALLENA'}</b>\n\n"
+                    f"👤 <b>Billetera:</b> {wallet_name} ({category})\n"
+                    f"🌐 <b>Red:</b> {wallet.blockchain.upper()}\n"
+                    f"🎯 <b>Token:</b> {symbol}\n"
+                    f"📊 <b>Probabilidad Éxito:</b> <code>{prob_txt}</code>\n"
                     f"📈 <b>Patrón:</b> {pattern}\n"
                     f"📝 <b>Detalle:</b> {description}\n\n"
-                    f"🔗 <a href='{explorer_url}'>Ver en {explorer_name}</a>\n"
-                    f"💡 <i>Analizado por CriptoDash PatternEngine</i>"
+                    f"💡 <i>Este movimiento coincide con el ADN histórico de la ballena.</i>" if confidence > 0.75 and not is_consensus else ""
                 )
+                
+                from .utils.notifications import send_telegram_message
                 if send_telegram_message(msg):
                     if not insight.meta_data: insight.meta_data = {}
                     insight.meta_data['last_alert_at'] = timezone.now().isoformat()
