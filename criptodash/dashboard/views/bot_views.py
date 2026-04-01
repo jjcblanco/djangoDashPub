@@ -10,7 +10,7 @@ import json
 import requests
 import logging
 
-from ..models import LiveBot, LiveTrade, TradingPair, CapitalFunding, GlobalSettings, DailyMetric
+from ..models import LiveBot, LiveTrade, TradingPair, CapitalFunding, GlobalSettings, DailyMetric, TradeSignal
 from ..bot_manager import BotManager
 from .utils import ajax_rate_limit
 
@@ -393,36 +393,107 @@ def trigger_bot_update(request):
 
 @login_required
 def trigger_balance_sync(request):
-    """Sincroniza los balances de los bots con el saldo real de Binance."""
+    """Sincroniza y recalibra los balances de los bots con el saldo real y parámetros."""
     if not request.user.is_staff:
         messages.error(request, "Acceso denegado.")
         return redirect('bot_dashboard')
         
     from ..ccxttest1 import binance as exchange
     try:
-        bal = exchange.fetch_balance()
-        real_total = Decimal(str(bal['total'].get('USDT', 0)))
-        
-        if real_total <= 0:
-            messages.error(request, "No se encontraron fondos reales en Binance.")
-            return redirect('bot_dashboard')
-            
+        # 1. Recalibración Contable (Lógica de recalibrate_bots.py)
         bots = LiveBot.objects.all()
-        total_local_assigned = sum(b.current_balance for b in bots)
-        
-        if total_local_assigned <= 0:
-            messages.warning(request, "No hay saldo local asignado.")
-            return redirect('bot_dashboard')
-            
-        ratio = real_total / total_local_assigned
         for bot in bots:
-            bot.current_balance = (bot.current_balance * ratio).quantize(Decimal("1.00000000"))
-            bot.initial_balance = (bot.initial_balance * ratio).quantize(Decimal("1.00000000"))
-            bot.save()
+            # Sincronizar Capital Inicial si es GRID
+            if bot.strategy_type == 'GRID':
+                try:
+                    levels = int(bot.parameters.get('grid_levels', 0))
+                    amount = float(bot.parameters.get('amount_per_level', 0))
+                    ideal = Decimal(str(levels * amount))
+                    if bot.initial_balance < ideal:
+                        bot.initial_balance = ideal
+                except: pass
             
-        messages.success(request, f"Sincronización exitosa (${real_total:.2f} USDT).")
+            # Recalcular saldo disponible (Initial + PnL - OpenCost)
+            realized_pnl = LiveTrade.objects.filter(bot=bot).exclude(status__in=['OPEN', 'WAITING']).aggregate(total=Sum('pnl'))['total'] or Decimal("0")
+            open_trades = LiveTrade.objects.filter(bot=bot, status__in=['OPEN', 'WAITING'])
+            invested = sum(t.entry_price * t.amount for t in open_trades)
+            
+            new_current = bot.initial_balance + realized_pnl - invested
+            bot.current_balance = max(new_current, Decimal("1.0")) # Evitar negativos
+            bot.save()
+
+        # 2. Sincronización Proporcional con Binance (Opcional - solo si hay fondos)
+        try:
+            bal = exchange.fetch_balance()
+            real_total = Decimal(str(bal['total'].get('USDT', 0)))
+            if real_total > 0:
+                total_local = sum(b.current_balance for b in bots)
+                if total_local > 0:
+                    ratio = real_total / total_local
+                    for b in bots:
+                        b.current_balance = (b.current_balance * ratio).quantize(Decimal("1.00000000"))
+                        b.save()
+            messages.success(request, f"¡Sincronización y Recalibración completa! (${real_total:.2f} USDT detectados).")
+        except Exception as e:
+            messages.warning(request, f"Recalibración interna lista, pero falló la conexión con Binance: {e}")
+            
     except Exception as e:
         messages.error(request, f"Error durante la sincronización: {e}")
+    return redirect('bot_dashboard')
+
+@login_required
+def apply_strategic_optimizations(request):
+    """Aplica parches tácticos a bots específicos por su nombre."""
+    if not request.user.is_staff:
+        messages.error(request, "Acceso denegado.")
+        return redirect('bot_dashboard')
+        
+    results = []
+    
+    # 1. etcgrid - Mover rango y Trailing
+    try:
+        b = LiveBot.objects.get(name="etcgrid")
+        p = b.parameters
+        p['upper_price'] = '2150'
+        p['lower_price'] = '1750'
+        p['trailing_down'] = True
+        b.parameters = p
+        b.save()
+        results.append("etcgrid: Rango ajustado 1750-2150 y Trailing Down ON.")
+    except LiveBot.DoesNotExist: pass
+
+    # 2. all time sol - Malla SOL real
+    try:
+        b = LiveBot.objects.get(name="all time sol")
+        p = b.parameters
+        if "SOL" in b.pair.symbol:
+            p['upper_price'] = '145' # Ajustado a SOL real actual aprox
+            p['lower_price'] = '115'
+            results.append("all time sol: Rango SOL ajustado 115-145.")
+        else:
+            p['upper_price'] = '2200'
+            p['lower_price'] = '1800'
+            results.append("all time sol: Rango ETH ajustado 1800-2200.")
+        b.parameters = p
+        b.save()
+    except LiveBot.DoesNotExist: pass
+
+    # 3. ethdaynuevo - Daytrading filters
+    try:
+        b = LiveBot.objects.get(name="ethdaynuevo")
+        p = b.parameters
+        p['atr_sl'] = 2.0
+        p['min_strength'] = 2.0
+        b.parameters = p
+        b.save()
+        results.append("ethdaynuevo: ATR SL (2.0) y Strength (2.0) optimizados.")
+    except LiveBot.DoesNotExist: pass
+
+    if results:
+        messages.success(request, "Optimizaciones aplicadas: " + " | ".join(results))
+    else:
+        messages.warning(request, "No se encontraron los bots específicos para optimizar por nombre.")
+        
     return redirect('bot_dashboard')
 
 @login_required

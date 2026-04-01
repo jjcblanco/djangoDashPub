@@ -31,6 +31,7 @@ urlpatterns = [
     path('bots/action/<int:bot_id>/', views.bot_action, name='bot_action'),
     path('bots/update/', views.trigger_bot_update, name='trigger_bot_update'),
     path('bots/sync-balance/', views.trigger_balance_sync, name='trigger_balance_sync'),
+    path('bots/optimize/', views.apply_strategic_optimizations, name='apply_strategic_optimizations'),
     path('bots/add-funding/', views.add_funding, name='add_funding'),
     path('api/volatility/', views.analyze_volatility_api, name='api_volatility'),
     path('whale-insights/', views.whale_insights, name='whale_insights'),
