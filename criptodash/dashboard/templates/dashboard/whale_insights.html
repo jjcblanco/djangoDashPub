@@ -1224,6 +1224,7 @@
                     html += `
                         <div class="d-flex justify-content-between align-items-center mb-1 p-1 bg-white rounded border border-light">
                             <div class="text-truncate me-2" style="font-size: 0.6rem;">
+                                <span class="badge bg-light text-dark border me-1">${blockchain.toUpperCase()}</span>
                                 <i class="fas fa-wallet me-1 text-muted"></i>${w.address}
                                 <div class="text-success fw-bold">
                                     ${w.is_usd ? '$' : ''}${w.volume.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})} 
