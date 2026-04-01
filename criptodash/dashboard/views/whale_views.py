@@ -303,6 +303,33 @@ def get_whale_insights(request, wallet_id):
         }, status=500)
 
 @login_required
+@ajax_rate_limit(max_calls=10, period_seconds=60)
+def discover_contract_whales_ajax(request):
+    """
+    Busca las billeteras más activas para un contrato de token específico.
+    Parte de la herramienta Whale Scout.
+    """
+    address = request.GET.get('address')
+    blockchain = request.GET.get('blockchain', 'ethereum')
+    
+    if not address or len(address) < 30:
+        return JsonResponse({'status': 'error', 'message': 'Dirección de contrato válida requerida.'}, status=400)
+    
+    try:
+        whales = PatternEngine.discover_token_whales(address.strip(), blockchain)
+        
+        if not whales:
+            return JsonResponse({'status': 'error', 'message': 'No se encontraron movimientos significativos recientemente.'})
+            
+        return JsonResponse({
+            'status': 'success',
+            'whales': whales,
+            'token_symbol': whales[0].get('symbol', 'TOKEN') if whales else 'TOKEN'
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+@login_required
 @ajax_rate_limit(max_calls=30, period_seconds=60)
 def whale_scores_ajax(request):
     """Retorna scores y PnL de todas las billeteras seguidas. Llamado vía AJAX post-pageload."""

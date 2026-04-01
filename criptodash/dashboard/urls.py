@@ -48,6 +48,7 @@ urlpatterns = [
     path('whale-insights/api/scores/', views.whale_scores_ajax, name='whale_scores_ajax'),
     path('whale-insights/api/hot-tokens/', views.whale_hot_tokens_ajax, name='whale_hot_tokens_ajax'),
     path('whale-insights/suggest-bot/<int:wallet_id>/', views.suggest_bot_from_whale, name='suggest_bot_from_whale'),
+    path('whale-insights/discover/', views.discover_contract_whales_ajax, name='discover_contract_whales_ajax'),
     path('bots/<int:bot_id>/detail/', views.bot_detail, name='bot_detail'),
     path('bots/kill-switch/', views.trigger_kill_switch, name='trigger_kill_switch'),
     path('bots/risk-settings/', views.update_risk_settings, name='update_risk_settings'),

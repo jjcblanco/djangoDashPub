@@ -255,6 +255,24 @@
                             Busca billeteras con >$1M que operen tokens estables y "Blue Chips". Cópialas aquí en modo <b>STRICT</b> para filtrar el ruido.
                         </small>
                     </div>
+
+                    <!-- 🛰️ WHALE SCOUT: BUSCADOR POR CONTRATO -->
+                    <div class="mt-4 pt-3 border-top">
+                        <h6 class="fw-bold mb-2" style="font-size: 0.75rem;"><i class="fas fa-satellite me-2 text-primary"></i>Whale Scout (Contract Scanner)</h6>
+                        <div class="input-group input-group-sm mb-2 shadow-sm">
+                            <select id="scoutChain" class="form-select border-primary-subtle" style="max-width: 90px; font-size: 0.65rem;">
+                                <option value="ethereum">ETH</option>
+                                <option value="base">BASE</option>
+                            </select>
+                            <input type="text" id="scoutAddress" class="form-control border-primary-subtle" placeholder="Token Contract Address..." style="font-size: 0.65rem;">
+                            <button class="btn btn-primary" onclick="triggerWhaleScout()">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                        <div id="scoutResults" class="mt-2" style="max-height: 200px; overflow-y: auto;">
+                            <!-- Resultados dinámicos -->
+                        </div>
+                    </div>
                 </div>
             </div>
             <!-- FIN HUB DE DESCUBRIMIENTO -->
@@ -1182,6 +1200,57 @@
         
         modal.show();
     }
+
+    // WHALE SCOUT LOGIC
+    window.triggerWhaleScout = async function() {
+        const address = document.getElementById('scoutAddress').value.trim();
+        const blockchain = document.getElementById('scoutChain').value;
+        const resultsDiv = document.getElementById('scoutResults');
+        
+        if (!address || address.length < 30) {
+            alert('Por favor, ingresa una dirección de contrato válida.');
+            return;
+        }
+        
+        resultsDiv.innerHTML = '<div class="text-center py-2"><div class="spinner-border spinner-border-sm text-primary"></div> <small>Escaneando DEX...</small></div>';
+        
+        try {
+            const response = await fetch(`/whale-insights/discover/?address=${address}&blockchain=${blockchain}`);
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                let html = `<div class="small fw-bold text-muted mb-2">Top Acumuladores (${data.token_symbol}):</div>`;
+                data.whales.forEach(w => {
+                    html += `
+                        <div class="d-flex justify-content-between align-items-center mb-1 p-1 bg-white rounded border border-light">
+                            <div class="text-truncate me-2" style="font-size: 0.6rem;">
+                                <i class="fas fa-wallet me-1 text-muted"></i>${w.address}
+                                <div class="text-success fw-bold">${w.volume.toLocaleString()} ${w.symbol}</div>
+                            </div>
+                            <button class="btn btn-xs btn-outline-primary py-0 px-1" style="font-size: 0.55rem;"
+                                    onclick="quickFollowWhale('${w.address}', '${blockchain}', '${w.symbol}')">
+                                Seguir
+                            </button>
+                        </div>
+                    `;
+                });
+                resultsDiv.innerHTML = html;
+            } else {
+                resultsDiv.innerHTML = `<div class="alert alert-warning py-1 small" style="font-size: 0.6rem;">${data.message}</div>`;
+            }
+        } catch (error) {
+            resultsDiv.innerHTML = '<div class="alert alert-danger py-1 small">Error en Scanner.</div>';
+        }
+    };
+
+    window.quickFollowWhale = function(address, blockchain, token) {
+        const modal = new bootstrap.Modal(document.getElementById('followWhaleModal'));
+        document.querySelector('#followWhaleModal input[name="address"]').value = address;
+        document.querySelector('#followWhaleModal select[name="blockchain"]').value = blockchain;
+        document.querySelector('#followWhaleModal input[name="name"]').value = `Whale of ${token}`;
+        document.querySelector('#followWhaleModal input[name="target_token"]').value = token;
+        modal.show();
+    };
     </script>
 
     <!-- Modal: Whale DNA -->
