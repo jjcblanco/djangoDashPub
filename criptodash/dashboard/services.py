@@ -425,6 +425,62 @@ class PatternEngine:
             wallet_obj.save()
 
         return f"Análisis completado para {wallet_obj.address[:8]}"
+
+    @staticmethod
+    def discover_token_whales(contract_address, blockchain='ethereum'):
+        """
+        Escanea el historial de un contrato de token para identificar grandes compradores.
+        Útil para Uniswap / descubrimiento de ballenas específicas de un activo.
+        """
+        from .services import EVMWhaleTracker
+        tracker = EVMWhaleTracker(blockchain)
+        params = {
+            'module': 'account',
+            'action': 'tokentx',
+            'contractaddress': contract_address,
+            'sort': 'desc',
+            'order': 'desc',
+            'page': 1,
+            'offset': 100,
+            'apikey': tracker.api_key
+        }
+        
+        try:
+            resp = requests.get(tracker.api_url, params=params, timeout=12)
+            if resp.status_code != 200: return []
+            
+            data = resp.json()
+            if data.get('status') != '1': return []
+            
+            transfers = data.get('result', [])
+            buyers = {} # {address: {'volume': 0, 'tx_count': 0, 'symbol': ''}}
+            
+            for tx in transfers:
+                to_addr = tx.get('to', '').lower()
+                # Omitir si es una DEX Pool o Router conocido (simplificado)
+                # En una versión avanzada, filtraríamos direcciones de contratos
+                if to_addr in ('0x0000000000000000000000000000000000000000', '0x000000000000000000000000000000000000dead'):
+                    continue
+                
+                try:
+                    amount = float(tx.get('value', 0)) / (10**int(tx.get('tokenDecimal', 18)))
+                except: amount = 0
+                
+                symbol = tx.get('tokenSymbol', '???')
+                
+                if to_addr not in buyers:
+                    buyers[to_addr] = {'volume': 0, 'tx_count': 0, 'symbol': symbol, 'address': to_addr}
+                
+                buyers[to_addr]['volume'] += amount
+                buyers[to_addr]['tx_count'] += 1
+            
+            # Ordenar por volumen descendente
+            sorted_buyers = sorted(buyers.values(), key=lambda x: x['volume'], reverse=True)
+            return sorted_buyers[:10]
+            
+        except Exception as e:
+            logger.error(f"[Whale Scout] Error analizando contrato {contract_address}: {e}")
+            return []
                 
     @staticmethod
     def _close_shadow_trade(wallet, symbol, tx):
