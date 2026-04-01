@@ -429,56 +429,85 @@ class PatternEngine:
     @staticmethod
     def discover_token_whales(contract_address, blockchain='ethereum'):
         """
-        Escanea el historial de un contrato de token para identificar grandes compradores.
-        Útil para Uniswap / descubrimiento de ballenas específicas de un activo.
+        Escanea el historial de trades de un token usando la API de GeckoTerminal.
+        Estrategia 'Gecko-Hunter': Muy superior para encontrar ballenas activas en DEXs.
         """
-        tracker = EVMWhaleTracker(blockchain)
-        params = {
-            'module': 'account',
-            'action': 'tokentx',
-            'contractaddress': contract_address,
-            'sort': 'desc',
-            'order': 'desc',
-            'page': 1,
-            'offset': 100,
-            'apikey': tracker.api_key
-        }
+        # 1. Buscar el Par en DexScreener para obtener el pool_address y network
+        pair_data = None
+        try:
+            dex_url = f"https://api.dexscreener.com/latest/dex/search?q={contract_address}"
+            dex_resp = requests.get(dex_url, timeout=8)
+            if dex_resp.status_code == 200:
+                pairs = dex_resp.json().get('pairs', [])
+                if pairs:
+                     # Filtrar por blockchain correcta
+                     network_map = {'ethereum': 'eth', 'base': 'base', 'solana': 'solana'}
+                     target_net = network_map.get(blockchain, 'eth')
+                     
+                     for p in pairs:
+                         if p.get('chainId') == target_net or p.get('chainId') == blockchain:
+                             pair_data = p
+                             break
+        except Exception as e:
+            logger.error(f"[Whale Scout] Error buscando par: {e}")
+
+        if not pair_data:
+            return []
+
+        pool_address = pair_data.get('pairAddress')
+        network = pair_data.get('chainId', 'eth')
+        # GeckoTerminal usa 'eth' para ethereum
+        if network == 'ethereum': network = 'eth'
+
+        # 2. Consultar GeckoTerminal para los últimos trades del Pool
+        # Retorna hasta 300 trades recientes sin necesidad de API Key
+        gecko_url = f"https://api.geckoterminal.com/api/v2/networks/{network}/pools/{pool_address}/trades"
         
         try:
-            resp = requests.get(tracker.api_url, params=params, timeout=12)
+            resp = requests.get(gecko_url, timeout=10)
             if resp.status_code != 200: return []
             
             data = resp.json()
-            if data.get('status') != '1': return []
+            trades = data.get('data', [])
+            buyers = {} # {address: {'volume': 0, 'tx_count': 0}}
             
-            transfers = data.get('result', [])
-            buyers = {} # {address: {'volume': 0, 'tx_count': 0, 'symbol': ''}}
+            token_symbol = pair_data.get('baseToken', {}).get('symbol', 'TOKEN')
             
-            for tx in transfers:
-                to_addr = tx.get('to', '').lower()
-                # Omitir si es una DEX Pool o Router conocido (simplificado)
-                # En una versión avanzada, filtraríamos direcciones de contratos
-                if to_addr in ('0x0000000000000000000000000000000000000000', '0x000000000000000000000000000000000000dead'):
-                    continue
-                
-                try:
-                    amount = float(tx.get('value', 0)) / (10**int(tx.get('tokenDecimal', 18)))
-                except: amount = 0
-                
-                symbol = tx.get('tokenSymbol', '???')
-                
-                if to_addr not in buyers:
-                    buyers[to_addr] = {'volume': 0, 'tx_count': 0, 'symbol': symbol, 'address': to_addr}
-                
-                buyers[to_addr]['volume'] += amount
-                buyers[to_addr]['tx_count'] += 1
+            for t in trades:
+                attr = t.get('attributes', {})
+                # Solo nos interesan las COMPRAS para encontrar "Ballenas de entrada"
+                if attr.get('kind') == 'buy':
+                    buyer_addr = attr.get('tx_from_address', '').lower()
+                    if not buyer_addr: continue
+                    
+                    # Usamos el volumen en USD que es más fácil de comparar entre tokens
+                    vol_usd = float(attr.get('volume_usd') or 0)
+                    # Si vol_usd es 0 (no indexado), intentar usar cantidad de tokens si estuviera disponible
+                    # GeckoTerminal no siempre da el amount de tokens en el /trades simplificado
+                    
+                    if buyer_addr not in buyers:
+                        buyers[buyer_addr] = {
+                            'volume': 0, 
+                            'tx_count': 0, 
+                            'symbol': token_symbol, 
+                            'address': buyer_addr,
+                            'is_usd': True
+                        }
+                    
+                    buyers[buyer_addr]['volume'] += vol_usd
+                    buyers[buyer_addr]['tx_count'] += 1
             
-            # Ordenar por volumen descendente
+            # Ordenar por volumen USD descendente
             sorted_buyers = sorted(buyers.values(), key=lambda x: x['volume'], reverse=True)
-            return sorted_buyers[:10]
+            
+            # Si no hay vol_usd (muchos aparecen como 0), ordenar por tx_count
+            if not sorted_buyers or sorted_buyers[0]['volume'] == 0:
+                sorted_buyers = sorted(buyers.values(), key=lambda x: x['tx_count'], reverse=True)
+                
+            return sorted_buyers[:12]
             
         except Exception as e:
-            logger.error(f"[Whale Scout] Error analizando contrato {contract_address}: {e}")
+            logger.error(f"[Whale Scout] Error en GeckoTerminal para {pool_address}: {e}")
             return []
                 
     @staticmethod

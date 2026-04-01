@@ -1225,7 +1225,10 @@
                         <div class="d-flex justify-content-between align-items-center mb-1 p-1 bg-white rounded border border-light">
                             <div class="text-truncate me-2" style="font-size: 0.6rem;">
                                 <i class="fas fa-wallet me-1 text-muted"></i>${w.address}
-                                <div class="text-success fw-bold">${w.volume.toLocaleString()} ${w.symbol}</div>
+                                <div class="text-success fw-bold">
+                                    ${w.is_usd ? '$' : ''}${w.volume.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})} 
+                                    <small class="text-muted" style="font-size: 0.5rem;">(${w.tx_count} trades)</small>
+                                </div>
                             </div>
                             <button class="btn btn-xs btn-outline-primary py-0 px-1" style="font-size: 0.55rem;"
                                     onclick="quickFollowWhale('${w.address}', '${blockchain}', '${w.symbol}')">
