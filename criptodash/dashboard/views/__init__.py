@@ -37,6 +37,7 @@ from .bot_views import (
     test_telegram_view,
     bot_detail,
     edit_bot,
+    apply_strategic_optimizations,
 )
 
 # Importar vistas de ballenas (NUEVO)
@@ -114,6 +115,7 @@ __all__ = [
     'test_telegram_view',
     'bot_detail',
     'edit_bot',
+    'apply_strategic_optimizations',
     'whale_insights',
     'follow_whale',
     'unfollow_whale',
