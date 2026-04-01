@@ -432,7 +432,6 @@ class PatternEngine:
         Escanea el historial de un contrato de token para identificar grandes compradores.
         Útil para Uniswap / descubrimiento de ballenas específicas de un activo.
         """
-        from .services import EVMWhaleTracker
         tracker = EVMWhaleTracker(blockchain)
         params = {
             'module': 'account',

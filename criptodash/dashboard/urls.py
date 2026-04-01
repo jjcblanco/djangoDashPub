@@ -1,7 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
-from . import views
 from . import auth_views
 from .views import api_views, bot_views # Para asegurar acceso a follow_whale si es necesario
 
