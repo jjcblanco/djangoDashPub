@@ -182,9 +182,12 @@
                     <div class="col-auto">
                         <label class="form-label mb-1" style="font-size:.8rem;color:#9e9e9e;">Intervalo</label>
                         <select name="timeframe" id="timeframe" class="form-select form-select-sm" style="width:110px;">
-                            {% for tf in "1m,5m,15m,1h,4h,1d"|split:"," %}
-                            <option value="{{ tf }}" {% if timeframe == tf %}selected{% endif %}>{{ tf }}</option>
-                            {% endfor %}
+                            <option value="1m"  {% if timeframe == "1m"  %}selected{% endif %}>1m</option>
+                            <option value="5m"  {% if timeframe == "5m"  %}selected{% endif %}>5m</option>
+                            <option value="15m" {% if timeframe == "15m" %}selected{% endif %}>15m</option>
+                            <option value="1h"  {% if timeframe == "1h"  %}selected{% endif %}>1h</option>
+                            <option value="4h"  {% if timeframe == "4h"  %}selected{% endif %}>4h</option>
+                            <option value="1d"  {% if timeframe == "1d"  %}selected{% endif %}>1d</option>
                         </select>
                     </div>
                     <div class="col-auto">
