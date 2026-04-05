@@ -4,219 +4,354 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CriptoDash - Dashboard Mejorado</title>
+    <title>CriptoDash – Señales Avanzadas</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
             --primary: #667eea;
             --secondary: #764ba2;
-            --success: #2ecc71;
-            --danger: #e74c3c;
-            --warning: #f39c12;
-            --info: #3498db;
+            --dark-bg: #1a1a2e;
+            --card-bg: #16213e;
+            --accent: #0f3460;
+            --text: #e0e0e0;
+            --success: #26a69a;
+            --danger: #ef5350;
         }
 
+        * { box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f8f9fa;
+            background: var(--dark-bg);
+            color: var(--text);
         }
 
+        /* NAVBAR */
         .navbar {
             background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            padding: 1rem 2rem;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.3);
+            padding: 0.75rem 1.5rem;
+        }
+        .navbar-brand { font-size: 22px; font-weight: 700; color: white !important; }
+        .navbar-nav .nav-link { color: rgba(255,255,255,0.85) !important; }
+        .navbar-nav .nav-link:hover { color: white !important; }
+
+        /* CARDS */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+        }
+        .card-header {
+            border-radius: 16px 16px 0 0 !important;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            background: var(--accent) !important;
+            font-weight: 600;
         }
 
-        .navbar-brand {
-            font-size: 24px;
-            font-weight: bold;
-            color: white !important;
+        /* STATS BADGES */
+        .stat-card {
+            background: linear-gradient(135deg, var(--accent), var(--card-bg));
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 12px;
+            padding: 14px 18px;
+            text-align: center;
+        }
+        .stat-card .stat-val { font-size: 1.5rem; font-weight: 700; }
+        .stat-card .stat-lbl { font-size: 0.78rem; color: #9e9e9e; margin-top: 2px; }
+
+        /* TOGGLES */
+        .overlay-toggles {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 10px;
+        }
+        .overlay-toggle-btn {
             display: flex;
             align-items: center;
-            gap: 10px;
-        }
-
-        .navbar-brand i {
-            font-size: 28px;
-        }
-
-        .navbar-nav .nav-link {
-            color: rgba(255, 255, 255, 0.9) !important;
-            margin-left: 20px;
-            transition: all 0.3s;
-        }
-
-        .navbar-nav .nav-link:hover {
-            color: white !important;
-        }
-
-        .card {
-            border: none;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-        }
-
-        .card-header {
-            border-radius: 15px 15px 0 0 !important;
-            border: none;
-            font-weight: 600;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            border: none;
-            border-radius: 25px;
-            padding: 10px 25px;
-            font-weight: 600;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .table {
-            border-radius: 10px;
-            overflow: hidden;
-        }
-
-        .progress {
-            border-radius: 10px;
-        }
-
-        .alert {
-            border-radius: 10px;
-            border: none;
-        }
-
-        .badge {
-            font-size: 0.75em;
-            padding: 6px 12px;
+            gap: 6px;
+            padding: 6px 14px;
             border-radius: 20px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.06);
+            color: #bbb;
+            transition: all .2s;
+            user-select: none;
         }
+        .overlay-toggle-btn.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+            box-shadow: 0 0 12px rgba(102,126,234,0.4);
+        }
+        .overlay-toggle-btn:hover { transform: translateY(-1px); }
+
+        /* CONTROLS FORM */
+        .form-select, .form-control {
+            background: #0d1b2a;
+            border-color: rgba(255,255,255,0.12);
+            color: var(--text);
+        }
+        .form-select:focus, .form-control:focus {
+            background: #0d1b2a;
+            color: var(--text);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(102,126,234,0.25);
+        }
+
+        /* STALE ALERT */
+        .alert-stale {
+            background: rgba(239,83,80,0.1);
+            border: 1px solid rgba(239,83,80,0.4);
+            border-radius: 10px;
+            color: #ef9a9a;
+        }
+
+        /* TABLE */
+        .table { color: var(--text); }
+        .table-dark { --bs-table-bg: var(--card-bg); }
+        .badge-buy  { background: rgba(38,166,154,0.2); color: #26a69a; border: 1px solid rgba(38,166,154,0.4); }
+        .badge-sell { background: rgba(239,83,80,0.2);  color: #ef5350;  border: 1px solid rgba(239,83,80,0.4); }
+
+        /* LEGEND BAR */
+        .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/">
-                <i class="fas fa-chart-line"></i> CriptoDash
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'dashboard_index' %}"><i class="fas fa-home"></i> Inicio</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'dashboard_nuevo' %}"><i class="fas fa-chart-area"></i> Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'technical_analysis' %}"><i class="fas fa-chart-line"></i> Análisis Técnico</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'backtest' %}"><i class="fas fa-flask"></i> Backtesting</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'bot_dashboard' %}"><i class="fas fa-robot"></i> Live Bots</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'import_data' %}"><i class="fas fa-download"></i> Importar Datos</a>
-                    </li>
-                </ul>
-                {% if user.is_authenticated %}
-                <div class="nav-user-section" style="display: flex; align-items: center; gap: 15px; margin-left: auto;">
-                    <span class="user-welcome" style="color: rgba(255, 255, 255, 0.95); font-size: 14px;">👋 ¡Hola, {{ user.first_name | default:user.username }}!</span>
-                    <a href="{% url 'profile' %}" class="btn btn-light btn-sm">
-                        <i class="fas fa-user-circle"></i> Perfil
-                    </a>
-                    <a href="{% url 'custom_logout' %}" class="btn btn-outline-light btn-sm">
-                        <i class="fas fa-sign-out-alt"></i> Salir
-                    </a>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </nav>
+
+<nav class="navbar navbar-expand-lg navbar-dark">
     <div class="container-fluid">
-        <div class="card mb-4">
-            <div class="card-header bg-primary text-white">
-                <h5 class="card-title mb-0">📅 Seleccionar Período de Análisis</h5>
+        <a class="navbar-brand" href="/"><i class="fas fa-chart-line me-2"></i>CriptoDash</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="{% url 'dashboard_index' %}"><i class="fas fa-home me-1"></i>Inicio</a></li>
+                <li class="nav-item"><a class="nav-link active" href="{% url 'dashboard_nuevo' %}"><i class="fas fa-chart-area me-1"></i>Dashboard</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'technical_analysis' %}"><i class="fas fa-chart-line me-1"></i>Análisis</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'backtest' %}"><i class="fas fa-flask me-1"></i>Backtest</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'bot_dashboard' %}"><i class="fas fa-robot me-1"></i>Live Bots</a></li>
+            </ul>
+            {% if user.is_authenticated %}
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span style="color:rgba(255,255,255,.9);font-size:13px;">👋 {{ user.first_name|default:user.username }}</span>
+                <a href="{% url 'profile' %}" class="btn btn-light btn-sm"><i class="fas fa-user-circle me-1"></i>Perfil</a>
+                <a href="{% url 'custom_logout' %}" class="btn btn-outline-light btn-sm"><i class="fas fa-sign-out-alt me-1"></i>Salir</a>
             </div>
-            <div class="card-body">
-                <form method="get" class="mb-3" style="display:flex;gap:10px;align-items:center;">
-                    <label for="pair">Par:</label>
-                    <select id="pair" name="pair" class="form-control" style="width:160px;">
-                        {% for p in available_pairs %}
-                        <option value="{{ p }}" {% if pair_selected == p %}selected{% endif %}>{{ p }}</option>
-                        {% endfor %}
-                    </select>
-
-                    <label for="timeframe">Intervalo:</label>
-                    <select id="timeframe" name="timeframe" class="form-control" style="width:120px;">
-                        <option value="1m" {% if timeframe == '1m' %}selected{% endif %}>1m</option>
-                        <option value="5m" {% if timeframe == '5m' %}selected{% endif %}>5m</option>
-                        <option value="15m" {% if timeframe == '15m' %}selected{% endif %}>15m</option>
-                        <option value="1h" {% if timeframe == '1h' %}selected{% endif %}>1h</option>
-                        <option value="4h" {% if timeframe == '4h' %}selected{% endif %}>4h</option>
-                        <option value="1d" {% if timeframe == '1d' %}selected{% endif %}>1d</option>
-                    </select>
-
-                    <label for="fecha_inicio">Desde:</label>
-                    <input id="fecha_inicio" name="fecha_inicio" type="date" value="{{ fecha_inicio }}" class="form-control" />
-
-                    <label for="fecha_fin">Hasta:</label>
-                    <input id="fecha_fin" name="fecha_fin" type="date" value="{{ fecha_fin }}" class="form-control" />
-
-                    <button type="submit" class="btn btn-primary">Actualizar</button>
-                    <button type="submit" name="refresh" value="1" class="btn btn-success">
-                        <i class="fas fa-sync-alt"></i> Generar Nuevas Señales
-                    </button>
-                </form>
-            </div>
+            {% endif %}
         </div>
-
-        <div class="alert alert-info">
-            <strong>Fuente de datos:</strong> {{ fuente_datos|default:"Base de datos local" }}
-        </div>
-
-        {% if error %}
-        <div class="alert alert-danger">
-            <h4>❌ Error en el Análisis</h4>
-            <p class="mb-0">{{ error }}</p>
-        </div>
-        {% else %}
-        
-        <div class="row mb-4">
-            <!-- Stats summary cards here -->
-        </div>
-
-        <div class="card">
-            <div class="card-header bg-dark text-white">
-                <h5 class="card-title mb-0">📈 Gráfico de Trading {{ pair_selected|default:"ETH/USDT" }}</h5>
-            </div>
-            <div class="card-body">
-                {{ grafico|safe }}
-            </div>
-        </div>
-        
-        {% if señales %}
-        <div class="card mt-4">
-            <div class="card-header bg-dark text-white">
-                <h5 class="card-title mb-0">📋 Detalle de Señales Generadas</h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <!-- Table content here -->
-                </div>
-            </div>
-        </div>
-        {% endif %}
-        {% endif %}
     </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+</nav>
+
+<div class="container-fluid p-3">
+
+    <!-- ===== CONTROL FORM ===== -->
+    <div class="card mb-3">
+        <div class="card-header text-white">
+            <i class="fas fa-sliders-h me-2"></i>Configuración del Análisis
+        </div>
+        <div class="card-body">
+            <form method="get" id="chartForm">
+                <!-- Hidden fields for toggles -->
+                <input type="hidden" name="show_ema"      id="h_show_ema"      value="{{ show_ema|yesno:'1,0' }}">
+                <input type="hidden" name="show_rsi"      id="h_show_rsi"      value="{{ show_rsi|yesno:'1,0' }}">
+                <input type="hidden" name="show_macd"     id="h_show_macd"     value="{{ show_macd|yesno:'1,0' }}">
+                <input type="hidden" name="show_ichimoku" id="h_show_ichimoku" value="{{ show_ichimoku|yesno:'1,0' }}">
+                <input type="hidden" name="show_bb"       id="h_show_bb"       value="{{ show_bb|yesno:'1,0' }}">
+                <input type="hidden" name="show_sr"       id="h_show_sr"       value="{{ show_sr|yesno:'1,0' }}">
+                <input type="hidden" name="show_elliott"  id="h_show_elliott"  value="{{ show_elliott|yesno:'1,0' }}">
+                <input type="hidden" name="show_patterns" id="h_show_patterns" value="{{ show_patterns|yesno:'1,0' }}">
+
+                <div class="row g-2 align-items-end mb-3">
+                    <div class="col-auto">
+                        <label class="form-label mb-1" style="font-size:.8rem;color:#9e9e9e;">Par</label>
+                        <select name="pair" id="pair" class="form-select form-select-sm" style="width:150px;">
+                            {% for p in available_pairs %}
+                            <option value="{{ p }}" {% if pair_selected == p %}selected{% endif %}>{{ p }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label mb-1" style="font-size:.8rem;color:#9e9e9e;">Intervalo</label>
+                        <select name="timeframe" id="timeframe" class="form-select form-select-sm" style="width:110px;">
+                            {% for tf in "1m,5m,15m,1h,4h,1d"|split:"," %}
+                            <option value="{{ tf }}" {% if timeframe == tf %}selected{% endif %}>{{ tf }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label mb-1" style="font-size:.8rem;color:#9e9e9e;">Desde</label>
+                        <input type="date" name="fecha_inicio" value="{{ fecha_inicio }}" class="form-control form-control-sm" style="width:145px;">
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label mb-1" style="font-size:.8rem;color:#9e9e9e;">Hasta</label>
+                        <input type="date" name="fecha_fin" value="{{ fecha_fin }}" class="form-control form-control-sm" style="width:145px;">
+                    </div>
+                    <div class="col-auto d-flex gap-2">
+                        <button type="submit" class="btn btn-primary btn-sm px-4">
+                            <i class="fas fa-sync-alt me-1"></i>Actualizar
+                        </button>
+                        <button type="submit" name="refresh" value="1" class="btn btn-success btn-sm px-3">
+                            <i class="fas fa-bolt me-1"></i>Generar Señales
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Overlay Toggle Buttons -->
+                <div class="overlay-toggles">
+                    <span style="font-size:.78rem;color:#9e9e9e;align-self:center;margin-right:4px;"><i class="fas fa-layer-group me-1"></i>Overlays:</span>
+
+                    {% for toggle_key, toggle_icon, toggle_label, toggle_val in toggle_list %}
+                    <button type="button"
+                        class="overlay-toggle-btn {% if toggle_val %}active{% endif %}"
+                        data-key="{{ toggle_key }}"
+                        onclick="toggleOverlay('{{ toggle_key }}', this)">
+                        <i class="{{ toggle_icon }}"></i> {{ toggle_label }}
+                    </button>
+                    {% endfor %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Alerts -->
+    {% if is_stale %}
+    <div class="alert alert-stale mb-3">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <strong>Datos obsoletos:</strong> La última señal tiene más de 24 horas. Haz clic en «Generar Señales» para actualizar.
+    </div>
+    {% endif %}
+    {% if error_message %}
+    <div class="alert alert-danger mb-3">
+        <i class="fas fa-times-circle me-2"></i> {{ error_message }}
+    </div>
+    {% endif %}
+
+    <!-- ===== STATS ROW ===== -->
+    {% if stats %}
+    <div class="row g-2 mb-3">
+        <div class="col-6 col-md-3 col-lg-2">
+            <div class="stat-card">
+                <div class="stat-val text-white">{{ stats.total_señales }}</div>
+                <div class="stat-lbl">Total Señales</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-lg-2">
+            <div class="stat-card">
+                <div class="stat-val" style="color:#26a69a;">{{ stats.compras }}</div>
+                <div class="stat-lbl">Compras</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-lg-2">
+            <div class="stat-card">
+                <div class="stat-val" style="color:#ef5350;">{{ stats.ventas }}</div>
+                <div class="stat-lbl">Ventas</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-lg-2">
+            <div class="stat-card">
+                <div class="stat-val" style="color:#ffd54f;">{{ stats.fuerza_promedio }}</div>
+                <div class="stat-lbl">Fuerza Prom.</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-lg-2">
+            <div class="stat-card">
+                <div class="stat-val text-info">{{ stats.market_state|default:"—" }}</div>
+                <div class="stat-lbl">Estado Mercado</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-lg-2">
+            <div class="stat-card">
+                <div class="stat-val" style="color:#b39ddb;">{{ stats.grid_recommendation|default:"—" }}</div>
+                <div class="stat-lbl">Sugerencia Grid</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ===== MAIN CHART ===== -->
+    <div class="card mb-3">
+        <div class="card-header text-white d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-chart-candlestick me-2"></i> {{ pair_selected|default:"ETH/USDT" }} — {{ timeframe|default:"1h" }}</span>
+            <small class="text-muted">{{ fuente_datos }}</small>
+        </div>
+        <div class="card-body p-0" style="overflow:hidden;border-radius:0 0 16px 16px;">
+            {% if grafico %}
+                {{ grafico|safe }}
+            {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-chart-area fa-3x mb-3 d-block" style="opacity:.3;"></i>
+                    Sin datos. Seleccioná un par y hacé clic en «Generar Señales».
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ===== SIGNALS TABLE ===== -->
+    {% if señales %}
+    <div class="card mb-3">
+        <div class="card-header text-white">
+            <i class="fas fa-table me-2"></i>Últimas Señales Generadas
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Fecha/Hora</th>
+                            <th>Tipo</th>
+                            <th>Precio</th>
+                            <th>Fuerza</th>
+                            <th>Indicador</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in señales|slice:":50" %}
+                        <tr>
+                            <td>{{ s.timestamp|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                {% if s.signal_type == "BUY" or s.signal_type == "buy" %}
+                                    <span class="badge badge-buy"><i class="fas fa-arrow-up me-1"></i>COMPRA</span>
+                                {% else %}
+                                    <span class="badge badge-sell"><i class="fas fa-arrow-down me-1"></i>VENTA</span>
+                                {% endif %}
+                            </td>
+                            <td><strong>${{ s.price|floatformat:2 }}</strong></td>
+                            <td>
+                                <div class="progress" style="height:6px;width:80px;background:rgba(255,255,255,.1);">
+                                    <div class="progress-bar"
+                                        style="width:{% widthratio s.strength 10 100 %}%;background:{% if s.signal_type == 'BUY' or s.signal_type == 'buy' %}#26a69a{% else %}#ef5350{% endif %};">
+                                    </div>
+                                </div>
+                                <small class="text-muted">{{ s.strength|floatformat:1 }}</small>
+                            </td>
+                            <td><small class="text-muted">{{ s.indicator|default:"—" }}</small></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div><!-- /container -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+<script>
+function toggleOverlay(key, btn) {
+    const hiddenInput = document.getElementById('h_' + key);
+    const isActive = btn.classList.toggle('active');
+    hiddenInput.value = isActive ? '1' : '0';
+}
+</script>
 </body>
 </html>

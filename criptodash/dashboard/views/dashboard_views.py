@@ -152,11 +152,21 @@ def dashboard_mejorado(request):
         from ..data_service import DataManager
         from ..indicadores import calculate_rsi, ichimoku_cloud
         
-        # Parámetros de visualización (por defecto EMAs y RSI activos)
+        # Parámetros de visualización (por defecto EMAs, RSI y MACD activos)
+        def _toggle(key, default=False):
+            if key in request.GET:
+                return request.GET.get(key) == '1'
+            return default
+
         viz_params = {
-            'show_ema': request.GET.get('show_ema') == '1' if 'show_ema' in request.GET else True,
-            'show_rsi': request.GET.get('show_rsi') == '1' if 'show_rsi' in request.GET else True,
-            'show_ichimoku': request.GET.get('show_ichimoku') == '1'
+            'show_ema':      _toggle('show_ema',      default=True),
+            'show_rsi':      _toggle('show_rsi',      default=True),
+            'show_macd':     _toggle('show_macd',     default=True),
+            'show_ichimoku': _toggle('show_ichimoku',  default=False),
+            'show_bb':       _toggle('show_bb',        default=False),
+            'show_sr':       _toggle('show_sr',        default=False),
+            'show_elliott':  _toggle('show_elliott',   default=False),
+            'show_patterns': _toggle('show_patterns',  default=False),
         }
         
         # Obtener los datos base respetando los filtros de fecha
@@ -170,13 +180,17 @@ def dashboard_mejorado(request):
         
         if not ohlcv_df.empty:
             # Calcular indicadores dinámicamente para el gráfico
-            ohlcv_df['ema9'] = ohlcv_df['close'].ewm(span=9, adjust=False).mean()
-            ohlcv_df['ema21'] = ohlcv_df['close'].ewm(span=21, adjust=False).mean()
-            ohlcv_df['ema50'] = ohlcv_df['close'].ewm(span=50, adjust=False).mean()
+            ohlcv_df['ema9']   = ohlcv_df['close'].ewm(span=9,   adjust=False).mean()
+            ohlcv_df['ema21']  = ohlcv_df['close'].ewm(span=21,  adjust=False).mean()
+            ohlcv_df['ema50']  = ohlcv_df['close'].ewm(span=50,  adjust=False).mean()
             ohlcv_df['ema200'] = ohlcv_df['close'].ewm(span=200, adjust=False).mean()
-            ohlcv_df['rsi'] = calculate_rsi(ohlcv_df, period=14)
-            
-            # Calcular Ichimoku solo si se solicita o si es necesario para el merge
+            ohlcv_df['rsi']    = calculate_rsi(ohlcv_df, period=14)
+
+            # MACD (siempre calculado para que el panel esté disponible)
+            from ..indicadores import macd as calc_macd
+            ohlcv_df = calc_macd(ohlcv_df)
+
+            # Ichimoku (solo si se solicita)
             if viz_params['show_ichimoku']:
                 ohlcv_df = ichimoku_cloud(ohlcv_df)
             
@@ -243,10 +257,28 @@ def dashboard_mejorado(request):
         'is_stale': is_stale,
         'fuente_datos': fuente_datos,
         'error_message': error_message,
-        'show_ema': viz_params['show_ema'],
-        'show_rsi': viz_params['show_rsi'],
-        'show_ichimoku': viz_params['show_ichimoku'],
+        # Toggles para el template
+        'show_ema':      viz_params.get('show_ema',      True),
+        'show_rsi':      viz_params.get('show_rsi',      True),
+        'show_macd':     viz_params.get('show_macd',     True),
+        'show_ichimoku': viz_params.get('show_ichimoku', False),
+        'show_bb':       viz_params.get('show_bb',       False),
+        'show_sr':       viz_params.get('show_sr',       False),
+        'show_elliott':  viz_params.get('show_elliott',  False),
+        'show_patterns': viz_params.get('show_patterns', False),
+        # Lista para los botones toggle del template
+        'toggle_list': [
+            ('show_ema',      'fas fa-chart-line',    'EMAs',          viz_params.get('show_ema',      True)),
+            ('show_rsi',      'fas fa-tachometer-alt','RSI',           viz_params.get('show_rsi',      True)),
+            ('show_macd',     'fas fa-wave-square',   'MACD',          viz_params.get('show_macd',     True)),
+            ('show_ichimoku', 'fas fa-cloud',         'Ichimoku',      viz_params.get('show_ichimoku', False)),
+            ('show_bb',       'fas fa-compress-arrows-alt','Bollinger',viz_params.get('show_bb',       False)),
+            ('show_sr',       'fas fa-grip-lines',    'Sop/Res',       viz_params.get('show_sr',       False)),
+            ('show_elliott',  'fas fa-water',         'Elliott',       viz_params.get('show_elliott',  False)),
+            ('show_patterns', 'fas fa-shapes',        'Patrones',      viz_params.get('show_patterns', False)),
+        ],
     }
+
     
     return render(request, 'dashboard/dashboard_mejorado.html', context)
 @login_required
