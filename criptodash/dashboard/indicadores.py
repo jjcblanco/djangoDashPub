@@ -801,84 +801,133 @@ def detect_candlestick_patterns(df):
 
 
 '''
-
-📊 Mejoras para Bollinger Bands y Señales de Compra/Venta
-
-🎯 Estrategias de Señales Específicas
-
-
-📊 Visualización Mejorada en tu Dashboard
-python
-# En tu callback de Plotly:
-def update_chart(indicadores_activos, tema, n_clicks):
-    candles = cargar_datos()
-    
-    # Filtrar señales de Bollinger Bands
-    bb_buy_signals = candles[
-        (candles['signal_buy_sell'] == 'buy') & 
-        (candles['signal_type'].str.contains('BB_', na=False))
-    ]
-    bb_sell_signals = candles[
-        (candles['signal_buy_sell'] == 'sell') & 
-        (candles['signal_type'].str.contains('BB_', na=False))
-    ]
-    
-    fig = go.Figure()
-    
-    # ... tu código actual de velas ...
-    
-    # Agregar Bollinger Bands al gráfico
-    if 'bollinger' in indicadores_activos:
-        # Bandas principales
-        fig.add_trace(go.Scatter(
-            x=candles['timestamp'], y=candles['bb_upper'],
-            line=dict(color='purple', width=1, dash='dash'),
-            name='BB Upper'
-        ))
-        fig.add_trace(go.Scatter(
-            x=candles['timestamp'], y=candles['bb_lower'],
-            line=dict(color='purple', width=1, dash='dash'),
-            name='BB Lower',
-            fill='tonexty'
-        ))
-        fig.add_trace(go.Scatter(
-            x=candles['timestamp'], y=candles['bb_middle'],
-            line=dict(color='blue', width=1),
-            name='BB Middle'
-        ))
-    
-    # Agregar señales BB específicas
-    if 'signals' in indicadores_activos:
-        if not bb_buy_signals.empty:
-            fig.add_trace(go.Scatter(
-                x=bb_buy_signals['timestamp'], 
-                y=bb_buy_signals['close'],
-                mode='markers',
-                marker=dict(color='lime', symbol='circle', size=10),
-                name='Compra BB'
-            ))
-        
-        if not bb_sell_signals.empty:
-            fig.add_trace(go.Scatter(
-                x=bb_sell_signals['timestamp'], 
-                y=bb_sell_signals['close'],
-                mode='markers',
-                marker=dict(color='magenta', symbol='x', size=10),
-                name='Venta BB'
-            ))
-    
-    return fig
-🎯 Resumen de Mejoras
-Múltiples bandas (1std y 2std)
-
-Indicadores derivados (%B, Bandwidth, Position)
-
-4 estrategias diferentes de trading
-
-Señales priorizadas y limpiadas
-
-Flexibilidad para usar estrategias específicas
-
-Integración perfecta con tu código existente
-
+Código de ejemplo para integración de Bollinger con Plotly (referencia)
 '''
+
+
+# --- Soporte y Resistencia Automáticos ---
+
+def detect_support_resistance(df, window=5, tolerance=0.015, max_levels=6):
+    """
+    Detecta niveles de Soporte y Resistencia automáticamente.
+
+    Algoritmo:
+    1. Detecta pivotes altos (resistencias) y bajos (soportes) locales.
+    2. Agrupa niveles cercanos (dentro de la tolerancia) en un único nivel representativo.
+    3. Devuelve los niveles más relevantes (más tocados).
+
+    Parámetros:
+    - df: DataFrame con columnas high, low, close.
+    - window: Ventana local para detectar máximos/mínimos (default=5).
+    - tolerance: % de tolerancia para agrupar niveles cercanos (default=1.5%).
+    - max_levels: Máximo de niveles a devolver por tipo (default=6).
+
+    Retorna:
+    - dict con {'supports': [precios], 'resistances': [precios]}
+    """
+    highs = df['high'].values
+    lows = df['low'].values
+
+    pivot_highs = []
+    pivot_lows = []
+
+    for i in range(window, len(df) - window):
+        is_high = all(highs[i] >= highs[i - j] for j in range(1, window + 1)) and \
+                  all(highs[i] >= highs[i + j] for j in range(1, window + 1))
+        is_low = all(lows[i] <= lows[i - j] for j in range(1, window + 1)) and \
+                 all(lows[i] <= lows[i + j] for j in range(1, window + 1))
+
+        if is_high:
+            pivot_highs.append(highs[i])
+        if is_low:
+            pivot_lows.append(lows[i])
+
+    def cluster_levels(levels, tol):
+        """Agrupa niveles cercanos en clusters y devuelve el promedio de cada cluster."""
+        if not levels:
+            return []
+        levels = sorted(levels)
+        clusters = [[levels[0]]]
+        for lv in levels[1:]:
+            if abs(lv - clusters[-1][-1]) / clusters[-1][-1] <= tol:
+                clusters[-1].append(lv)
+            else:
+                clusters.append([lv])
+        # Devolver el nivel promedio de cada cluster, ordenados por cantidad de toques (peso)
+        result = sorted([(sum(c) / len(c), len(c)) for c in clusters], key=lambda x: -x[1])
+        return [r[0] for r in result[:max_levels]]
+
+    supports = cluster_levels(pivot_lows, tolerance)
+    resistances = cluster_levels(pivot_highs, tolerance)
+
+    return {'supports': supports, 'resistances': resistances}
+
+
+# --- Ondas de Elliott (Detección Automática Simplificada) ---
+
+def detect_elliott_waves(df, order=5):
+    """
+    Detecta una secuencia de ondas de Elliott simplificada.
+
+    Usa máximos/mínimos alternativos locales para identificar los 5 puntos
+    de la onda impulsiva (W1-W5) o las 3 correctivas (A-B-C).
+
+    Parámetros:
+    - df: DataFrame con columnas timestamp, high, low, close.
+    - order: Sensibilidad de detección de pivotes (default=5).
+
+    Retorna:
+    - Lista de dicts: [{'timestamp': ts, 'price': p, 'label': 'W1'}, ...]
+    """
+    try:
+        from scipy.signal import argrelextrema
+    except ImportError:
+        return []
+
+    closes = df['close'].values
+    timestamps = df['timestamp'].values
+
+    # Detectar máximos y mínimos locales significativos
+    local_max_idx = argrelextrema(closes, np.greater_equal, order=order)[0]
+    local_min_idx = argrelextrema(closes, np.less_equal, order=order)[0]
+
+    # Combinar y ordenar por índice
+    extremes = []
+    for idx in local_max_idx:
+        extremes.append({'idx': idx, 'price': float(closes[idx]), 'type': 'high', 'ts': timestamps[idx]})
+    for idx in local_min_idx:
+        extremes.append({'idx': idx, 'price': float(closes[idx]), 'type': 'low', 'ts': timestamps[idx]})
+
+    extremes.sort(key=lambda x: x['idx'])
+
+    # Eliminar duplicados consecutivos del mismo tipo (mantener el más extremo)
+    filtered = []
+    for e in extremes:
+        if filtered and filtered[-1]['type'] == e['type']:
+            # Mantener el más extremo
+            if e['type'] == 'high' and e['price'] > filtered[-1]['price']:
+                filtered[-1] = e
+            elif e['type'] == 'low' and e['price'] < filtered[-1]['price']:
+                filtered[-1] = e
+        else:
+            filtered.append(e)
+
+    # Tomar los últimos N puntos para las ondas
+    wave_points = filtered[-8:]  # suficiente para 5 ondas impulsivas + 3 correctivas
+
+    # Labels: W1-W5 para las primeras 5, A-B-C para las siguientes 3
+    labels_impulsive = ['W1', 'W2', 'W3', 'W4', 'W5']
+    labels_corrective = ['A', 'B', 'C']
+    all_labels = labels_impulsive + labels_corrective
+
+    result = []
+    for i, pt in enumerate(wave_points):
+        label = all_labels[i] if i < len(all_labels) else f'P{i+1}'
+        result.append({
+            'timestamp': pt['ts'],
+            'price': pt['price'],
+            'label': label,
+            'type': pt['type']
+        })
+
+    return result
