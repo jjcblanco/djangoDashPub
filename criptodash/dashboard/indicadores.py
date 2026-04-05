@@ -493,7 +493,7 @@ def generar_señales_ichimoku(data, kijun=26):
     if 'signal_buy_sell' not in data.columns:
         data['signal_buy_sell'] = ' '
     if 'signal_strenght' not in data.columns:
-        data['signal_strenght'] = 0
+        data['signal_strenght'] = 0.0
     else:
         # Asegurar que los valores existentes sean numéricos
         data['signal_strenght'] = pd.to_numeric(data['signal_strenght'], errors='coerce').fillna(0)
@@ -629,7 +629,7 @@ def generate_rsi_signals(df, rsi_period=14, overbought=70, oversold=30):
     if 'signal_type' not in df.columns:
         df['signal_type'] = ''
     if 'signal_strenght' not in df.columns:
-        df['signal_strenght'] = 0
+        df['signal_strenght'] = 0.0
     
     # Generar señales para cada punto
     for i in range(1, len(df)):

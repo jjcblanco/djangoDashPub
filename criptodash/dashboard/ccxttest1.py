@@ -137,7 +137,7 @@ def signals(df):
     # 2. Inicializar columnas de señales
     df['signal_buy_sell'] = 'none'
     if 'signal_strenght' not in df.columns:
-        df['signal_strenght'] = 0
+        df['signal_strenght'] = 0.0
     
     df['stop_loss'] = np.nan
     df['take_profit'] = np.nan
