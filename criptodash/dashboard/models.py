@@ -312,3 +312,34 @@ class ShadowTrade(models.Model):
 
     def __str__(self):
         return f"Shadow {self.token_symbol} - {self.wallet.name or self.wallet.address[:8]}"
+
+
+class WhaleHuntTarget(models.Model):
+    """
+    Contrato de token a escanear automáticamente para descubrir ballenas.
+    Administrable desde el panel visual del dashboard.
+    """
+    BLOCKCHAIN_CHOICES = [
+        ('solana', 'Solana'),
+        ('ethereum', 'Ethereum'),
+        ('base', 'Base'),
+        ('hyperliquid', 'Hyperliquid'),
+    ]
+
+    blockchain = models.CharField(max_length=50, choices=BLOCKCHAIN_CHOICES, default='ethereum')
+    token_symbol = models.CharField(max_length=20, help_text="Símbolo del token. Ej: WIF, PEPE, BONK")
+    contract_address = models.CharField(max_length=255, help_text="Dirección del contrato del token")
+    min_volume_usd = models.FloatField(default=3000, help_text="Volumen mínimo en USD para considerar como ballena")
+    is_active = models.BooleanField(default=True, help_text="Desactivar para pausar sin borrar")
+    notes = models.CharField(max_length=200, blank=True, null=True, help_text="Notas opcionales")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [['contract_address', 'blockchain']]
+        ordering = ['blockchain', 'token_symbol']
+        verbose_name = "Whale Hunt Target"
+        verbose_name_plural = "Whale Hunt Targets"
+
+    def __str__(self):
+        return f"${self.token_symbol} ({self.blockchain}) — {self.contract_address[:12]}..."
+

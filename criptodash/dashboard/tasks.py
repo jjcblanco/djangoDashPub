@@ -104,95 +104,104 @@ def sync_all_whales_task():
 # ───────────────────────────────────────────
 # HUNTER DE BALLENAS POR PAR / TOKEN
 # ───────────────────────────────────────────
-# Diccionario de contratos objetivo. Añade o quita tokens aquí.
-# Formato: { 'blockchain': ['contrato1', 'contrato2', ...] }
-WHALE_HUNT_TARGETS = {
-    'solana': [
-        'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',  # $WIF
-        'DezXAZ8z7Pnrn9vzctrxEXpWMrNHqR1f6f69nL4XYUDx',  # $BONK
-        'JUPyiPZp718zay7kaPn2CoJvRwvpqcRuS5B7shuYf79',   # $JUP
-    ],
-    'ethereum': [
-        '0x6982508145454ce325ddbe47a25d4ec3d2311933',  # $PEPE
-        '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE',  # $SHIB
-    ],
-    'base': [
-        '0x2da56acd00b702c8f5a43d65f5fcbef7b3f3c36c',  # $TOSHI (Base)
-    ],
-}
 
-# Volumen mínimo en USD para considerar a alguien como "ballena"
-WHALE_HUNT_MIN_VOLUME_USD = 3000
+# Targets por defecto usados como semilla si la BD está vacía
+_DEFAULT_HUNT_TARGETS = [
+    {'blockchain': 'solana',   'token_symbol': 'WIF',   'contract_address': 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', 'min_volume_usd': 3000},
+    {'blockchain': 'solana',   'token_symbol': 'BONK',  'contract_address': 'DezXAZ8z7Pnrn9vzctrxEXpWMrNHqR1f6f69nL4XYUDx', 'min_volume_usd': 2000},
+    {'blockchain': 'solana',   'token_symbol': 'JUP',   'contract_address': 'JUPyiPZp718zay7kaPn2CoJvRwvpqcRuS5B7shuYf79',  'min_volume_usd': 5000},
+    {'blockchain': 'ethereum', 'token_symbol': 'PEPE',  'contract_address': '0x6982508145454ce325ddbe47a25d4ec3d2311933',      'min_volume_usd': 5000},
+    {'blockchain': 'ethereum', 'token_symbol': 'SHIB',  'contract_address': '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE',      'min_volume_usd': 5000},
+    {'blockchain': 'base',     'token_symbol': 'TOSHI', 'contract_address': '0x2da56acd00b702c8f5a43d65f5fcbef7b3f3c36c',      'min_volume_usd': 2000},
+]
+
+
+def _seed_hunt_targets():
+    """Carga los targets por defecto en la BD si no existe ninguno."""
+    from dashboard.models import WhaleHuntTarget
+    if WhaleHuntTarget.objects.exists():
+        return
+    for t in _DEFAULT_HUNT_TARGETS:
+        WhaleHuntTarget.objects.get_or_create(
+            contract_address=t['contract_address'],
+            blockchain=t['blockchain'],
+            defaults={
+                'token_symbol': t['token_symbol'],
+                'min_volume_usd': t['min_volume_usd'],
+                'is_active': True,
+            }
+        )
+    logger.info("[WhaleHunter] Targets por defecto sembrados en la BD.")
 
 
 @shared_task
 def hunt_whales_by_pair_task():
     """
-    Escanea los pares configurados en WHALE_HUNT_TARGETS y añade
-    automáticamente al sistema a los mayores compradores encontrados.
-    Se puede lanzar manualmente o programar con Celery Beat.
+    Escanea los targets activos en WhaleHuntTarget (administrables desde el
+    panel del dashboard) y añade automáticamente los mayores compradores.
     """
-    from dashboard.models import WhaleWallet
+    from dashboard.models import WhaleWallet, WhaleHuntTarget
     from dashboard.services import PatternEngine
+
+    # Semilla automática si la tabla está vacía
+    _seed_hunt_targets()
+
+    targets = WhaleHuntTarget.objects.filter(is_active=True)
+    if not targets.exists():
+        logger.warning("[WhaleHunter] No hay targets activos en la BD.")
+        return {'new': 0, 'updated': 0}
 
     total_new = 0
     total_updated = 0
 
-    for blockchain, token_addresses in WHALE_HUNT_TARGETS.items():
-        for token_address in token_addresses:
-            logger.info(f"[WhaleHunter] Escaneando {blockchain} → {token_address[:12]}...")
+    for target in targets:
+        blockchain = target.blockchain
+        token_address = target.contract_address
+        symbol = target.token_symbol
+        min_vol = target.min_volume_usd
 
-            try:
-                top_buyers = PatternEngine.discover_token_whales(token_address, blockchain)
-            except Exception as e:
-                logger.error(f"[WhaleHunter] Error escaneando {token_address[:12]}: {e}")
+        logger.info(f"[WhaleHunter] Escaneando ${symbol} ({blockchain}) → {token_address[:12]}...")
+
+        try:
+            top_buyers = PatternEngine.discover_token_whales(token_address, blockchain)
+        except Exception as e:
+            logger.error(f"[WhaleHunter] Error escaneando {token_address[:12]}: {e}")
+            continue
+
+        for buyer in top_buyers:
+            wallet_address = buyer.get('address', '')
+            volume = buyer.get('volume', 0)
+
+            if not wallet_address or volume < min_vol:
                 continue
 
-            for buyer in top_buyers:
-                wallet_address = buyer.get('address', '')
-                symbol = buyer.get('symbol', 'UNKNOWN')
-                volume = buyer.get('volume', 0)
+            if blockchain in ['ethereum', 'base']:
+                wallet_address = wallet_address.lower()
 
-                # Filtrar wallets sin dirección o con volumen muy bajo
-                if not wallet_address or volume < WHALE_HUNT_MIN_VOLUME_USD:
-                    continue
+            try:
+                whale, created = WhaleWallet.objects.get_or_create(
+                    address=wallet_address,
+                    blockchain=blockchain,
+                    defaults={
+                        'name': f'Hunter: {symbol} #{wallet_address[:6]}',
+                        'wallet_category': 'OBSERVATION',
+                        'filter_mode': 'OPEN',
+                        'is_active': True,
+                        'target_pairs': symbol,
+                    }
+                )
+                if created:
+                    total_new += 1
+                    logger.info(f"[WhaleHunter] ✅ Nueva ballena de ${symbol}: {wallet_address[:10]} (vol: ${volume:,.0f})")
+                else:
+                    existing_pairs = whale.target_pairs or ''
+                    if symbol.upper() not in [p.strip().upper() for p in existing_pairs.split(',')]:
+                        whale.target_pairs = f"{existing_pairs},{symbol}" if existing_pairs else symbol
+                        whale.save(update_fields=['target_pairs'])
+                        total_updated += 1
+            except Exception as e:
+                logger.error(f"[WhaleHunter] Error creando wallet {wallet_address[:10]}: {e}")
 
-                # Normalizar dirección según la blockchain
-                if blockchain in ['ethereum', 'base']:
-                    wallet_address = wallet_address.lower()
-
-                try:
-                    whale, created = WhaleWallet.objects.get_or_create(
-                        address=wallet_address,
-                        blockchain=blockchain,
-                        defaults={
-                            'name': f'Hunter: {symbol} #{wallet_address[:6]}',
-                            'wallet_category': 'OBSERVATION',
-                            'filter_mode': 'OPEN',
-                            'is_active': True,
-                            'target_pairs': symbol,
-                        }
-                    )
-
-                    if created:
-                        total_new += 1
-                        logger.info(
-                            f"[WhaleHunter] ✅ Nueva ballena de {symbol}: {wallet_address[:10]} "
-                            f"(vol: ${volume:,.0f}) en {blockchain}"
-                        )
-                    else:
-                        # Actualizar target_pairs si el símbolo todavía no está registrado
-                        existing_pairs = whale.target_pairs or ''
-                        if symbol.upper() not in existing_pairs.upper().split(','):
-                            whale.target_pairs = f"{existing_pairs},{symbol}" if existing_pairs else symbol
-                            whale.save(update_fields=['target_pairs'])
-                            total_updated += 1
-
-                except Exception as e:
-                    logger.error(f"[WhaleHunter] Error creando wallet {wallet_address[:10]}: {e}")
-
-    logger.info(
-        f"[WhaleHunter] Caza completada: {total_new} nuevas ballenas, "
-        f"{total_updated} actualizadas con nuevo par."
-    )
+    logger.info(f"[WhaleHunter] Caza completada: {total_new} nuevas, {total_updated} actualizadas.")
     return {'new': total_new, 'updated': total_updated}
+
