@@ -128,7 +128,7 @@
                                         {# ── Badges de target_pairs (Par de origen) ── #}
                                         {% if wallet.target_pairs %}
                                         <div class="d-flex flex-wrap gap-1 ms-1">
-                                            {% for pair_tag in wallet.target_pairs.split "," %}
+                                            {% for pair_tag in wallet.target_pairs_list %}
                                             {% if pair_tag %}
                                             <a href="?pair={{ pair_tag|upper|urlencode }}"
                                                class="badge text-decoration-none"
