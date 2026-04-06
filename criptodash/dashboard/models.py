@@ -267,6 +267,13 @@ class WhaleWallet(models.Model):
     def __str__(self):
         return f"{self.name or self.address[:8]} ({self.blockchain})"
 
+    @property
+    def target_pairs_list(self):
+        """Devuelve una lista limpia de los pares/tokens objetivo."""
+        if not self.target_pairs:
+            return []
+        return [p.strip().upper() for p in self.target_pairs.split(',') if p.strip()]
+
 class WhaleTransaction(models.Model):
     wallet = models.ForeignKey(WhaleWallet, on_delete=models.CASCADE, related_name='transactions')
     tx_hash = models.CharField(max_length=255, unique=True)
