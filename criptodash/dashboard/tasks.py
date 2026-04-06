@@ -99,3 +99,100 @@ def sync_all_whales_task():
     
     logger.info(f"Encolada sincronización en background para {count} ballenas activas.")
     return count
+
+
+# ───────────────────────────────────────────
+# HUNTER DE BALLENAS POR PAR / TOKEN
+# ───────────────────────────────────────────
+# Diccionario de contratos objetivo. Añade o quita tokens aquí.
+# Formato: { 'blockchain': ['contrato1', 'contrato2', ...] }
+WHALE_HUNT_TARGETS = {
+    'solana': [
+        'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',  # $WIF
+        'DezXAZ8z7Pnrn9vzctrxEXpWMrNHqR1f6f69nL4XYUDx',  # $BONK
+        'JUPyiPZp718zay7kaPn2CoJvRwvpqcRuS5B7shuYf79',   # $JUP
+    ],
+    'ethereum': [
+        '0x6982508145454ce325ddbe47a25d4ec3d2311933',  # $PEPE
+        '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE',  # $SHIB
+    ],
+    'base': [
+        '0x2da56acd00b702c8f5a43d65f5fcbef7b3f3c36c',  # $TOSHI (Base)
+    ],
+}
+
+# Volumen mínimo en USD para considerar a alguien como "ballena"
+WHALE_HUNT_MIN_VOLUME_USD = 3000
+
+
+@shared_task
+def hunt_whales_by_pair_task():
+    """
+    Escanea los pares configurados en WHALE_HUNT_TARGETS y añade
+    automáticamente al sistema a los mayores compradores encontrados.
+    Se puede lanzar manualmente o programar con Celery Beat.
+    """
+    from dashboard.models import WhaleWallet
+    from dashboard.services import PatternEngine
+
+    total_new = 0
+    total_updated = 0
+
+    for blockchain, token_addresses in WHALE_HUNT_TARGETS.items():
+        for token_address in token_addresses:
+            logger.info(f"[WhaleHunter] Escaneando {blockchain} → {token_address[:12]}...")
+
+            try:
+                top_buyers = PatternEngine.discover_token_whales(token_address, blockchain)
+            except Exception as e:
+                logger.error(f"[WhaleHunter] Error escaneando {token_address[:12]}: {e}")
+                continue
+
+            for buyer in top_buyers:
+                wallet_address = buyer.get('address', '')
+                symbol = buyer.get('symbol', 'UNKNOWN')
+                volume = buyer.get('volume', 0)
+
+                # Filtrar wallets sin dirección o con volumen muy bajo
+                if not wallet_address or volume < WHALE_HUNT_MIN_VOLUME_USD:
+                    continue
+
+                # Normalizar dirección según la blockchain
+                if blockchain in ['ethereum', 'base']:
+                    wallet_address = wallet_address.lower()
+
+                try:
+                    whale, created = WhaleWallet.objects.get_or_create(
+                        address=wallet_address,
+                        blockchain=blockchain,
+                        defaults={
+                            'name': f'Hunter: {symbol} #{wallet_address[:6]}',
+                            'wallet_category': 'OBSERVATION',
+                            'filter_mode': 'OPEN',
+                            'is_active': True,
+                            'target_pairs': symbol,
+                        }
+                    )
+
+                    if created:
+                        total_new += 1
+                        logger.info(
+                            f"[WhaleHunter] ✅ Nueva ballena de {symbol}: {wallet_address[:10]} "
+                            f"(vol: ${volume:,.0f}) en {blockchain}"
+                        )
+                    else:
+                        # Actualizar target_pairs si el símbolo todavía no está registrado
+                        existing_pairs = whale.target_pairs or ''
+                        if symbol.upper() not in existing_pairs.upper().split(','):
+                            whale.target_pairs = f"{existing_pairs},{symbol}" if existing_pairs else symbol
+                            whale.save(update_fields=['target_pairs'])
+                            total_updated += 1
+
+                except Exception as e:
+                    logger.error(f"[WhaleHunter] Error creando wallet {wallet_address[:10]}: {e}")
+
+    logger.info(
+        f"[WhaleHunter] Caza completada: {total_new} nuevas ballenas, "
+        f"{total_updated} actualizadas con nuevo par."
+    )
+    return {'new': total_new, 'updated': total_updated}
