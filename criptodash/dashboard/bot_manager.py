@@ -167,15 +167,27 @@ class BotManager:
             else:
                 # LÓGICA DE SIMULACIÓN (Papertrading local sin órdenes reales)
                 if trade.status == 'WAITING' and current_price <= float(trade.entry_price):
+                    # Compra ejecutada: calcular y guardar el TP exacto sobre el trade
                     trade.status = 'OPEN'
+                    trade.take_profit = Decimal(str(float(trade.entry_price) + grid_step))
                     trade.save()
-                    logger.info(f"[PAPER] Trade {trade.id} comprado en {trade.entry_price}")
+                    logger.info(f"[PAPER] Trade {trade.id} comprado en {trade.entry_price}. TP fijado en {trade.take_profit}")
                 elif trade.status == 'OPEN':
-                    target_tp = float(trade.entry_price) + grid_step
+                    # Usar el TP guardado en el trade (precio fijo, no recalculado)
+                    # Fallback a entry_price + grid_step para trades legacy sin take_profit
+                    if trade.take_profit:
+                        target_tp = float(trade.take_profit)
+                    else:
+                        target_tp = float(trade.entry_price) + grid_step
+                        # Guardarlo para las próximas iteraciones
+                        trade.take_profit = Decimal(str(target_tp))
+                        trade.save()
+
                     if current_price >= target_tp:
                         BotManager._close_trade(trade, current_price, "GRID_PAPER_TP")
                         if bot.status == 'RUNNING':
                             BotManager._repose_limit_buy(bot, trade.entry_price)
+
 
         # 2. Verificar Stop Loss Global (Si el precio cae por debajo del SL, cancelar todo)
         if stop_loss_price and current_price <= stop_loss_price:
