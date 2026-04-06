@@ -54,6 +54,7 @@ from .whale_views import (
     whale_hot_tokens_ajax,
     suggest_bot_from_whale,
     discover_contract_whales_ajax,
+    trigger_whale_hunt,
 )
 
 # Importar vistas de simulaciones / shadow trading (NUEVO)
@@ -131,6 +132,7 @@ __all__ = [
     'whale_hot_tokens_ajax',
     'suggest_bot_from_whale',
     'discover_contract_whales_ajax',
+    'trigger_whale_hunt',
     'simulate_whale_trade',
     'close_shadow_trade',
 

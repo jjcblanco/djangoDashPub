@@ -251,6 +251,10 @@ class WhaleWallet(models.Model):
     target_token = models.CharField(max_length=100, blank=True, null=True, help_text="Token principal que opera (ej: JUP, PEPE)")
     notes = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
+    target_pairs = models.CharField(
+        max_length=500, blank=True, null=True,
+        help_text="Tokens/pares en los que esta ballena opera. Separados por comas. Ej: SOL,WIF,PEPE"
+    )
     sync_status = models.CharField(max_length=20, default='IDLE', help_text="Estado de la sincronización en background")
     last_sync = models.DateTimeField(null=True, blank=True)
     top_tokens = models.JSONField(default=dict, blank=True)  # {'SOL': 10, 'BONK': 5}

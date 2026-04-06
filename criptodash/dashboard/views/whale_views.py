@@ -21,30 +21,54 @@ from .utils import ajax_rate_limit
 def whale_insights(request):
     """Vista para seguimiento de ballenas y análisis de patrones."""
     try:
-        # BYPASS TEMPORAL: No calcular el top global en vivo porque colapsa la RAM si hay muchas ballenas
         top_whales = []
-        
-        # BYPASS TEMPORAL: Mostrar solo las 10 billeteras más recientes para no saturar memoria en el For Loop
-        wallets = WhaleWallet.objects.annotate(
+
+        # ── Filtro por par ──────────────────────────────────────────────
+        active_pair = request.GET.get('pair', '').strip().upper()
+
+        # Calcular lista dinámica de pares disponibles desde target_pairs de todas las wallets
+        all_pair_values = WhaleWallet.objects.exclude(
+            target_pairs__isnull=True
+        ).exclude(target_pairs='').values_list('target_pairs', flat=True)
+
+        available_pairs = set()
+        for raw in all_pair_values:
+            for token in raw.split(','):
+                t = token.strip().upper()
+                if t:
+                    available_pairs.add(t)
+        available_pairs = sorted(available_pairs)
+
+        # ── Wallets: filtrar por par si está activo ─────────────────────
+        wallets_qs = WhaleWallet.objects.annotate(
             tx_count=Count('transactions', distinct=True),
             trade_count=Count('shadow_trades', distinct=True)
-        ).order_by('-created_at')[:10]
+        ).order_by('-created_at')
+
+        if active_pair:
+            wallets_qs = wallets_qs.filter(target_pairs__icontains=active_pair)
         
-        # Sincronizar billeteras si se solicita (Envío a Celery Background Task)
+        wallets = wallets_qs[:15]
+
+        # ── Sincronización masiva ───────────────────────────────────────
         if request.GET.get('sync') == '1':
             from dashboard.tasks import sync_all_whales_task
             try:
-                # Encolar la tarea
                 sync_all_whales_task.delay()
-                messages.success(request, "Sincronización masiva iniciada en segundo plano. Los datos se actualizarán pronto sin colgar la web.")
+                messages.success(request, "Sincronización masiva iniciada en segundo plano.")
             except Exception as e:
                 messages.error(request, f"Error al encolar tarea de sincronización: {e}. ¿Está corriendo Redis/Celery?")
-            
             return redirect('whale_insights')
 
-        insights = PatternInsight.objects.all().order_by('-detected_at')[:20]
-        
-        # Calcular P&L para cada billetera 
+        # ── Insights ────────────────────────────────────────────────────
+        insights_qs = PatternInsight.objects.all().order_by('-detected_at')
+        if active_pair:
+            insights_qs = insights_qs.filter(
+                meta_data__hot_token_symbol__iexact=active_pair
+            )
+        insights = insights_qs[:20]
+
+        # ── PnL por wallet (desde caché) ────────────────────────────────
         for wallet in wallets:
             cache_key = f"wallet_score_{wallet.id}"
             cached_data = cache.get(cache_key)
@@ -54,15 +78,19 @@ def whale_insights(request):
             else:
                 wallet.pnl_stats = {'total_pnl': 0, 'win_rate': 0, 'status': 'Cargando...'}
                 wallet.score_data = {'score': 0, 'tier': 'Calculando...', 'category': {'name': 'Pendiente', 'color': 'gray'}}
-            
-        shadow_trades = ShadowTrade.objects.filter(status='OPEN').order_by('-created_at')
-        
+
+        # ── Shadow Trades: filtrar por par ──────────────────────────────
+        shadow_qs = ShadowTrade.objects.filter(status='OPEN').order_by('-created_at')
+        if active_pair:
+            shadow_qs = shadow_qs.filter(token_symbol__iexact=active_pair)
+        shadow_trades = shadow_qs
+
         for trade in shadow_trades:
             trade.current_price = None
             trade.live_pnl = None
-        
+
         hot_tokens = []
-            
+
         context = {
             'wallets': wallets,
             'insights': insights,
@@ -71,6 +99,9 @@ def whale_insights(request):
             'page_title': 'Whale Insights & Alpha',
             'top_scored_whales': top_whales,
             'pairs': TradingPair.objects.all(),
+            # filtro por par
+            'available_pairs': available_pairs,
+            'active_pair': active_pair,
         }
         return render(request, 'dashboard/whale_insights.html', context)
     except Exception as e:
@@ -406,3 +437,20 @@ def suggest_bot_from_whale(request, wallet_id):
     except Exception as e:
         import traceback
         return JsonResponse({'status': 'error', 'message': str(e), 'trace': traceback.format_exc()}, status=500)
+
+
+@login_required
+def trigger_whale_hunt(request):
+    """
+    Lanza la tarea de caza de ballenas por pares en Celery (background).
+    También soporta ejecución síncrona de emergencia si Celery no está disponible.
+    """
+    try:
+        from dashboard.tasks import hunt_whales_by_pair_task
+        hunt_whales_by_pair_task.delay()
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Caza de ballenas iniciada en segundo plano. Nuevas wallets aparecerán en unos minutos.',
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

@@ -56,12 +56,40 @@
 
 <body>
     <nav class="navbar navbar-dark mb-4">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="/"><i class="fas fa-whale me-2"></i>Whale Insights & Alpha</a>
-            <div class="ms-auto">
-                <a href="{% url 'bot_dashboard' %}" class="btn btn-outline-light btn-sm"><i
-                        class="fas fa-robot me-1"></i>Bots</a>
-                <a href="?sync=1" class="btn btn-light btn-sm ms-2"><i class="fas fa-sync-alt me-1"></i>Sincronizar</a>
+        <div class="container-fluid px-4">
+            <a class="navbar-brand fw-bold" href="/"><i class="fas fa-fish me-2"></i>Whale Insights &amp; Alpha</a>
+
+            {% if active_pair %}
+            <span class="badge bg-warning text-dark me-2" style="font-size:0.8rem;">
+                <i class="fas fa-filter me-1"></i>Filtrando: ${{ active_pair }}
+                <a href="{% url 'whale_insights' %}" class="text-dark ms-2" title="Quitar filtro"><i class="fas fa-times"></i></a>
+            </span>
+            {% endif %}
+
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <!-- Selector de Par -->
+                <form method="GET" action="{% url 'whale_insights' %}" class="d-flex align-items-center gap-1">
+                    <select name="pair" class="form-select form-select-sm bg-dark text-white border-secondary"
+                            style="font-size:0.75rem; min-width:110px;"
+                            onchange="this.form.submit()">
+                        <option value="">🌐 Todos los pares</option>
+                        {% for p in available_pairs %}
+                        <option value="{{ p }}" {% if p == active_pair %}selected{% endif %}>${{ p }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+
+                <!-- Botón Cazar Ballenas -->
+                <button id="btnWhaleHunt" class="btn btn-warning btn-sm text-dark fw-bold" onclick="triggerWhaleHunt()" title="Buscar ballenas automáticamente en los pares configurados">
+                    <i class="fas fa-crosshairs me-1"></i>Cazar
+                </button>
+
+                <a href="{% url 'whale_insights' %}?sync=1" class="btn btn-outline-light btn-sm">
+                    <i class="fas fa-sync-alt me-1"></i>Sincronizar
+                </a>
+                <a href="{% url 'bot_dashboard' %}" class="btn btn-outline-light btn-sm">
+                    <i class="fas fa-robot me-1"></i>Bots
+                </a>
             </div>
         </div>
     </nav>
@@ -97,6 +125,21 @@
                                                 {% endfor %}
                                             {% endif %}
                                         </div>
+                                        {# ── Badges de target_pairs (Par de origen) ── #}
+                                        {% if wallet.target_pairs %}
+                                        <div class="d-flex flex-wrap gap-1 ms-1">
+                                            {% for pair_tag in wallet.target_pairs.split "," %}
+                                            {% if pair_tag %}
+                                            <a href="?pair={{ pair_tag|upper|urlencode }}"
+                                               class="badge text-decoration-none"
+                                               style="font-size:0.55rem; background: linear-gradient(135deg,#4e73df,#764ba2); color:white;"
+                                               title="Ver solo ballenas de ${{ pair_tag|upper }}">
+                                                ${{ pair_tag|upper }}
+                                            </a>
+                                            {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
                                         <span data-wallet-dna-icon="{{ wallet.id }}" 
                                               class="badge dna-badge ms-auto" 
                                               style="font-size: 0.65rem; display: {% if wallet.trading_dna %}inline-block{% else %}none{% endif %};"
@@ -803,6 +846,40 @@
                     alert('Copiado al portapapeles: ' + text);
                 });
             };
+
+            // ── Caza automática de ballenas por par ────────────────────────
+            window.triggerWhaleHunt = async function () {
+                const btn = document.getElementById('btnWhaleHunt');
+                const originalHtml = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Cazando...';
+
+                try {
+                    const resp = await fetch('/whale-insights/hunt/');
+                    const data = await resp.json();
+                    if (data.status === 'success') {
+                        // Toast de éxito
+                        const toast = document.createElement('div');
+                        toast.style.cssText = 'position:fixed;top:70px;right:20px;z-index:9999;min-width:280px;';
+                        toast.innerHTML = `
+                            <div class="alert alert-success shadow-lg border-0 d-flex align-items-center" role="alert">
+                                <i class="fas fa-crosshairs me-2 text-success"></i>
+                                <div><strong>¡Caza iniciada!</strong><br><small>${data.message}</small></div>
+                                <button type="button" class="btn-close ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
+                            </div>`;
+                        document.body.appendChild(toast);
+                        setTimeout(() => toast.remove(), 8000);
+                    } else {
+                        alert('Error al cazar: ' + data.message);
+                    }
+                } catch (e) {
+                    alert('Error de conexión al intentar cazar ballenas.');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            };
+
             window.loadWhaleAnalysis = async function(walletId) {
                 const section = document.getElementById('analysisSection');
                 const content = document.getElementById('analysisContent');
