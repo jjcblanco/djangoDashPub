@@ -55,6 +55,10 @@ from .whale_views import (
     suggest_bot_from_whale,
     discover_contract_whales_ajax,
     trigger_whale_hunt,
+    hunt_targets_list,
+    hunt_targets_add,
+    hunt_targets_toggle,
+    hunt_targets_delete,
 )
 
 # Importar vistas de simulaciones / shadow trading (NUEVO)
@@ -133,6 +137,10 @@ __all__ = [
     'suggest_bot_from_whale',
     'discover_contract_whales_ajax',
     'trigger_whale_hunt',
+    'hunt_targets_list',
+    'hunt_targets_add',
+    'hunt_targets_toggle',
+    'hunt_targets_delete',
     'simulate_whale_trade',
     'close_shadow_trade',
 

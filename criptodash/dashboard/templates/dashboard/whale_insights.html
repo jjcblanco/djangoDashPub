@@ -316,8 +316,65 @@
                             <!-- Resultados dinámicos -->
                         </div>
                     </div>
+
+                    <!-- 🎯 HUNT TARGETS: GESTIÓN VISUAL DE CONTRATOS -->
+                    <div class="mt-4 pt-3 border-top">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="fw-bold mb-0" style="font-size: 0.75rem;">
+                                <i class="fas fa-crosshairs me-2 text-warning"></i>Hunt Targets
+                            </h6>
+                            <button class="btn btn-outline-warning btn-sm py-0 px-2"
+                                    style="font-size:0.65rem;"
+                                    onclick="document.getElementById('addTargetForm').classList.toggle('d-none')">
+                                <i class="fas fa-plus me-1"></i>Añadir
+                            </button>
+                        </div>
+
+                        <!-- Formulario para agregar nuevo target (oculto por defecto) -->
+                        <div id="addTargetForm" class="d-none mb-3 p-2 rounded bg-white border shadow-sm">
+                            <div class="mb-2">
+                                <input type="text" id="htSymbol" class="form-control form-control-sm"
+                                       placeholder="Símbolo (ej: PEPE)" style="font-size:0.7rem;">
+                            </div>
+                            <div class="mb-2">
+                                <select id="htBlockchain" class="form-select form-select-sm" style="font-size:0.7rem;">
+                                    <option value="solana">Solana</option>
+                                    <option value="ethereum">Ethereum</option>
+                                    <option value="base">Base</option>
+                                    <option value="hyperliquid">Hyperliquid</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <input type="text" id="htContract" class="form-control form-control-sm"
+                                       placeholder="Contract Address" style="font-size:0.7rem;">
+                            </div>
+                            <div class="mb-2">
+                                <input type="number" id="htMinVol" class="form-control form-control-sm"
+                                       placeholder="Vol. mín. USD (ej: 3000)" value="3000" style="font-size:0.7rem;">
+                            </div>
+                            <div class="mb-2">
+                                <input type="text" id="htNotes" class="form-control form-control-sm"
+                                       placeholder="Notas opcionales" style="font-size:0.7rem;">
+                            </div>
+                            <button class="btn btn-warning btn-sm w-100 text-dark fw-bold"
+                                    style="font-size:0.7rem;" onclick="addHuntTarget()">
+                                <i class="fas fa-save me-1"></i>Guardar Target
+                            </button>
+                            <div id="htAddMsg" class="mt-1 small text-center" style="font-size:0.65rem;"></div>
+                        </div>
+
+                        <!-- Tabla de targets -->
+                        <div id="huntTargetsList" style="max-height:220px; overflow-y:auto;">
+                            <div class="text-center py-2 text-muted small">
+                                <div class="spinner-border spinner-border-sm"></div> Cargando...
+                            </div>
+                        </div>
+                    </div>
+                    <!-- FIN HUNT TARGETS -->
+
                 </div>
             </div>
+
             <!-- FIN HUB DE DESCUBRIMIENTO -->
             <div class="col-md-8">
                 <div class="card shadow-sm h-100">
@@ -880,7 +937,110 @@
                 }
             };
 
+            // ── Hunt Targets Manager ───────────────────────────────────────
+            async function loadHuntTargets() {
+                const container = document.getElementById('huntTargetsList');
+                try {
+                    const resp = await fetch('/whale-insights/targets/');
+                    const data = await resp.json();
+                    if (data.status !== 'ok' || !data.targets.length) {
+                        container.innerHTML = '<div class="text-muted text-center py-2 small">Sin targets. Usa el botón + para agregar.</div>';
+                        return;
+                    }
+                    const blockchainColors = {solana: 'text-success', ethereum: 'text-primary', base: 'text-info', hyperliquid: 'text-warning'};
+                    container.innerHTML = data.targets.map(t => `
+                        <div id="ht-row-${t.id}" class="d-flex align-items-center justify-content-between py-1 border-bottom" style="font-size:0.65rem;">
+                            <div class="flex-grow-1">
+                                <span class="fw-bold ${t.is_active ? '' : 'text-muted text-decoration-line-through'}">$${t.token_symbol}</span>
+                                <span class="badge bg-light border text-muted ms-1 ${blockchainColors[t.blockchain] || ''}" style="font-size:0.55rem;">${t.blockchain.toUpperCase()}</span>
+                                <div class="text-muted" style="font-size:0.6rem;" title="${t.contract_address}">${t.contract_address.substring(0,16)}...</div>
+                                <div class="text-muted">Min: $${t.min_volume_usd.toLocaleString()}${t.notes ? ' · ' + t.notes : ''}</div>
+                            </div>
+                            <div class="d-flex gap-1 ms-2">
+                                <button class="btn btn-xs btn-outline-${t.is_active ? 'warning' : 'success'} py-0 px-1"
+                                        style="font-size:0.6rem;" title="${t.is_active ? 'Pausar' : 'Activar'}"
+                                        onclick="toggleTarget(${t.id}, this)">
+                                    <i class="fas fa-${t.is_active ? 'pause' : 'play'}"></i>
+                                </button>
+                                <button class="btn btn-xs btn-outline-danger py-0 px-1"
+                                        style="font-size:0.6rem;" title="Eliminar"
+                                        onclick="deleteTarget(${t.id}, '$${t.token_symbol}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                } catch(e) {
+                    container.innerHTML = '<div class="text-danger text-center py-2 small">Error al cargar targets.</div>';
+                }
+            }
+
+            window.addHuntTarget = async function() {
+                const msgEl = document.getElementById('htAddMsg');
+                const symbol = document.getElementById('htSymbol').value.trim();
+                const blockchain = document.getElementById('htBlockchain').value;
+                const contract = document.getElementById('htContract').value.trim();
+                const minVol = document.getElementById('htMinVol').value || 3000;
+                const notes = document.getElementById('htNotes').value.trim();
+
+                if (!symbol || !contract) {
+                    msgEl.innerHTML = '<span class="text-danger">Símbolo y contrato son obligatorios.</span>';
+                    return;
+                }
+                msgEl.innerHTML = '<span class="text-muted"><i class="fas fa-spinner fa-spin me-1"></i>Guardando...</span>';
+
+                const form = new FormData();
+                form.append('token_symbol', symbol);
+                form.append('blockchain', blockchain);
+                form.append('contract_address', contract);
+                form.append('min_volume_usd', minVol);
+                form.append('notes', notes);
+                form.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+                try {
+                    const resp = await fetch('/whale-insights/targets/add/', {method: 'POST', body: form});
+                    const data = await resp.json();
+                    if (data.status === 'ok') {
+                        msgEl.innerHTML = `<span class="text-success">${data.message}</span>`;
+                        // Limpiar formulario y recargar lista
+                        ['htSymbol','htContract','htNotes'].forEach(id => document.getElementById(id).value = '');
+                        document.getElementById('htMinVol').value = 3000;
+                        loadHuntTargets();
+                        setTimeout(() => document.getElementById('addTargetForm').classList.add('d-none'), 1500);
+                    } else {
+                        msgEl.innerHTML = `<span class="text-danger">${data.message}</span>`;
+                    }
+                } catch(e) {
+                    msgEl.innerHTML = '<span class="text-danger">Error de conexión.</span>';
+                }
+            };
+
+            window.toggleTarget = async function(id, btn) {
+                btn.disabled = true;
+                try {
+                    const form = new FormData();
+                    form.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                    const resp = await fetch(`/whale-insights/targets/${id}/toggle/`, {method: 'POST', body: form});
+                    const data = await resp.json();
+                    if (data.status === 'ok') loadHuntTargets();
+                } finally { btn.disabled = false; }
+            };
+
+            window.deleteTarget = async function(id, label) {
+                if (!confirm(`¿Eliminar ${label} de los targets de caza?`)) return;
+                const form = new FormData();
+                form.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                const resp = await fetch(`/whale-insights/targets/${id}/delete/`, {method: 'POST', body: form});
+                const data = await resp.json();
+                if (data.status === 'ok') loadHuntTargets();
+                else alert(data.message);
+            };
+
+            // Cargar targets al iniciar
+            loadHuntTargets();
+
             window.loadWhaleAnalysis = async function(walletId) {
+
                 const section = document.getElementById('analysisSection');
                 const content = document.getElementById('analysisContent');
                 

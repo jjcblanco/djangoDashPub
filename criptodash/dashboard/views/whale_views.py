@@ -454,3 +454,100 @@ def trigger_whale_hunt(request):
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+# ─────────────────────────────────────────────────────────────
+#  CRUD — WhaleHuntTarget (Gestión de contratos objetivo)
+# ─────────────────────────────────────────────────────────────
+
+@login_required
+def hunt_targets_list(request):
+    """Devuelve la lista actual de targets en JSON (para el panel AJAX)."""
+    from ..models import WhaleHuntTarget
+    targets = list(WhaleHuntTarget.objects.values(
+        'id', 'token_symbol', 'blockchain', 'contract_address',
+        'min_volume_usd', 'is_active', 'notes', 'created_at'
+    ))
+    # Formatear fecha
+    for t in targets:
+        t['created_at'] = t['created_at'].strftime('%d/%m/%Y') if t['created_at'] else ''
+    return JsonResponse({'status': 'ok', 'targets': targets})
+
+
+@login_required
+@require_POST
+def hunt_targets_add(request):
+    """Crea un nuevo WhaleHuntTarget desde el formulario del panel."""
+    from ..models import WhaleHuntTarget
+    try:
+        symbol    = request.POST.get('token_symbol', '').strip().upper()
+        blockchain = request.POST.get('blockchain', 'ethereum').strip()
+        contract  = request.POST.get('contract_address', '').strip()
+        min_vol   = float(request.POST.get('min_volume_usd', 3000) or 3000)
+        notes     = request.POST.get('notes', '').strip()
+
+        if not symbol or not contract:
+            return JsonResponse({'status': 'error', 'message': 'Símbolo y contrato son obligatorios.'}, status=400)
+
+        if len(contract) < 20:
+            return JsonResponse({'status': 'error', 'message': 'El contrato parece demasiado corto.'}, status=400)
+
+        # Normalizar EVM
+        if blockchain in ['ethereum', 'base']:
+            contract = contract.lower()
+
+        obj, created = WhaleHuntTarget.objects.get_or_create(
+            contract_address=contract,
+            blockchain=blockchain,
+            defaults={
+                'token_symbol': symbol,
+                'min_volume_usd': min_vol,
+                'notes': notes,
+                'is_active': True,
+            }
+        )
+        if not created:
+            return JsonResponse({'status': 'error', 'message': f'El contrato ya existe para {blockchain.upper()}.'}, status=400)
+
+        return JsonResponse({
+            'status': 'ok',
+            'message': f'✅ ${symbol} añadido a los targets de caza.',
+            'target': {
+                'id': obj.id, 'token_symbol': obj.token_symbol,
+                'blockchain': obj.blockchain, 'contract_address': obj.contract_address,
+                'min_volume_usd': obj.min_volume_usd, 'is_active': obj.is_active,
+                'notes': obj.notes or '', 'created_at': obj.created_at.strftime('%d/%m/%Y'),
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def hunt_targets_toggle(request, target_id):
+    """Activa o pausa un WhaleHuntTarget."""
+    from ..models import WhaleHuntTarget
+    try:
+        target = get_object_or_404(WhaleHuntTarget, id=target_id)
+        target.is_active = not target.is_active
+        target.save(update_fields=['is_active'])
+        estado = 'activado' if target.is_active else 'pausado'
+        return JsonResponse({'status': 'ok', 'is_active': target.is_active, 'message': f'${target.token_symbol} {estado}.'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def hunt_targets_delete(request, target_id):
+    """Elimina un WhaleHuntTarget."""
+    from ..models import WhaleHuntTarget
+    try:
+        target = get_object_or_404(WhaleHuntTarget, id=target_id)
+        symbol = target.token_symbol
+        target.delete()
+        return JsonResponse({'status': 'ok', 'message': f'${symbol} eliminado de los targets.'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
