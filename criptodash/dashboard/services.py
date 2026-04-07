@@ -480,10 +480,17 @@ class PatternEngine:
                     buyer_addr = attr.get('tx_from_address', '').lower()
                     if not buyer_addr: continue
                     
-                    # Usamos el volumen en USD que es más fácil de comparar entre tokens
-                    vol_usd = float(attr.get('volume_usd') or 0)
-                    # Si vol_usd es 0 (no indexado), intentar usar cantidad de tokens si estuviera disponible
-                    # GeckoTerminal no siempre da el amount de tokens en el /trades simplificado
+                    # GeckoTerminal usa 'volume_in_usd'. Si falta o es 0, intentamos calcularlo manualmente.
+                    vol_usd = float(attr.get('volume_in_usd') or 0)
+                    
+                    if vol_usd == 0:
+                        # Fallback: Multiplicar cantidad de tokens recibidos por el precio en el momento
+                        try:
+                            amount = float(attr.get('to_token_amount') or 0)
+                            price = float(attr.get('price_to_in_usd') or 0)
+                            vol_usd = amount * price
+                        except:
+                            pass
                     
                     if buyer_addr not in buyers:
                         buyers[buyer_addr] = {
