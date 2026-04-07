@@ -436,7 +436,7 @@ class PatternEngine:
         pair_data = None
         try:
             dex_url = f"https://api.dexscreener.com/latest/dex/search?q={contract_address}"
-            dex_resp = requests.get(dex_url, timeout=8)
+            dex_resp = requests.get(dex_url, timeout=5) # Reducido de 8 a 5
             if dex_resp.status_code == 200:
                 pairs = dex_resp.json().get('pairs', [])
                 if pairs:
@@ -464,7 +464,7 @@ class PatternEngine:
         gecko_url = f"https://api.geckoterminal.com/api/v2/networks/{network}/pools/{pool_address}/trades"
         
         try:
-            resp = requests.get(gecko_url, timeout=10)
+            resp = requests.get(gecko_url, timeout=5) # Reducido de 10 a 5
             if resp.status_code != 200: return []
             
             data = resp.json()
