@@ -263,9 +263,11 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-# Ejecución síncrona en desarrollo (sin worker)
-CELERY_TASK_ALWAYS_EAGER = DEBUG
-CELERY_TASK_EAGER_PROPAGATES = DEBUG
+# Control de ejecución de tareas
+# Si es True, las tareas se ejecutan síncronamente (bloqueante). 
+# En el VPS debe ser False para que el botón "Cazar" no cuelgue la web.
+CELERY_TASK_ALWAYS_EAGER = config('CELERY_TASK_ALWAYS_EAGER', default=False, cast=bool)
+CELERY_TASK_EAGER_PROPAGATES = CELERY_TASK_ALWAYS_EAGER
 
 # ======================================
 # BINANCE API KEYS (Cargar desde .env)
