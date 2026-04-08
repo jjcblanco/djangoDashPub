@@ -1658,7 +1658,8 @@ function openWhaleChart(walletId, walletName, pairsStr) {
     document.getElementById('whaleChartTitle').textContent = `Operaciones de ${walletName}`;
     document.getElementById('whaleChartSubtitle').textContent = 'Cargando datos...';
     document.getElementById('whaleChartSpinner').style.display = 'flex';
-    document.getElementById('whaleChartCanvas').style.display = 'none';
+    document.getElementById('whaleChartContainer').style.display = 'none';
+    document.getElementById('whaleChartContainer').innerHTML = '';
     document.getElementById('whaleChartTradesTable').style.display = 'none';
     document.getElementById('whaleChartTradeCount').textContent = '';
 
