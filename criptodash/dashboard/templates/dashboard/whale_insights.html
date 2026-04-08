@@ -1657,7 +1657,8 @@ function openWhaleChart(walletId, walletName, pairsStr) {
     _whaleChartWalletId = walletId;
     document.getElementById('whaleChartTitle').textContent = `Operaciones de ${walletName}`;
     document.getElementById('whaleChartSubtitle').textContent = 'Cargando datos...';
-    document.getElementById('whaleChartSpinner').style.display = 'flex';
+    const sp1 = document.getElementById('whaleChartSpinner');
+    if(sp1) { sp1.classList.remove('d-none'); sp1.classList.add('d-flex'); }
     document.getElementById('whaleChartContainer').style.display = 'none';
     document.getElementById('whaleChartContainer').innerHTML = '';
     document.getElementById('whaleChartTradesTable').style.display = 'none';
@@ -1683,12 +1684,13 @@ function loadWhaleChart() {
     const token = document.getElementById('whaleChartTokenSelect').value;
     if (!walletId || !token) return;
 
-    document.getElementById('whaleChartSpinner').style.display = 'flex';
+    const sp2 = document.getElementById('whaleChartSpinner');
+    if(sp2) { sp2.classList.remove('d-none'); sp2.classList.add('d-flex'); }
 
     fetch(`/whale-insights/chart/${walletId}/?token=${token}`)
         .then(r => r.json())
         .then(data => {
-            document.getElementById('whaleChartSpinner').style.display = 'none';
+            const spy = document.getElementById('whaleChartSpinner'); if(spy) { spy.classList.remove('d-flex'); spy.classList.add('d-none'); }
 
             if (data.status === 'no_trades' || data.status === 'error') {
                 const msg = data.message || 'Sin datos para este token.';
@@ -1744,7 +1746,7 @@ function loadWhaleChart() {
         })
         .catch(e => {
             document.getElementById('whaleChartSubtitle').textContent = 'Error de conexión: ' + e.message;
-            document.getElementById('whaleChartSpinner').style.display = 'none';
+            const spy = document.getElementById('whaleChartSpinner'); if(spy) { spy.classList.remove('d-flex'); spy.classList.add('d-none'); }
             console.error('WhaleChart fetch error:', e);
         });
 }
