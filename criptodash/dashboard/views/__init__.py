@@ -60,6 +60,7 @@ from .whale_views import (
     hunt_targets_toggle,
     hunt_targets_delete,
     whale_consensus_ajax,
+    whale_trade_chart_ajax,
 )
 
 # Importar vistas de simulaciones / shadow trading (NUEVO)
