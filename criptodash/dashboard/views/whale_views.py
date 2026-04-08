@@ -551,3 +551,48 @@ def hunt_targets_delete(request, target_id):
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
+
+@login_required
+def whale_consensus_ajax(request):
+    """
+    Devuelve las señales de consenso activas en JSON para el panel del dashboard.
+    """
+    from ..models import ConsensusSignal
+    from django.utils import timezone
+
+    signals = ConsensusSignal.objects.filter(
+        status='ACTIVE',
+    ).order_by('-detected_at')[:10]
+
+    data = []
+    for s in signals:
+        # Calcular cambio de precio en vivo si tenemos precio de entrada
+        price_change_pct = s.price_change_pct
+        current_price = None
+        if s.entry_price:
+            try:
+                from dashboard.services import fetch_current_price
+                live_price = fetch_current_price(s.token_symbol)
+                if live_price:
+                    current_price = live_price
+                    price_change_pct = round(
+                        ((live_price - float(s.entry_price)) / float(s.entry_price)) * 100, 2
+                    )
+            except Exception:
+                pass
+
+        data.append({
+            'id': s.id,
+            'token_symbol': s.token_symbol,
+            'blockchain': s.blockchain,
+            'whale_count': s.whale_count,
+            'confidence': s.confidence,
+            'entry_price': float(s.entry_price) if s.entry_price else None,
+            'current_price': current_price,
+            'price_change_pct': price_change_pct,
+            'detected_at': s.detected_at.strftime('%d/%m %H:%M'),
+            'expires_at': s.expires_at.strftime('%d/%m %H:%M') if s.expires_at else None,
+            'whale_addresses': s.whale_addresses,
+        })
+
+    return JsonResponse({'status': 'ok', 'signals': data})

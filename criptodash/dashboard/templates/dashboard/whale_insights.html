@@ -377,6 +377,24 @@
 
             <!-- FIN HUB DE DESCUBRIMIENTO -->
             <div class="col-md-8">
+
+                <!-- ════ SEÑALES DE CONSENSO ════ -->
+                <div id="consensusSignalsSection" class="mb-3" style="display:none;">
+                    <div class="card border-0 shadow-sm" style="border-radius:14px; background: linear-gradient(135deg, #1a0a2e 0%, #2d1b4e 100%); border-left: 4px solid #ff6b35 !important;">
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-center mb-2">
+                                <span style="font-size:1.3rem;">🔥</span>
+                                <h6 class="fw-bold text-white mb-0 ms-2">Señales de Consenso</h6>
+                                <span class="badge bg-danger ms-auto animate__animated animate__pulse animate__infinite" style="font-size:0.6rem;">ALTA PRIORIDAD</span>
+                            </div>
+                            <div id="consensusSignalsList" class="d-flex flex-wrap gap-2">
+                                <div class="text-muted small"><div class="spinner-border spinner-border-sm me-2"></div>Cargando señales...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- FIN SEÑALES DE CONSENSO -->
+
                 <div class="card shadow-sm h-100">
                     <div class="card-body">
                         <!-- Buscador DexScreener -->
@@ -1122,6 +1140,40 @@
                 });
             })
             .catch(e => console.warn('Live prices AJAX error:', e));
+
+        // 1b. CARGAR SEÑALES DE CONSENSO 🔥
+        fetch("{% url 'whale_consensus_ajax' %}")
+            .then(r => r.json())
+            .then(data => {
+                if (data.status !== 'ok' || !data.signals.length) return;
+                const section = document.getElementById('consensusSignalsSection');
+                const list = document.getElementById('consensusSignalsList');
+                if (!section || !list) return;
+                section.style.display = '';
+                list.innerHTML = data.signals.map(s => {
+                    const confPct = Math.round(s.confidence * 100);
+                    const priceChg = s.price_change_pct;
+                    const chgColor = priceChg >= 0 ? '#26e07f' : '#ff4d4f';
+                    const chgSign = priceChg >= 0 ? '+' : '';
+                    return `
+                        <div class="p-2 rounded-3 text-white d-flex flex-column" style="background:rgba(255,107,53,0.15); border:1px solid rgba(255,107,53,0.4); min-width:160px; max-width:200px;">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <span class="badge bg-warning text-dark fw-bold" style="font-size:0.8rem;">$${s.token_symbol}</span>
+                                <span class="small opacity-75">${s.blockchain.toUpperCase()}</span>
+                            </div>
+                            <div class="small mb-1">
+                                <i class="fas fa-users me-1"></i><strong>${s.whale_count}</strong> ballenas
+                            </div>
+                            <div class="small mb-1">
+                                <i class="fas fa-brain me-1"></i>Conf: <span class="fw-bold">${confPct}%</span>
+                            </div>
+                            ${s.entry_price ? `<div class="small">In: $${parseFloat(s.entry_price).toFixed(4)}</div>` : ''}
+                            ${priceChg !== 0 ? `<div class="fw-bold small" style="color:${chgColor};">${chgSign}${priceChg}%</div>` : ''}
+                            <div class="small opacity-50 mt-1">${s.detected_at}</div>
+                        </div>`;
+                }).join('');
+            })
+            .catch(e => console.warn('Consensus signals error:', e));
 
         // 2. CARGAR HOT TOKENS
         fetch("{% url 'whale_hot_tokens_ajax' %}")

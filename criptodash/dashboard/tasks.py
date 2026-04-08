@@ -39,6 +39,18 @@ def sync_wallet_task(wallet_id, deep_sync=False):
             
         # El análisis es costoso, por eso va en Celery
         PatternEngine.analyze_wallet(wallet)
+
+        # --- FASE 2: Detección de Consenso ---
+        # Después de analizar, verificar si este token ya lo compraron 3+ ballenas (señal de consenso)
+        try:
+            top_pairs = wallet.target_pairs_list  # ['WIF', 'JUP', ...]
+            for token_symbol in top_pairs:
+                PatternEngine.check_and_fire_consensus_signal(
+                    symbol=token_symbol,
+                    blockchain=wallet.blockchain
+                )
+        except Exception as e:
+            logger.warning(f"[Consensus] Error en detección post-sync para wallet {wallet_id}: {e}")
         
         # Marcar como finalizado con éxito
         wallet.sync_status = 'IDLE'
