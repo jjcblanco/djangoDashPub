@@ -1690,9 +1690,17 @@ function loadWhaleChart() {
     fetch(`/whale-insights/chart/${walletId}/?token=${token}`)
         .then(r => r.json())
         .then(data => {
+            document.getElementById('whaleChartSpinner').style.display = 'none';
+
+            if (data.status === 'no_trades' || data.status === 'error') {
+                const msg = data.message || 'Sin datos para este token.';
+                document.getElementById('whaleChartSubtitle').textContent = '⚠️ ' + msg;
+                document.getElementById('whaleChartCanvas').style.display = 'none';
+                return;
+            }
+
             if (data.status !== 'ok') {
-                document.getElementById('whaleChartSubtitle').textContent = data.message || 'Error cargando datos.';
-                document.getElementById('whaleChartSpinner').style.display = 'none';
+                document.getElementById('whaleChartSubtitle').textContent = 'Error cargando datos.';
                 return;
             }
 

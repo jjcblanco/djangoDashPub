@@ -658,26 +658,49 @@ def whale_trade_chart_ajax(request, wallet_id):
         if not token:
             token = wallet.target_pairs_list[0] if wallet.target_pairs_list else None
         if not token:
-            return JsonResponse({'status': 'error', 'message': 'No hay tokens asociados a esta billetera.'})
+            # Intentar cualquier transacción disponible
+            any_tx = WhaleTransaction.objects.filter(wallet=wallet).first()
+            if any_tx:
+                token = any_tx.to_asset or any_tx.from_asset or 'TOKEN'
+            else:
+                return JsonResponse({'status': 'no_trades',
+                                     'message': 'Esta billetera no tiene transacciones sincronizadas todavía.'})
 
-        # ── 1. Operaciones de la ballena para ese token ──────────────────
+        # ── Operaciones de la ballena para ese token ──────────────────
         txs = WhaleTransaction.objects.filter(
             wallet=wallet,
         ).filter(
             Q(to_asset__iexact=token) | Q(from_asset__iexact=token)
         ).order_by('timestamp')
 
+        # Si no hay transacciones para ese token, devolver todos los tokens disponibles
+        if not txs.exists():
+            all_tokens = list(
+                WhaleTransaction.objects.filter(wallet=wallet)
+                .values_list('to_asset', flat=True)
+                .distinct()
+            )
+            all_tokens = [t for t in all_tokens if t]
+            return JsonResponse({
+                'status': 'no_trades',
+                'message': f'Sin operaciones de ${token}. Tokens disponibles: {", ".join(all_tokens[:5]) or "ninguno"}',
+                'available_tokens': all_tokens[:10],
+            })
+
         trades = []
         for tx in txs:
             price = None
             try:
                 raw = tx.raw_data or {}
-                price = float(raw.get('priceUsd') or raw.get('px') or raw.get('price') or 0) or None
+                price_val = raw.get('priceUsd') or raw.get('px') or raw.get('price') or 0
+                price = float(price_val) if price_val else None
+                if price == 0:
+                    price = None
             except Exception:
                 pass
 
             trade_type = 'BUY'
-            if tx.tx_type in ['SELL', 'TRANSFER'] or tx.from_asset and tx.from_asset.upper() == token:
+            if tx.from_asset and tx.from_asset.upper() == token:
                 trade_type = 'SELL'
             if tx.to_asset and tx.to_asset.upper() == token:
                 trade_type = 'BUY'
@@ -691,44 +714,26 @@ def whale_trade_chart_ajax(request, wallet_id):
                 'amount_out': float(tx.amount_out) if tx.amount_out else None,
             })
 
-        # ── 2. Precio histórico desde CoinGecko ─────────────────────────
-        # Mapeo símbolo → CoinGecko ID
-        COINGECKO_MAP = {
-            'WIF': 'dogwifhat', 'BONK': 'bonk', 'JUP': 'jupiter',
-            'SOL': 'solana', 'BTC': 'bitcoin', 'ETH': 'ethereum',
-            'PEPE': 'pepe', 'SHIB': 'shiba-inu', 'TOSHI': 'toshi',
-            'DOGE': 'dogecoin', 'ADA': 'cardano', 'AVAX': 'avalanche-2',
-            'LINK': 'chainlink', 'UNI': 'uniswap', 'AAVE': 'aave',
-            'BNB': 'binancecoin', 'XRP': 'ripple', 'MATIC': 'matic-network',
-        }
-        coingecko_id = COINGECKO_MAP.get(token.upper())
-        price_data = []
-
-        if coingecko_id:
-            try:
-                url = f"https://api.coingecko.com/api/v3/coins/{coingecko_id}/market_chart"
-                resp = req.get(url, params={'vs_currency': 'usd', 'days': 30}, timeout=6)
-                if resp.status_code == 200:
-                    raw_prices = resp.json().get('prices', [])
-                    # Muestra cada 4 horas para no saturar el gráfico
-                    step = max(1, len(raw_prices) // 180)
-                    price_data = [
-                        {'t': p[0], 'y': round(p[1], 6)}
-                        for i, p in enumerate(raw_prices) if i % step == 0
-                    ]
-            except Exception as e:
-                logger.warning(f"[WhaleChart] CoinGecko error para {token}: {e}")
+        # ── Construir línea de precio a partir de los trades almacenados ──
+        # Usamos los puntos con precio conocido como "price_data" para la línea
+        price_data = [
+            {'t': t['timestamp'], 'y': t['price']}
+            for t in trades if t['price'] is not None
+        ]
 
         return JsonResponse({
             'status': 'ok',
             'wallet_name': wallet.name or wallet.address[:12],
             'token': token,
-            'pairs': wallet.target_pairs_list,
+            'pairs': wallet.target_pairs_list or [token],
             'price_data': price_data,
             'trades': trades,
             'has_price': bool(price_data),
+            'trade_count': len(trades),
         })
 
     except Exception as e:
         import traceback
         return JsonResponse({'status': 'error', 'message': str(e), 'trace': traceback.format_exc()}, status=500)
+
+
