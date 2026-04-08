@@ -680,8 +680,9 @@ class PatternEngine:
         )
         logger.info(f"ShadowTrade AUTO creado para {wallet.name or wallet.address[:8]} en {symbol} @ {entry_price} (Score: {predictive_score})")
 
-        # 7. Detección de Consenso de Cohorte
+        # 7. Detección de Consenso de Cohorte (BUGFIX: is_consensus se define aquí)
         cohort_others = PatternEngine._check_cohort_consensus(symbol, wallet.id)
+        is_consensus = cohort_others >= 2  # 3+ ballenas total (las 2 otras + la actual)
         # 8. Generar Insight
         confidence = predictive_score
         pattern = "ACTIVIDAD"
@@ -787,7 +788,113 @@ class PatternEngine:
             })
             
         return sorted(hot_list, key=lambda x: x['count'], reverse=True)[:5]
-# En services.py - agregar al final
+
+    @staticmethod
+    def check_and_fire_consensus_signal(symbol, blockchain='solana', hours=6, min_whales=3):
+        """
+        Detecta si 3+ ballenas distintas compraron el mismo token en las últimas `hours` horas.
+        Si se detecta, crea un ConsensusSignal en BD y dispara alerta por Telegram.
+        
+        Devuelve el ConsensusSignal creado o None si no hubo consenso.
+        """
+        from datetime import timedelta
+        from .models import ConsensusSignal
+        
+        STABLES = ['USDC', 'USDT', 'DAI', 'PYUSD', 'UST', 'FDUSD', 'BUSD']
+        if not symbol or symbol.upper() in STABLES:
+            return None
+
+        since = timezone.now() - timedelta(hours=hours)
+
+        # 1. Obtener todas las wallets distintas que compraron este token recientemente
+        buyer_wallets = (
+            WhaleTransaction.objects
+            .filter(
+                to_asset__iexact=symbol,
+                timestamp__gte=since,
+                tx_type__in=['BUY', 'SWAP']
+            )
+            .values('wallet')
+            .distinct()
+        )
+        whale_count = buyer_wallets.count()
+
+        if whale_count < min_whales:
+            return None  # No hay suficiente consenso
+
+        # 2. Verificar que no existe ya una señal reciente para este token (evitar spam)
+        recent_signal = ConsensusSignal.objects.filter(
+            token_symbol__iexact=symbol,
+            status='ACTIVE',
+            detected_at__gte=since
+        ).first()
+
+        if recent_signal:
+            logger.info(f"[Consensus] Ya existe señal activa para ${symbol}.")
+            return recent_signal
+
+        # 3. Obtener precio actual
+        entry_price = None
+        try:
+            price = fetch_current_price(symbol)
+            entry_price = price
+        except Exception:
+            pass
+
+        # 4. Recopilar las addresses que dispararon la señal (para contexto)
+        wallet_ids = [str(w['wallet']) for w in buyer_wallets]
+        wallet_objs = WhaleWallet.objects.filter(id__in=wallet_ids).values('address', 'name', 'blockchain')
+        whale_info = [
+            {'address': w['address'][:10] + '...', 'name': w['name'] or w['address'][:8]}
+            for w in wallet_objs[:10]
+        ]
+
+        # 5. Calcular confianza: base 0.7 + bonus por cantidad de ballenas
+        confidence = min(0.98, 0.70 + (whale_count - min_whales) * 0.05)
+
+        # 6. Crear la señal en la BD
+        signal = ConsensusSignal.objects.create(
+            token_symbol=symbol.upper(),
+            blockchain=blockchain,
+            whale_count=whale_count,
+            whale_addresses=whale_info,
+            confidence=round(confidence, 2),
+            entry_price=entry_price,
+            status='ACTIVE',
+            expires_at=timezone.now() + timedelta(hours=24),
+        )
+
+        logger.info(f"[Consensus] 🔥 Nueva señal: ${symbol} — {whale_count} ballenas en {hours}h (conf: {confidence:.0%})")
+
+        # 7. Disparar alerta Telegram
+        try:
+            from .utils.notifications import send_telegram_message
+            
+            whales_list = '\n'.join([
+                f"  · {w['name']}" for w in whale_info[:5]
+            ])
+            price_txt = f"${float(entry_price):,.4f}" if entry_price else "N/D"
+
+            msg = (
+                f"🔥🔥 <b>¡SEÑAL DE CONSENSO ALTA PRIORIDAD!</b>\n\n"
+                f"🎯 <b>Token:</b> <code>${symbol.upper()}</code>\n"
+                f"🌐 <b>Red:</b> {blockchain.upper()}\n"
+                f"🐋 <b>Ballenas activas:</b> <code>{whale_count}</code> en las últimas {hours}h\n"
+                f"💰 <b>Precio actual:</b> {price_txt}\n"
+                f"📊 <b>Confianza:</b> <code>{confidence:.0%}</code>\n\n"
+                f"<b>Ballenas detectadas:</b>\n{whales_list}\n\n"
+                f"⚡ <i>Acción sugerida: Considera abrir posición o configurar un bot para ${symbol.upper()}.</i>"
+            )
+
+            if send_telegram_message(msg):
+                signal.alert_sent = True
+                signal.save(update_fields=['alert_sent'])
+
+        except Exception as e:
+            logger.error(f"[Consensus] Error enviando alerta Telegram: {e}")
+
+        return signal
+
 
 from .whale_scoring import WhaleScoringEngine, WhalePerformanceTracker
 

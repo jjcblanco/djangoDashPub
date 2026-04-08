@@ -350,3 +350,40 @@ class WhaleHuntTarget(models.Model):
     def __str__(self):
         return f"${self.token_symbol} ({self.blockchain}) — {self.contract_address[:12]}..."
 
+
+class ConsensusSignal(models.Model):
+    """
+    Registra un evento de consenso: 3+ ballenas comprando el mismo token en un período corto.
+    Cada señal puede derivar en una alerta de Telegram y una sugerencia de acción para los bots.
+    """
+    STATUS_CHOICES = [
+        ('ACTIVE', 'Activa'),
+        ('EXPIRED', 'Expirada'),
+        ('BOT_CREATED', 'Bot Creado'),
+    ]
+
+    token_symbol = models.CharField(max_length=50)
+    blockchain = models.CharField(max_length=50, default='solana')
+    whale_count = models.IntegerField(default=0, help_text="Número de ballenas distintas que compraron")
+    whale_addresses = models.JSONField(default=list, help_text="Lista de wallets que dispararon la señal")
+    confidence = models.FloatField(default=0.0, help_text="Confianza calculada entre 0 y 1")
+    entry_price = models.DecimalField(max_digits=30, decimal_places=10, null=True, blank=True)
+    current_price = models.DecimalField(max_digits=30, decimal_places=10, null=True, blank=True)
+    price_change_pct = models.FloatField(default=0.0, help_text="Cambio de precio desde la señal")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
+    alert_sent = models.BooleanField(default=False)
+    detected_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-detected_at']
+        verbose_name = "Consensus Signal"
+        verbose_name_plural = "Consensus Signals"
+
+    def __str__(self):
+        return f"🔥 Consenso ${self.token_symbol} — {self.whale_count} ballenas @ {self.detected_at.strftime('%d/%m %H:%M')}"
+
+    def is_active(self):
+        from django.utils import timezone
+        return self.status == 'ACTIVE' and (self.expires_at is None or self.expires_at > timezone.now())
