@@ -714,21 +714,79 @@ def whale_trade_chart_ajax(request, wallet_id):
                 'amount_out': float(tx.amount_out) if tx.amount_out else None,
             })
 
-        # ── Construir línea de precio a partir de los trades almacenados ──
-        # Usamos los puntos con precio conocido como "price_data" para la línea
-        price_data = [
-            {'t': t['timestamp'], 'y': t['price']}
-            for t in trades if t['price'] is not None
-        ]
+        # ── Construir Gráfico con Plotly ──
+        # Generar figura
+        import plotly.graph_objects as go
+        import pandas as pd
+        
+        # Filtramos trades que tienen precio y creamos un DataFrame
+        trades_with_price = [t for t in trades if t['price'] is not None]
+        
+        if trades_with_price:
+            df = pd.DataFrame(trades_with_price)
+            # Ordenar df por timestamp por seguridad (ya venían ordenados, pero por si acaso)
+            df = df.sort_values('timestamp')
+            
+            fig = go.Figure()
+
+            # 1. Línea Principal de Precio
+            fig.add_trace(go.Scatter(
+                x=df['date'], y=df['price'],
+                mode='lines+markers',
+                line=dict(color='#4e73df', width=2),
+                marker=dict(size=4, color='rgba(78,115,223,0.5)'),
+                name=f'Precio ${token}'
+            ))
+
+            # 2. Marcadores superpuestos de Compra y Venta (Triángulos más grandes)
+            buys = df[df['type'] == 'BUY']
+            sells = df[df['type'] == 'SELL']
+
+            if not buys.empty:
+                fig.add_trace(go.Scatter(
+                    x=buys['date'], y=buys['price'],
+                    mode='markers',
+                    marker=dict(symbol='triangle-up', size=14, color='#26e07f', line=dict(color='white', width=1)),
+                    name='Compra',
+                    hovertemplate='Compra: $%{y:.6f}<extra></extra>'
+                ))
+
+            if not sells.empty:
+                fig.add_trace(go.Scatter(
+                    x=sells['date'], y=sells['price'],
+                    mode='markers',
+                    marker=dict(symbol='triangle-down', size=14, color='#ff4d4f', line=dict(color='white', width=1)),
+                    name='Venta',
+                    hovertemplate='Venta: $%{y:.6f}<extra></extra>'
+                ))
+
+            # Configuración del layout similar a los otros gráficos del sitio (dark theme)
+            fig.update_layout(
+                template='plotly_dark',
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=30, b=10),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                hovermode='x unified',
+                xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', tickangle=-45),
+                yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', side='right', tickformat='.6f')
+            )
+
+            # Exportar a HTML (usando CDN para Plotly)
+            chart_html = fig.to_html(full_html=False, include_plotlyjs='cdn', config={'displayModeBar': False})
+            has_price = True
+        else:
+            chart_html = "<div class='text-center text-muted p-5'><i class='fas fa-chart-line fa-3x mb-3 opacity-25'></i><br>Sin datos de precio disponibles para graficar.</div>"
+            has_price = False
 
         return JsonResponse({
             'status': 'ok',
             'wallet_name': wallet.name or wallet.address[:12],
             'token': token,
             'pairs': wallet.target_pairs_list or [token],
-            'price_data': price_data,
+            'chart_html': chart_html,
             'trades': trades,
-            'has_price': bool(price_data),
+            'has_price': has_price,
             'trade_count': len(trades),
         })
 
