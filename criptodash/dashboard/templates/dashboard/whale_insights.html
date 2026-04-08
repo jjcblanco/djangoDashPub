@@ -10,6 +10,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <!-- Chart.js para gráficos de operaciones de ballenas -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <style>
         :root {
             --primary: #4e73df;
@@ -1752,7 +1753,7 @@ function loadWhaleChart() {
                 data: { datasets: [priceDataset, buyDataset, sellDataset] },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
+                    interaction: { mode: 'nearest', intersect: false },
                     plugins: {
                         legend: { labels: { color: '#adb3c7', font: { size: 11 } } },
                         tooltip: {
@@ -1768,9 +1769,12 @@ function loadWhaleChart() {
                         }
                     },
                     scales: {
-                        x: {
-                            type: 'time',
-                            time: { unit: 'day', tooltipFormat: 'dd/MM/yy HH:mm' },
+                        x: data.has_price ? {
+                            type: 'timeseries',
+                            time: { unit: 'day' },
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#adb3c7', font: { size: 10 }, maxTicksLimit: 10 },
+                        } : {
                             grid: { color: 'rgba(255,255,255,0.05)' },
                             ticks: { color: '#adb3c7', font: { size: 10 } },
                         },
