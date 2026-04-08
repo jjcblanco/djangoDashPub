@@ -442,15 +442,55 @@ def suggest_bot_from_whale(request, wallet_id):
 @login_required
 def trigger_whale_hunt(request):
     """
-    Lanza la tarea de caza de ballenas por pares en Celery (background).
-    También soporta ejecución síncrona de emergencia si Celery no está disponible.
+    Lanza la tarea de caza de ballenas por pares.
+    - Intenta Celery (background). 
+    - Si Celery no está disponible, ejecuta síncronamente y retorna el resultado real.
     """
+    from dashboard.tasks import hunt_whales_by_pair_task
+    
+    # Primero verificar si hay targets activos
+    from dashboard.models import WhaleHuntTarget
+    target_count = WhaleHuntTarget.objects.filter(is_active=True).count()
+    if target_count == 0:
+        return JsonResponse({
+            'status': 'warning',
+            'message': '⚠️ No hay contratos activos en Hunt Targets. Agrega al menos uno en el panel de abajo.',
+        })
+
+    # Intentar encolar en Celery (modo background)
+    use_sync = request.GET.get('sync') == '1'
+    
+    if not use_sync:
+        try:
+            hunt_whales_by_pair_task.delay()
+            return JsonResponse({
+                'status': 'success',
+                'message': f'🔍 Cazando en {target_count} tokens en segundo plano. Las nuevas billeteras aparecerán en el listado en unos segundos.',
+            })
+        except Exception as celery_err:
+            # Celery no disponible, continuar con modo síncrono
+            pass
+    
+    # Modo síncrono (fallback o forzado)
     try:
-        from dashboard.tasks import hunt_whales_by_pair_task
-        hunt_whales_by_pair_task.delay()
+        result = hunt_whales_by_pair_task()
+        new_count = result.get('new', 0) if isinstance(result, dict) else 0
+        updated_count = result.get('updated', 0) if isinstance(result, dict) else 0
+        
+        if new_count == 0 and updated_count == 0:
+            return JsonResponse({
+                'status': 'warning',
+                'message': (
+                    f'🔍 Escaneo completo en {target_count} tokens. No se encontraron ballenas nuevas. '
+                    f'Tip: Baja el "Vol. mín. USD" en tus targets para capturar más traders.'
+                ),
+            })
+        
         return JsonResponse({
             'status': 'success',
-            'message': 'Caza de ballenas iniciada en segundo plano. Nuevas wallets aparecerán en unos minutos.',
+            'message': f'✅ Caza completada: {new_count} ballenas nuevas, {updated_count} actualizadas.',
+            'new_wallets': new_count,
+            'updated_wallets': updated_count,
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

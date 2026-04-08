@@ -119,12 +119,12 @@ def sync_all_whales_task():
 
 # Targets por defecto usados como semilla si la BD está vacía
 _DEFAULT_HUNT_TARGETS = [
-    {'blockchain': 'solana',   'token_symbol': 'WIF',   'contract_address': 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', 'min_volume_usd': 3000},
-    {'blockchain': 'solana',   'token_symbol': 'BONK',  'contract_address': 'DezXAZ8z7Pnrn9vzctrxEXpWMrNHqR1f6f69nL4XYUDx', 'min_volume_usd': 2000},
-    {'blockchain': 'solana',   'token_symbol': 'JUP',   'contract_address': 'JUPyiPZp718zay7kaPn2CoJvRwvpqcRuS5B7shuYf79',  'min_volume_usd': 5000},
-    {'blockchain': 'ethereum', 'token_symbol': 'PEPE',  'contract_address': '0x6982508145454ce325ddbe47a25d4ec3d2311933',      'min_volume_usd': 5000},
-    {'blockchain': 'ethereum', 'token_symbol': 'SHIB',  'contract_address': '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE',      'min_volume_usd': 5000},
-    {'blockchain': 'base',     'token_symbol': 'TOSHI', 'contract_address': '0x2da56acd00b702c8f5a43d65f5fcbef7b3f3c36c',      'min_volume_usd': 2000},
+    {'blockchain': 'solana',   'token_symbol': 'WIF',   'contract_address': 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', 'min_volume_usd': 200},
+    {'blockchain': 'solana',   'token_symbol': 'BONK',  'contract_address': 'DezXAZ8z7Pnrn9vzctrxEXpWMrNHqR1f6f69nL4XYUDx', 'min_volume_usd': 100},
+    {'blockchain': 'solana',   'token_symbol': 'JUP',   'contract_address': 'JUPyiPZp718zay7kaPn2CoJvRwvpqcRuS5B7shuYf79',  'min_volume_usd': 500},
+    {'blockchain': 'ethereum', 'token_symbol': 'PEPE',  'contract_address': '0x6982508145454ce325ddbe47a25d4ec3d2311933',      'min_volume_usd': 1000},
+    {'blockchain': 'ethereum', 'token_symbol': 'SHIB',  'contract_address': '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE',      'min_volume_usd': 1000},
+    {'blockchain': 'base',     'token_symbol': 'TOSHI', 'contract_address': '0x2da56acd00b702c8f5a43d65f5fcbef7b3f3c36c',      'min_volume_usd': 200},
 ]
 
 
