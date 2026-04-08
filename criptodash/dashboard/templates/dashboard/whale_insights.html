@@ -1705,98 +1705,88 @@ function loadWhaleChart() {
             }
 
             document.getElementById('whaleChartSubtitle').textContent =
-                data.has_price ? `Últimos 30 días · $${data.token}` : `Sin datos de precio en CoinGecko · $${data.token}`;
+                `${data.trade_count || data.trades.length} operaciones · $${data.token}`;
 
             // Destruir instancia anterior
             if (_whaleChartInstance) { _whaleChartInstance.destroy(); _whaleChartInstance = null; }
 
             const canvas = document.getElementById('whaleChartCanvas');
-            document.getElementById('whaleChartSpinner').style.display = 'none';
             canvas.style.display = 'block';
-
             const ctx = canvas.getContext('2d');
 
-            // ── Dataset de precio histórico ──
-            const priceDataset = {
-                label: `$${data.token} Precio`,
-                data: data.price_data.map(p => ({ x: p.t, y: p.y })),
-                borderColor: '#4e73df',
-                backgroundColor: 'rgba(78,115,223,0.08)',
-                borderWidth: 1.5,
-                pointRadius: 0,
-                fill: true,
-                tension: 0.3,
-                yAxisID: 'y',
-            };
+            // ── Usar etiquetas de fecha como strings (sin escala time) ──
+            const tradesWithPrice = data.trades.filter(t => t.price != null);
+            const labels = tradesWithPrice.map(t => t.date);
+            const prices = tradesWithPrice.map(t => t.price);
 
-            // ── Markers de compra/venta ──
-            const buys = data.trades.filter(t => t.type === 'BUY' && t.price);
-            const sells = data.trades.filter(t => t.type === 'SELL' && t.price);
+            // Indices de compra/venta para dibujar los puntos con color
+            const pointColors = tradesWithPrice.map(t => t.type === 'BUY' ? '#26e07f' : '#ff4d4f');
+            const pointRadii = tradesWithPrice.map(() => 7);
 
-            const buyDataset = {
-                label: 'Compra 🔺',
-                data: buys.map(t => ({ x: t.timestamp, y: t.price })),
-                type: 'scatter',
-                pointStyle: 'triangle',
-                pointRadius: 9,
-                backgroundColor: '#26e07f',
-                borderColor: '#26e07f',
-                yAxisID: 'y',
-            };
-
-            const sellDataset = {
-                label: 'Venta 🔻',
-                data: sells.map(t => ({ x: t.timestamp, y: t.price })),
-                type: 'scatter',
-                pointStyle: 'triangle',
-                pointRadius: 9,
-                rotation: 180,
-                backgroundColor: '#ff4d4f',
-                borderColor: '#ff4d4f',
-                yAxisID: 'y',
-            };
-
-            _whaleChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: { datasets: [priceDataset, buyDataset, sellDataset] },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    interaction: { mode: 'nearest', intersect: false },
-                    plugins: {
-                        legend: { labels: { color: '#adb3c7', font: { size: 11 } } },
-                        tooltip: {
-                            backgroundColor: '#1e2330',
-                            titleColor: '#fff',
-                            bodyColor: '#adb3c7',
-                            callbacks: {
-                                label: ctx => {
-                                    const v = ctx.parsed.y;
-                                    return v != null ? ` ${ctx.dataset.label}: $${v.toFixed(6)}` : '';
+            try {
+                _whaleChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: `$${data.token}`,
+                            data: prices,
+                            borderColor: '#4e73df',
+                            backgroundColor: 'rgba(78,115,223,0.06)',
+                            borderWidth: 2,
+                            pointRadius: pointRadii,
+                            pointBackgroundColor: pointColors,
+                            pointBorderColor: pointColors,
+                            fill: true,
+                            tension: 0.3,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: '#1e2330',
+                                titleColor: '#fff',
+                                bodyColor: '#adb3c7',
+                                callbacks: {
+                                    label: ctx => {
+                                        const trade = tradesWithPrice[ctx.dataIndex];
+                                        const icon = trade.type === 'BUY' ? '🔺' : '🔻';
+                                        return ` ${icon} ${trade.type}: $${ctx.parsed.y.toFixed(6)}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { color: 'rgba(255,255,255,0.04)' },
+                                ticks: {
+                                    color: '#adb3c7',
+                                    font: { size: 10 },
+                                    maxTicksLimit: 8,
+                                    maxRotation: 30,
+                                }
+                            },
+                            y: {
+                                position: 'right',
+                                grid: { color: 'rgba(255,255,255,0.04)' },
+                                ticks: {
+                                    color: '#adb3c7',
+                                    font: { size: 10 },
+                                    callback: v => `$${v < 0.01 ? v.toFixed(6) : v.toFixed(4)}`
                                 }
                             }
                         }
-                    },
-                    scales: {
-                        x: data.has_price ? {
-                            type: 'timeseries',
-                            time: { unit: 'day' },
-                            grid: { color: 'rgba(255,255,255,0.05)' },
-                            ticks: { color: '#adb3c7', font: { size: 10 }, maxTicksLimit: 10 },
-                        } : {
-                            grid: { color: 'rgba(255,255,255,0.05)' },
-                            ticks: { color: '#adb3c7', font: { size: 10 } },
-                        },
-                        y: {
-                            position: 'right',
-                            grid: { color: 'rgba(255,255,255,0.05)' },
-                            ticks: {
-                                color: '#adb3c7', font: { size: 10 },
-                                callback: v => `$${v < 0.01 ? v.toFixed(6) : v.toFixed(4)}`
-                            }
-                        }
                     }
-                }
-            });
+                });
+            } catch(chartErr) {
+                console.error('Error renderizando gráfico:', chartErr);
+                canvas.style.display = 'none';
+                document.getElementById('whaleChartSubtitle').textContent = '⚠️ Error al renderizar el gráfico.';
+            }
 
             // ── Tabla de trades ──
             const count = data.trades.length;
@@ -1818,12 +1808,10 @@ function loadWhaleChart() {
             if (count > 0) document.getElementById('whaleChartTradesTable').style.display = 'block';
         })
         .catch(e => {
-            document.getElementById('whaleChartSubtitle').textContent = 'Error de conexión.';
+            document.getElementById('whaleChartSubtitle').textContent = 'Error de conexión: ' + e.message;
             document.getElementById('whaleChartSpinner').style.display = 'none';
-            console.error('WhaleChart error:', e);
+            console.error('WhaleChart fetch error:', e);
         });
 }
 </script>
 
-</body>
-</html>
