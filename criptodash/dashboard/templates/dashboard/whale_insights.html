@@ -1628,11 +1628,11 @@
           <span id="whaleChartTradeCount" class="small text-muted ms-auto"></span>
         </div>
         <!-- Canvas del gráfico -->
-        <div id="whaleChartContainer" style="position:relative; height:380px;">
+        <div style="position:relative; min-height:380px;">
           <div id="whaleChartSpinner" class="d-flex justify-content-center align-items-center" style="height:380px;">
             <div class="spinner-border text-warning"></div>
           </div>
-          <canvas id="whaleChartCanvas" style="display:none;"></canvas>
+          <div id="whaleChartContainer" style="display:none; width:100%;"></div>
         </div>
         <!-- Tabla de trades -->
         <div id="whaleChartTradesTable" class="mt-3" style="max-height:160px; overflow-y:auto; display:none;">
