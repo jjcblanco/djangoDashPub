@@ -49,7 +49,7 @@ def whale_insights(request):
         if active_pair:
             wallets_qs = wallets_qs.filter(target_pairs__icontains=active_pair)
         
-        wallets = wallets_qs[:15]
+        wallets = wallets_qs[:50]
 
         # ── Sincronización masiva ───────────────────────────────────────
         if request.GET.get('sync') == '1':
