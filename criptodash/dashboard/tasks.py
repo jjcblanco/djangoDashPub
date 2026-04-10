@@ -161,30 +161,49 @@ def hunt_whales_by_pair_task():
     targets = WhaleHuntTarget.objects.filter(is_active=True)
     if not targets.exists():
         logger.warning("[WhaleHunter] No hay targets activos en la BD.")
-        return {'new': 0, 'updated': 0}
+        return {'new': 0, 'updated': 0, 'scanned': 0, 'total_buyers_found': 0, 'already_existed': 0, 'filtered_by_vol': 0, 'errors': []}
 
     total_new = 0
     total_updated = 0
+    total_buyers_found = 0
+    total_filtered_by_vol = 0
+    total_already_existed = 0
+    scanned = 0
+    errors = []
 
     for target in targets:
         blockchain = target.blockchain
         token_address = target.contract_address
         symbol = target.token_symbol
         min_vol = target.min_volume_usd
+        scanned += 1
 
         logger.info(f"[WhaleHunter] Escaneando ${symbol} ({blockchain}) → {token_address[:12]}...")
 
         try:
             top_buyers = PatternEngine.discover_token_whales(token_address, blockchain)
         except Exception as e:
+            err_msg = f"${symbol}: {e}"
             logger.error(f"[WhaleHunter] Error escaneando {token_address[:12]}: {e}")
+            errors.append(err_msg)
             continue
+
+        if not top_buyers:
+            logger.warning(f"[WhaleHunter] ${symbol}: API no devolvió compradores (pool no encontrado o sin trades).")
+            errors.append(f"${symbol}: Sin datos de la API (pool no encontrado o 0 trades recientes)")
+            continue
+
+        total_buyers_found += len(top_buyers)
+        max_vol_seen = max((b.get('volume', 0) for b in top_buyers), default=0)
+        logger.info(f"[WhaleHunter] ${symbol}: {len(top_buyers)} compradores encontrados. Vol máx: ${max_vol_seen:,.2f}. Filtro mín: ${min_vol:,.0f}")
 
         for buyer in top_buyers:
             wallet_address = buyer.get('address', '')
             volume = buyer.get('volume', 0)
 
             if not wallet_address or volume < min_vol:
+                if wallet_address:
+                    total_filtered_by_vol += 1
                 continue
 
             if blockchain in ['ethereum', 'base']:
@@ -206,6 +225,7 @@ def hunt_whales_by_pair_task():
                     total_new += 1
                     logger.info(f"[WhaleHunter] ✅ Nueva ballena de ${symbol}: {wallet_address[:10]} (vol: ${volume:,.0f})")
                 else:
+                    total_already_existed += 1
                     existing_pairs = whale.target_pairs or ''
                     if symbol.upper() not in [p.strip().upper() for p in existing_pairs.split(',')]:
                         whale.target_pairs = f"{existing_pairs},{symbol}" if existing_pairs else symbol
@@ -214,6 +234,14 @@ def hunt_whales_by_pair_task():
             except Exception as e:
                 logger.error(f"[WhaleHunter] Error creando wallet {wallet_address[:10]}: {e}")
 
-    logger.info(f"[WhaleHunter] Caza completada: {total_new} nuevas, {total_updated} actualizadas.")
-    return {'new': total_new, 'updated': total_updated}
+    logger.info(f"[WhaleHunter] Caza completada: {total_new} nuevas, {total_updated} actualizadas, {total_buyers_found} compradores encontrados, {total_filtered_by_vol} filtrados por vol.")
+    return {
+        'new': total_new,
+        'updated': total_updated,
+        'scanned': scanned,
+        'total_buyers_found': total_buyers_found,
+        'already_existed': total_already_existed,
+        'filtered_by_vol': total_filtered_by_vol,
+        'errors': errors,
+    }
 
