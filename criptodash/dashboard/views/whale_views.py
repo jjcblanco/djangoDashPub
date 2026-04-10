@@ -10,6 +10,8 @@ from django.views.decorators.http import require_POST
 from django.db.models import Count
 from django.utils import timezone
 from django.core.cache import cache
+import logging
+logger = logging.getLogger(__name__)
 
 from ..models import WhaleWallet, WhaleTransaction, PatternInsight, TradingPair, ShadowTrade
 from ..services import SolanaWhaleTracker, PatternEngine
@@ -670,70 +672,89 @@ def whale_consensus_ajax(request):
 def whale_trade_chart_ajax(request, wallet_id):
     """
     Devuelve datos para el gráfico de operaciones de una ballena en un token:
-    - price_data: precio histórico de CoinGecko (últimos 30 días)
-    - trades: lista de compras/ventas de la ballena en ese token
+    - price_data: precio histórico de GeckoTerminal (línea de fondo)
+    - trades: lista de compras/ventas de la ballena superpuestas
     """
     import requests as req
-    from ..models import WhaleTransaction
+    import plotly.graph_objects as go
+    import pandas as pd
+    from datetime import datetime
+    from django.db.models import Q
+    from dashboard.models import WhaleWallet, WhaleTransaction
 
     token = request.GET.get('token', '').upper().strip()
+    wallet = get_object_or_404(WhaleWallet, id=wallet_id)
+    blockchain = wallet.blockchain
 
     try:
-        wallet = get_object_or_404(WhaleWallet, id=wallet_id)
-
-        # Si no se especificó token, usar el primero disponible
+        # 1. Determinar el Token a graficar
         if not token:
             token = wallet.target_pairs_list[0] if wallet.target_pairs_list else None
         if not token:
-            # Intentar cualquier transacción disponible
             any_tx = WhaleTransaction.objects.filter(wallet=wallet).first()
             if any_tx:
                 token = any_tx.to_asset or any_tx.from_asset or 'TOKEN'
             else:
-                return JsonResponse({'status': 'no_trades',
-                                     'message': 'Esta billetera no tiene transacciones sincronizadas todavía.'})
+                return JsonResponse({'status': 'no_trades', 'message': 'Esta billetera no tiene transacciones todavía.'})
 
-        # ── Operaciones de la ballena para ese token ──────────────────
-        txs = WhaleTransaction.objects.filter(
-            wallet=wallet,
-        ).filter(
+        # 2. Obtener Pool Address para el Token (DexScreener API)
+        pool_address = None
+        network = 'solana' if blockchain == 'solana' else 'eth'
+        if blockchain == 'base': network = 'base'
+        
+        try:
+            dex_url = f"https://api.dexscreener.com/latest/dex/search?q={token}"
+            dex_resp = req.get(dex_url, timeout=5)
+            if dex_resp.status_code == 200:
+                pairs = dex_resp.json().get('pairs', [])
+                # Buscar el par con más liquidez en la red correcta
+                valid_pairs = [p for p in pairs if p.get('chainId') in [blockchain, network]]
+                if valid_pairs:
+                    # Ordenar por liquidez USD descendente
+                    valid_pairs.sort(key=lambda x: float(x.get('liquidity', {}).get('usd', 0)), reverse=True)
+                    pool_address = valid_pairs[0].get('pairAddress')
+        except Exception as e:
+            logger.error(f"[WhaleChart] Error buscando pool: {e}")
+
+        # 3. Obtener Histórico de Precio (GeckoTerminal OHLCV)
+        ohlcv_df = pd.DataFrame()
+        if pool_address:
+            try:
+                # Gecko usa 'eth' para ethereum
+                gecko_net = 'eth' if blockchain == 'ethereum' else blockchain
+                ohlcv_url = f"https://api.geckoterminal.com/api/v2/networks/{gecko_net}/pools/{pool_address}/ohlcv/day"
+                gecko_resp = req.get(ohlcv_url, timeout=5)
+                if gecko_resp.status_code == 200:
+                    ohlcv_raw = gecko_resp.json().get('data', {}).get('attributes', {}).get('ohlcv_list', [])
+                    if ohlcv_raw:
+                        # [timestamp, open, high, low, close, volume]
+                        ohlcv_df = pd.DataFrame(ohlcv_raw, columns=['ts', 'open', 'high', 'low', 'close', 'vol'])
+                        ohlcv_df['date'] = pd.to_datetime(ohlcv_df['ts'], unit='s')
+                        ohlcv_df = ohlcv_df.sort_values('date')
+            except Exception as e:
+                logger.error(f"[WhaleChart] Error obteniendo OHLCV: {e}")
+
+        # 4. Obtener Operaciones de la Ballena
+        txs = WhaleTransaction.objects.filter(wallet=wallet).filter(
             Q(to_asset__iexact=token) | Q(from_asset__iexact=token)
         ).order_by('timestamp')
 
-        # Si no hay transacciones para ese token, devolver todos los tokens disponibles
-        if not txs.exists():
-            all_tokens = list(
-                WhaleTransaction.objects.filter(wallet=wallet)
-                .values_list('to_asset', flat=True)
-                .distinct()
-            )
-            all_tokens = [t for t in all_tokens if t]
-            return JsonResponse({
-                'status': 'no_trades',
-                'message': f'Sin operaciones de ${token}. Tokens disponibles: {", ".join(all_tokens[:5]) or "ninguno"}',
-                'available_tokens': all_tokens[:10],
-            })
-
         trades = []
         for tx in txs:
+            trade_type = 'BUY'
+            if tx.from_asset and tx.from_asset.upper() == token: trade_type = 'SELL'
+            if tx.to_asset and tx.to_asset.upper() == token: trade_type = 'BUY'
+
+            # Intentar extraer precio de raw_data
             price = None
             try:
                 raw = tx.raw_data or {}
-                price_val = raw.get('priceUsd') or raw.get('px') or raw.get('price') or 0
-                price = float(price_val) if price_val else None
-                if price == 0:
-                    price = None
-            except Exception:
-                pass
-
-            trade_type = 'BUY'
-            if tx.from_asset and tx.from_asset.upper() == token:
-                trade_type = 'SELL'
-            if tx.to_asset and tx.to_asset.upper() == token:
-                trade_type = 'BUY'
+                p_val = raw.get('priceUsd') or raw.get('px') or raw.get('price') or 0
+                price = float(p_val) if p_val else None
+            except: pass
 
             trades.append({
-                'timestamp': int(tx.timestamp.timestamp() * 1000),  # ms para Chart.js
+                'timestamp': tx.timestamp.isoformat(),
                 'date': tx.timestamp.strftime('%d/%m/%y %H:%M'),
                 'type': trade_type,
                 'price': price,
@@ -741,84 +762,79 @@ def whale_trade_chart_ajax(request, wallet_id):
                 'amount_out': float(tx.amount_out) if tx.amount_out else None,
             })
 
-        # ── Construir Gráfico con Plotly ──
-        # Generar figura
-        import plotly.graph_objects as go
-        import pandas as pd
-        
-        # Filtramos trades que tienen precio y creamos un DataFrame
-        trades_with_price = [t for t in trades if t['price'] is not None]
-        
-        if trades_with_price:
-            df = pd.DataFrame(trades_with_price)
-            # Ordenar df por timestamp por seguridad (ya venían ordenados, pero por si acaso)
-            df = df.sort_values('timestamp')
-            
-            fig = go.Figure()
+        # 5. Construir Figura Plotly
+        fig = go.Figure()
 
-            # 1. Línea Principal de Precio
+        # A. Trazar Línea de Precio Histórico (Contexto)
+        if not ohlcv_df.empty:
             fig.add_trace(go.Scatter(
-                x=df['date'], y=df['price'],
-                mode='lines+markers',
-                line=dict(color='#4e73df', width=2),
-                marker=dict(size=4, color='rgba(78,115,223,0.5)'),
-                name=f'Precio ${token}'
+                x=ohlcv_df['date'], y=ohlcv_df['close'],
+                mode='lines',
+                line=dict(color='rgba(100, 100, 100, 0.4)', width=1.5),
+                name='Precio Histórico',
+                hoverinfo='skip'
             ))
 
-            # 2. Marcadores superpuestos de Compra y Venta (Triángulos más grandes)
-            buys = df[df['type'] == 'BUY']
-            sells = df[df['type'] == 'SELL']
+        # B. Trazar Operaciones (Markers)
+        df_trades = pd.DataFrame(trades)
+        if not df_trades.empty:
+            # Si una operación no tiene precio, intentar interpolar o usar el precio más cercano del OHLCV
+            if not ohlcv_df.empty:
+                for i, row in df_trades.iterrows():
+                    if row['price'] is None:
+                        # Buscar el precio de cierre más cercano en el tiempo
+                        closest_idx = (ohlcv_df['date'] - pd.to_datetime(row['timestamp'])).abs().idxmin()
+                        df_trades.at[i, 'price'] = ohlcv_df.at[closest_idx, 'close']
+
+            buys = df_trades[df_trades['type'] == 'BUY']
+            sells = df_trades[df_trades['type'] == 'SELL']
 
             if not buys.empty:
                 fig.add_trace(go.Scatter(
-                    x=buys['date'], y=buys['price'],
+                    x=buys['timestamp'], y=buys['price'],
                     mode='markers',
                     marker=dict(symbol='triangle-up', size=14, color='#26e07f', line=dict(color='white', width=1)),
                     name='Compra',
-                    hovertemplate='Compra: $%{y:.6f}<extra></extra>'
+                    text=buys['amount_in'] if 'amount_in' in buys else buys['price'],
+                    hovertemplate='<b>COMPRA</b><br>Precio: $%{y:.6f}<br>Cant: %{text:.2f}<extra></extra>'
                 ))
 
             if not sells.empty:
                 fig.add_trace(go.Scatter(
-                    x=sells['date'], y=sells['price'],
+                    x=sells['timestamp'], y=sells['price'],
                     mode='markers',
                     marker=dict(symbol='triangle-down', size=14, color='#ff4d4f', line=dict(color='white', width=1)),
                     name='Venta',
-                    hovertemplate='Venta: $%{y:.6f}<extra></extra>'
+                    text=sells['amount_out'] if 'amount_out' in sells else sells['price'],
+                    hovertemplate='<b>VENTA</b><br>Precio: $%{y:.6f}<br>Cant: %{text:.2f}<extra></extra>'
                 ))
 
-            # Configuración del layout similar a los otros gráficos del sitio (dark theme)
-            fig.update_layout(
-                template='plotly_dark',
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=10, r=10, t=30, b=10),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                hovermode='x unified',
-                xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', tickangle=-45),
-                yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', side='right', tickformat='.6f')
-            )
+        # C. Layout (Dark Theme)
+        fig.update_layout(
+            template='plotly_dark',
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            margin=dict(l=10, r=10, t=30, b=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            hovermode='x unified',
+            xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)'),
+            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', side='right', tickformat='.6f')
+        )
 
-            # Exportar a HTML (usando CDN para Plotly)
-            chart_html = fig.to_html(full_html=False, include_plotlyjs=False, config={'displayModeBar': False})
-            has_price = True
-        else:
-            chart_html = "<div class='text-center text-muted p-5'><i class='fas fa-chart-line fa-3x mb-3 opacity-25'></i><br>Sin datos de precio disponibles para graficar.</div>"
-            has_price = False
+        chart_html = fig.to_html(full_html=False, include_plotlyjs=False, config={'displayModeBar': False})
 
         return JsonResponse({
             'status': 'ok',
             'wallet_name': wallet.name or wallet.address[:12],
             'token': token,
-            'pairs': wallet.target_pairs_list or [token],
             'chart_html': chart_html,
             'trades': trades,
-            'has_price': has_price,
             'trade_count': len(trades),
         })
 
     except Exception as e:
         import traceback
-        return JsonResponse({'status': 'error', 'message': str(e), 'trace': traceback.format_exc()}, status=500)
+        logger.error(f"Error Chart Ajax: {str(e)}\n{traceback.format_exc()}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
