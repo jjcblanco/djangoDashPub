@@ -444,11 +444,10 @@ def suggest_bot_from_whale(request, wallet_id):
 def trigger_whale_hunt(request):
     """
     Lanza la tarea de caza de ballenas por pares.
-    - Intenta Celery (background). 
-    - Si Celery no está disponible, ejecuta síncronamente y retorna el resultado real.
+    Siempre ejecuta de forma síncrona para dar feedback inmediato al usuario.
     """
     from dashboard.tasks import hunt_whales_by_pair_task
-    
+
     # Primero verificar si hay targets activos
     from dashboard.models import WhaleHuntTarget
     target_count = WhaleHuntTarget.objects.filter(is_active=True).count()
@@ -458,43 +457,71 @@ def trigger_whale_hunt(request):
             'message': '⚠️ No hay contratos activos en Hunt Targets. Agrega al menos uno en el panel de abajo.',
         })
 
-    # Intentar encolar en Celery (modo background)
-    use_sync = request.GET.get('sync') == '1'
-    
-    if not use_sync:
-        try:
-            hunt_whales_by_pair_task.delay()
-            return JsonResponse({
-                'status': 'success',
-                'message': f'🔍 Cazando en {target_count} tokens en segundo plano. Las nuevas billeteras aparecerán en el listado en unos segundos.',
-            })
-        except Exception as celery_err:
-            # Celery no disponible, continuar con modo síncrono
-            pass
-    
-    # Modo síncrono (fallback o forzado)
+    # Ejecutar síncronamente para dar feedback real al usuario
     try:
         result = hunt_whales_by_pair_task()
         new_count = result.get('new', 0) if isinstance(result, dict) else 0
         updated_count = result.get('updated', 0) if isinstance(result, dict) else 0
-        
-        if new_count == 0 and updated_count == 0:
+        buyers_found = result.get('total_buyers_found', 0) if isinstance(result, dict) else 0
+        already_existed = result.get('already_existed', 0) if isinstance(result, dict) else 0
+        filtered_by_vol = result.get('filtered_by_vol', 0) if isinstance(result, dict) else 0
+        errors = result.get('errors', []) if isinstance(result, dict) else []
+        scanned = result.get('scanned', 0) if isinstance(result, dict) else 0
+
+        # Construir mensaje de feedback detallado
+        if new_count > 0:
+            msg = f'✅ Caza completada: {new_count} ballenas nuevas añadidas'
+            if updated_count > 0:
+                msg += f', {updated_count} actualizadas'
+            msg += f'. ({buyers_found} compradores analizados en {scanned} tokens)'
             return JsonResponse({
-                'status': 'warning',
-                'message': (
-                    f'🔍 Escaneo completo en {target_count} tokens. No se encontraron ballenas nuevas. '
-                    f'Tip: Baja el "Vol. mín. USD" en tus targets para capturar más traders.'
-                ),
+                'status': 'success',
+                'message': msg,
+                'new_wallets': new_count,
+                'updated_wallets': updated_count,
             })
-        
+
+        # No se encontraron wallets nuevas — dar feedback útil
+        if buyers_found == 0:
+            # La API no devolvió compradores
+            error_detail = ' | '.join(errors[:3]) if errors else 'Las APIs no devolvieron datos de trades.'
+            msg = (
+                f'⚠️ Escaneo completo en {scanned} tokens, pero no se encontraron compradores. '
+                f'Detalle: {error_detail}'
+            )
+        elif filtered_by_vol > 0 and already_existed == 0:
+            # Hay compradores pero todos fueron filtrados por volumen
+            msg = (
+                f'⚠️ Se encontraron {buyers_found} compradores en {scanned} tokens, '
+                f'pero todos fueron filtrados por volumen mínimo. '
+                f'💡 Tip: Baja el "Vol. mín. USD" en tus targets para capturar más traders.'
+            )
+        elif already_existed > 0:
+            # Todos los compradores ya estaban guardados
+            msg = (
+                f'🔍 Escaneo completo: {buyers_found} compradores en {scanned} tokens. '
+                f'{already_existed} ya estaban en seguimiento'
+            )
+            if filtered_by_vol > 0:
+                msg += f', {filtered_by_vol} filtrados por volumen mín'
+            if updated_count > 0:
+                msg += f', {updated_count} actualizados con nuevo par'
+            msg += '. No hay ballenas de estreno.'
+        else:
+            msg = (
+                f'🔍 Escaneo completo en {scanned} tokens. '
+                f'No se encontraron ballenas nuevas.'
+            )
+            if errors:
+                msg += f' Errores: {" | ".join(errors[:2])}'
+
         return JsonResponse({
-            'status': 'success',
-            'message': f'✅ Caza completada: {new_count} ballenas nuevas, {updated_count} actualizadas.',
-            'new_wallets': new_count,
-            'updated_wallets': updated_count,
+            'status': 'warning',
+            'message': msg,
         })
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        import traceback
+        return JsonResponse({'status': 'error', 'message': f'Error ejecutando caza: {str(e)}'}, status=500)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -773,7 +800,7 @@ def whale_trade_chart_ajax(request, wallet_id):
             )
 
             # Exportar a HTML (usando CDN para Plotly)
-            chart_html = fig.to_html(full_html=False, include_plotlyjs='cdn', config={'displayModeBar': False})
+            chart_html = fig.to_html(full_html=False, include_plotlyjs=False, config={'displayModeBar': False})
             has_price = True
         else:
             chart_html = "<div class='text-center text-muted p-5'><i class='fas fa-chart-line fa-3x mb-3 opacity-25'></i><br>Sin datos de precio disponibles para graficar.</div>"
