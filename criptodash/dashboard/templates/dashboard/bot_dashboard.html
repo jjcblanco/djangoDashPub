@@ -569,10 +569,10 @@
                                     <span class="badge bg-light text-dark">{{ trade.status }}</span>
                                     {% endif %}
                                 </td>
-                                <td>
+                                <td data-order="{{ trade.entry_time|date:'U' }}">
                                     <small class="text-muted">{{ trade.entry_time|date:"d/m H:i" }}</small>
                                 </td>
-                                <td>
+                                <td data-order="{{ trade.updated_at|default:trade.entry_time|date:'U' }}">
                                     <small class="text-info">{{ trade.updated_at|default:trade.entry_time|date:"d/m H:i" }}</small>
                                 </td>
                             </tr>
