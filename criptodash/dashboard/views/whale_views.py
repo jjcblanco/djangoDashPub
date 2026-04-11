@@ -17,6 +17,8 @@ from ..services import SolanaWhaleTracker, PatternEngine
 from dashboard.services import get_top_scored_whales
 from dashboard.whale_scoring import WhaleScoringEngine
 from dashboard.whale_analysis import WhaleAnalysisEngine
+from dashboard.data_service import generar_grafico_desde_señales
+from dashboard.indicadores import calculate_rsi, macd
 from .utils import ajax_rate_limit
 
 @login_required
@@ -761,81 +763,58 @@ def whale_trade_chart_ajax(request, wallet_id):
                 'amount_out': float(tx.amount_out) if tx.amount_out else None,
             })
 
-        # 5. Construir Figura Plotly
-        fig = go.Figure()
-
-        # A. Trazar Línea de Precio Histórico (Contexto)
+        # 5. Calcular Indicadores Técnicos
         if not ohlcv_df.empty:
-            fig.add_trace(go.Scatter(
-                x=ohlcv_df['date'], y=ohlcv_df['close'],
-                mode='lines',
-                line=dict(color='rgba(100, 100, 100, 0.4)', width=1.5),
-                name='Precio Histórico',
-                hoverinfo='skip'
-            ))
-
-        # B. Trazar Operaciones (Markers)
+            ohlcv_df['ema9'] = ohlcv_df['close'].ewm(span=9, adjust=False).mean()
+            ohlcv_df['ema21'] = ohlcv_df['close'].ewm(span=21, adjust=False).mean()
+            ohlcv_df['ema50'] = ohlcv_df['close'].ewm(span=50, adjust=False).mean()
+            ohlcv_df['ema200'] = ohlcv_df['close'].ewm(span=200, adjust=False).mean()
+            ohlcv_df['rsi'] = calculate_rsi(ohlcv_df, period=14)
+            ohlcv_df = macd(ohlcv_df)
+            
+            # Renombrar columna de fecha para DataService
+            ohlcv_df = ohlcv_df.rename(columns={'date': 'timestamp'})
+        
+        # 6. Preparar Operaciones para el Gráfico
         df_trades = pd.DataFrame(trades)
-        if not df_trades.empty:
-            # Si una operación no tiene precio, intentar interpolar o usar el precio más cercano del OHLCV
-            if not ohlcv_df.empty:
-                for i, row in df_trades.iterrows():
-                    if row['price'] is None:
-                        # Buscar el precio de cierre más cercano en el tiempo
-                        closest_idx = (ohlcv_df['date'] - pd.to_datetime(row['timestamp'])).abs().idxmin()
-                        df_trades.at[i, 'price'] = ohlcv_df.at[closest_idx, 'close']
-
-            buys = df_trades[df_trades['type'] == 'BUY']
-            sells = df_trades[df_trades['type'] == 'SELL']
-
-            if not buys.empty:
-                fig.add_trace(go.Scatter(
-                    x=buys['timestamp'], y=buys['price'],
-                    mode='markers',
-                    marker=dict(symbol='triangle-up', size=14, color='#26e07f', line=dict(color='white', width=1)),
-                    name='Compra',
-                    text=buys['amount_in'] if 'amount_in' in buys else buys['price'],
-                    hovertemplate='<b>COMPRA</b><br>Precio: $%{y:.6f}<br>Cant: %{text:.2f}<extra></extra>'
-                ))
-
-            if not sells.empty:
-                fig.add_trace(go.Scatter(
-                    x=sells['timestamp'], y=sells['price'],
-                    mode='markers',
-                    marker=dict(symbol='triangle-down', size=14, color='#ff4d4f', line=dict(color='white', width=1)),
-                    name='Venta',
-                    text=sells['amount_out'] if 'amount_out' in sells else sells['price'],
-                    hovertemplate='<b>VENTA</b><br>Precio: $%{y:.6f}<br>Cant: %{text:.2f}<extra></extra>'
-                ))
-
-        # C. Layout (Dark Theme)
-        fig.update_layout(
-            template='plotly_dark',
-            paper_bgcolor='rgba(100,100,100,0)',
-            plot_bgcolor='rgba(100,100,100,0)',
-            margin=dict(l=10, r=10, t=30, b=10),
-            legend=dict(
-                orientation="h", 
-                yanchor="bottom", y=1.02, 
-                xanchor="right", x=1,
-                font=dict(color='white', size=11)
-            ),
-            hovermode='x unified',
-            xaxis=dict(
-                showgrid=True, 
-                gridcolor='rgba(255,255,255,0.05)',
-                tickfont=dict(color='rgba(255,255,255,0.7)')
-            ),
-            yaxis=dict(
-                showgrid=True, 
-                gridcolor='rgba(255,255,255,0.05)', 
-                side='right', 
-                tickformat='.6f',
-                tickfont=dict(color='rgba(255,255,255,0.7)')
+        final_df = ohlcv_df.copy()
+        
+        if not df_trades.empty and not ohlcv_df.empty:
+            df_trades['timestamp'] = pd.to_datetime(df_trades['timestamp'])
+            # Mapear tipos para el gráfico
+            df_trades['signal_type'] = df_trades['type'].map({'BUY': 'buy', 'SELL': 'sell'})
+            
+            # Asegurar que cada trade tenga un precio (si falta, usar el close más cercano)
+            for i, row in df_trades.iterrows():
+                if row['price'] is None:
+                    # Buscar el precio de cierre más cercano en el tiempo
+                    closest_idx = (ohlcv_df['timestamp'] - row['timestamp']).abs().idxmin()
+                    df_trades.at[i, 'price'] = ohlcv_df.at[closest_idx, 'close']
+            
+            # Mezclar con el DF de precio para que Plotly los reconozca en la misma línea de tiempo
+            # Usamos merge_asof para alinear trades con las velas horarias/diarias
+            df_trades = df_trades.sort_values('timestamp')
+            final_df = pd.merge_asof(
+                ohlcv_df.sort_values('timestamp'),
+                df_trades[['timestamp', 'signal_type', 'price']],
+                on='timestamp',
+                direction='nearest',
+                tolerance=pd.Timedelta('1D') # Tolerancia amplia para modo diario
             )
-        )
 
-        chart_html = fig.to_html(full_html=False, include_plotlyjs=False, config={'displayModeBar': False})
+        # 7. Generar Gráfico usando el servicio unificado
+        viz_options = {
+            'show_ema': True,
+            'show_rsi': True,
+            'show_macd': True,
+            'show_ichimoku': False,
+            'show_bb': False,
+        }
+        
+        if not final_df.empty:
+            chart_html = generar_grafico_desde_señales(final_df, token, viz_options=viz_options)
+        else:
+            chart_html = "<div class='alert alert-warning'>No hay datos de precio disponibles para este token.</div>"
 
         # Descubrir otros tokens disponibles para este whale (opcional para el selector)
         available_tokens = list(WhaleTransaction.objects.filter(wallet=wallet).values_list('to_asset', flat=True).distinct())
