@@ -1584,11 +1584,7 @@
                                 </div>
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <span class="small fw-bold text-muted"><i class="fas fa-clock me-2 text-info"></i>HOLDING TIME</span>
-                                    <span class="fw-bold" id="dnaHoldTime">--</span>
-                                </div>
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <span class="small fw-bold text-muted"><i class="fas fa-chart-area me-2 text-danger"></i>RSI FAVORITO</span>
-                                    <span class="fw-bold text-danger" id="dnaRSI">--</span>
+                                                                  <span class="fw-bold text-danger" id="dnaRSI">--</span>
                                 </div>
                             </div>
                         </div>
@@ -1600,6 +1596,7 @@
             </div>
         </div>
     </div>
+
 <!-- ════ MODAL: WHALE TRADE CHART ════ -->
 <div class="modal fade" id="whaleChartModal" tabindex="-1">
   <div class="modal-dialog modal-xl modal-dialog-centered">
@@ -1628,14 +1625,14 @@
           <span id="whaleChartTradeCount" class="small text-muted ms-auto"></span>
         </div>
         <!-- Canvas del gráfico -->
-        <div style="position:relative; min-height:380px;">
-          <div id="whaleChartSpinner" class="d-flex justify-content-center align-items-center" style="height:380px;">
+        <div style="position:relative; min-height:480px;">
+          <div id="whaleChartSpinner" class="d-flex justify-content-center align-items-center" style="height:480px;">
             <div class="spinner-border text-warning"></div>
           </div>
           <div id="whaleChartContainer" style="display:none; width:100%;"></div>
         </div>
         <!-- Tabla de trades -->
-        <div id="whaleChartTradesTable" class="mt-3" style="max-height:160px; overflow-y:auto; display:none;">
+        <div id="whaleChartTradesTable" class="mt-3" style="max-height:200px; overflow-y:auto; display:none;">
           <table class="table table-sm table-dark mb-0" style="font-size:0.75rem;">
             <thead><tr><th>Fecha</th><th>Tipo</th><th>Precio USD</th><th>Cantidad</th></tr></thead>
             <tbody id="whaleChartTradesBody"></tbody>
@@ -1657,14 +1654,16 @@ function openWhaleChart(walletId, walletName, pairsStr) {
     _whaleChartWalletId = walletId;
     document.getElementById('whaleChartTitle').textContent = `Operaciones de ${walletName}`;
     document.getElementById('whaleChartSubtitle').textContent = 'Cargando datos...';
+    
     const sp1 = document.getElementById('whaleChartSpinner');
     if(sp1) { sp1.classList.remove('d-none'); sp1.classList.add('d-flex'); }
+    
     document.getElementById('whaleChartContainer').style.display = 'none';
     document.getElementById('whaleChartContainer').innerHTML = '';
     document.getElementById('whaleChartTradesTable').style.display = 'none';
     document.getElementById('whaleChartTradeCount').textContent = '';
 
-    // Poblar selector de tokens
+    // Poblar selector inicial (desde target_pairs_list del template)
     const sel = document.getElementById('whaleChartTokenSelect');
     sel.innerHTML = '';
     const pairs = (pairsStr || '').split(',').map(p => p.trim().toUpperCase()).filter(Boolean);
@@ -1682,37 +1681,59 @@ function openWhaleChart(walletId, walletName, pairsStr) {
 function loadWhaleChart() {
     const walletId = _whaleChartWalletId;
     const token = document.getElementById('whaleChartTokenSelect').value;
-    if (!walletId || !token) return;
+    if (!walletId) return;
 
     const sp2 = document.getElementById('whaleChartSpinner');
     if(sp2) { sp2.classList.remove('d-none'); sp2.classList.add('d-flex'); }
+    
+    document.getElementById('whaleChartContainer').style.display = 'none';
+    document.getElementById('whaleChartTradesTable').style.display = 'none';
 
     fetch(`/whale-insights/chart/${walletId}/?token=${token}`)
         .then(r => r.json())
         .then(data => {
-            const spy = document.getElementById('whaleChartSpinner'); if(spy) { spy.classList.remove('d-flex'); spy.classList.add('d-none'); }
+            const spy = document.getElementById('whaleChartSpinner');
+            if(spy) { spy.classList.remove('d-flex'); spy.classList.add('d-none'); }
 
-            if (data.status === 'no_trades' || data.status === 'error') {
-                const msg = data.message || 'Sin datos para este token.';
-                document.getElementById('whaleChartSubtitle').textContent = '⚠️ ' + msg;
+            if (data.status === 'error') {
+                document.getElementById('whaleChartSubtitle').textContent = '❌ Error: ' + (data.message || 'Sin respuesta');
                 return;
             }
 
-            if (data.status !== 'ok') {
-                document.getElementById('whaleChartSubtitle').textContent = 'Error cargando datos.';
+            // Descubrimiento dinámico de tokens: si el backend devuelve tokens que no están en el select, los añadimos
+            if (data.available_tokens && data.available_tokens.length > 0) {
+                const sel = document.getElementById('whaleChartTokenSelect');
+                const existing = Array.from(sel.options).map(o => o.value);
+                let addedAny = false;
+                data.available_tokens.forEach(t => {
+                    if (!existing.includes(t)) {
+                        const opt = document.createElement('option');
+                        opt.value = t; opt.textContent = `$${t}`;
+                        sel.appendChild(opt);
+                        addedAny = true;
+                    }
+                });
+                // Limpiar el marcador '$TOKEN' si hemos descubierto tokens reales
+                if (existing.length === 1 && existing[0] === 'TOKEN' && addedAny) {
+                    sel.remove(0);
+                }
+            }
+
+            if (data.status === 'no_trades') {
+                document.getElementById('whaleChartSubtitle').textContent = '⚠️ ' + (data.message || 'Sin operaciones');
                 return;
             }
 
             document.getElementById('whaleChartSubtitle').textContent =
-                `${data.trade_count || data.trades.length} operaciones · $${data.token}`;
+                `${data.trade_count || 0} operaciones detectadas · $${data.token}`;
 
-            // Inyectar HTML generado por Plotly desde el backend
+            // Inyectar HTML generado por Plotly
             const container = document.getElementById('whaleChartContainer');
             if (container) {
                 container.style.display = 'block';
                 container.innerHTML = data.chart_html;
                 
-                // Ejecutar scripts que vengan en el HTML de Plotly (para que se dibuje)
+                // Ejecutar scripts internos de Plotly (esencial!)
                 const scripts = container.getElementsByTagName("script");
                 for (let i = 0; i < scripts.length; i++) {
                     const newScript = document.createElement("script");
@@ -1721,33 +1742,36 @@ function loadWhaleChart() {
                     } else {
                         newScript.text = scripts[i].innerHTML;
                     }
-                    document.body.appendChild(newScript).parentNode.removeChild(newScript);
+                    document.body.appendChild(newScript);
+                    newScript.parentNode.removeChild(newScript);
                 }
             }
 
-            // ── Tabla de trades ──
-            const count = data.trades.length;
+            // Descargar tabla de trades
+            const count = (data.trades || []).length;
             document.getElementById('whaleChartTradeCount').textContent =
                 `${count} operaci${count !== 1 ? 'ones' : 'ón'} detectada${count !== 1 ? 's' : ''}`;
 
             const tbody = document.getElementById('whaleChartTradesBody');
-            tbody.innerHTML = data.trades.slice().reverse().map(t => {
-                const isBuy = t.type === 'BUY';
-                return `<tr>
-                    <td>${t.date}</td>
-                    <td><span class="badge" style="background:${isBuy ? '#26e07f22' : '#ff4d4f22'}; color:${isBuy ? '#26e07f' : '#ff4d4f'};">
-                        ${isBuy ? '▲ COMPRA' : '▼ VENTA'}</span></td>
-                    <td>${t.price ? '$' + t.price.toFixed(6) : '<span class="text-muted">N/D</span>'}</td>
-                    <td class="text-muted">${t.amount_in ? t.amount_in.toFixed(2) : '—'}</td>
-                </tr>`;
-            }).join('');
-
-            if (count > 0) document.getElementById('whaleChartTradesTable').style.display = 'block';
+            if (tbody && data.trades) {
+                tbody.innerHTML = data.trades.slice().reverse().map(t => {
+                    const isBuy = t.type === 'BUY';
+                    return `<tr>
+                        <td>${t.date}</td>
+                        <td><span class="badge" style="background:${isBuy ? '#26e07f22' : '#ff4d4f22'}; color:${isBuy ? '#26e07f' : '#ff4d4f'};">
+                            ${isBuy ? '▲ COMPRA' : '▼ VENTA'}</span></td>
+                        <td>${t.price ? '$' + t.price.toFixed(6) : '<span class="text-muted">N/D</span>'}</td>
+                        <td class="text-muted">${t.amount_in ? t.amount_in.toFixed(2) : (t.amount_out ? t.amount_out.toFixed(2) : '—')}</td>
+                    </tr>`;
+                }).join('');
+                if (count > 0) document.getElementById('whaleChartTradesTable').style.display = 'block';
+            }
         })
         .catch(e => {
-            document.getElementById('whaleChartSubtitle').textContent = 'Error de conexión: ' + e.message;
-            const spy = document.getElementById('whaleChartSpinner'); if(spy) { spy.classList.remove('d-flex'); spy.classList.add('d-none'); }
-            console.error('WhaleChart fetch error:', e);
+            const spy = document.getElementById('whaleChartSpinner');
+            if(spy) { spy.classList.remove('d-flex'); spy.classList.add('d-none'); }
+            document.getElementById('whaleChartSubtitle').textContent = 'Error de conexión: ' + e;
+            console.error('WhaleChart error:', e);
         });
 }
 </script>

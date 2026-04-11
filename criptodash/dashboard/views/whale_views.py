@@ -7,7 +7,6 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
-from django.db.models import Count
 from django.utils import timezone
 from django.core.cache import cache
 import logging
@@ -812,21 +811,42 @@ def whale_trade_chart_ajax(request, wallet_id):
         # C. Layout (Dark Theme)
         fig.update_layout(
             template='plotly_dark',
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(100,100,100,0)',
+            plot_bgcolor='rgba(100,100,100,0)',
             margin=dict(l=10, r=10, t=30, b=10),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            legend=dict(
+                orientation="h", 
+                yanchor="bottom", y=1.02, 
+                xanchor="right", x=1,
+                font=dict(color='white', size=11)
+            ),
             hovermode='x unified',
-            xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)'),
-            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', side='right', tickformat='.6f')
+            xaxis=dict(
+                showgrid=True, 
+                gridcolor='rgba(255,255,255,0.05)',
+                tickfont=dict(color='rgba(255,255,255,0.7)')
+            ),
+            yaxis=dict(
+                showgrid=True, 
+                gridcolor='rgba(255,255,255,0.05)', 
+                side='right', 
+                tickformat='.6f',
+                tickfont=dict(color='rgba(255,255,255,0.7)')
+            )
         )
 
         chart_html = fig.to_html(full_html=False, include_plotlyjs=False, config={'displayModeBar': False})
+
+        # Descubrir otros tokens disponibles para este whale (opcional para el selector)
+        available_tokens = list(WhaleTransaction.objects.filter(wallet=wallet).values_list('to_asset', flat=True).distinct())
+        available_tokens += list(WhaleTransaction.objects.filter(wallet=wallet).values_list('from_asset', flat=True).distinct())
+        available_tokens = sorted(list(set([t.upper() for t in available_tokens if t and t.lower() != 'sol'])))
 
         return JsonResponse({
             'status': 'ok',
             'wallet_name': wallet.name or wallet.address[:12],
             'token': token,
+            'available_tokens': available_tokens,
             'chart_html': chart_html,
             'trades': trades,
             'trade_count': len(trades),
