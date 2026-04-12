@@ -17,8 +17,9 @@ from ..services import SolanaWhaleTracker, PatternEngine
 from dashboard.services import get_top_scored_whales
 from dashboard.whale_scoring import WhaleScoringEngine
 from dashboard.whale_analysis import WhaleAnalysisEngine
-from dashboard.data_service import generar_grafico_desde_señales
+from dashboard.data_service import generar_grafico_desde_señales, DataManager
 from dashboard.indicadores import calculate_rsi, macd
+from ..ccxttest1 import _ensure_binance_initialized, binance
 from .utils import ajax_rate_limit
 
 @login_required
@@ -698,63 +699,80 @@ def whale_trade_chart_ajax(request, wallet_id):
             else:
                 return JsonResponse({'status': 'no_trades', 'message': 'Esta billetera no tiene transacciones todavía.'})
 
-        # 2. Obtener Pool Address para el Token (DexScreener API)
-        pool_address = None
-        # Mapeo de redes para DexScreener y GeckoTerminal
-        network_mapping = {
-            'solana': 'solana',
-            'ethereum': 'ethereum',
-            'base': 'base',
-            'hyperliquid': 'hyperliquid',
-            'arbitrum': 'arbitrum',
-            'bsc': 'bsc',
-            'polygon': 'polygon',
-            'optimism': 'optimism'
-        }
-        
-        target_network = network_mapping.get(blockchain, 'ethereum')
-        gecko_net = 'eth' if blockchain == 'ethereum' else target_network
-        
-        try:
-            # Intentar buscar por símbolo o dirección
-            dex_url = f"https://api.dexscreener.com/latest/dex/search?q={token}"
-            dex_resp = req.get(dex_url, timeout=5)
-            
-            if dex_resp.status_code == 200:
-                pairs = dex_resp.json().get('pairs', [])
-                
-                # Filtrar por la red correcta. Aceptamos variaciones comunes de ID.
-                network_variants = [target_network, blockchain]
-                if target_network == 'ethereum': network_variants.append('eth')
-                
-                valid_pairs = [p for p in pairs if str(p.get('chainId')).lower() in network_variants]
-                
-                if valid_pairs:
-                    # Ordenar por liquidez USD descendente para pillar el pool principal
-                    valid_pairs.sort(key=lambda x: float(x.get('liquidity', {}).get('usd', 0)), reverse=True)
-                    pool_address = valid_pairs[0].get('pairAddress')
-                    
-                    # Si el token era una dirección, ahora podemos usar su símbolo real para el título
-                    if len(token) > 20: 
-                        token = valid_pairs[0].get('baseToken', {}).get('symbol', token)
-        except Exception as e:
-            logger.error(f"[WhaleChart] Error buscando pool: {e}")
-
-        # 3. Obtener Histórico de Precio (GeckoTerminal OHLCV)
+        # 2. Intentar obtener datos de Binance primero (para tokens comunes)
         ohlcv_df = pd.DataFrame()
-        if pool_address:
+        pool_address = None
+        source = 'DEX'
+
+        try:
+            _ensure_binance_initialized()
+            binance_symbol = f"{token}/USDT"
+            
+            if binance_symbol in binance.markets:
+                logger.info(f"[WhaleChart] Token {token} encontrado en Binance. Usando CEX data.")
+                # Obtener datos de Binance (DataManager maneja caché y DB)
+                ohlcv_df = DataManager.get_or_fetch(
+                    binance_symbol, 
+                    timeframe='1h', # Usamos 1h para mejor detalle en tokens comunes
+                    limit=1000
+                )
+                if not ohlcv_df.empty:
+                    source = 'BINANCE'
+                    # Normalizar columnas de DataManager si es necesario (ya deberían estar bien)
+        except Exception as e:
+            logger.error(f"[WhaleChart] Error consultando Binance: {e}")
+
+        # 3. Fallback a DEX (DexScreener + GeckoTerminal) si Binance no tiene el token
+        if ohlcv_df.empty:
+            # Mapeo de redes para DexScreener y GeckoTerminal
+            network_mapping = {
+                'solana': 'solana',
+                'ethereum': 'ethereum',
+                'base': 'base',
+                'hyperliquid': 'hyperliquid',
+                'arbitrum': 'arbitrum',
+                'bsc': 'bsc',
+                'polygon': 'polygon',
+                'optimism': 'optimism'
+            }
+            
+            target_network = network_mapping.get(blockchain, 'ethereum')
+            gecko_net = 'eth' if blockchain == 'ethereum' else target_network
+            
             try:
-                ohlcv_url = f"https://api.geckoterminal.com/api/v2/networks/{gecko_net}/pools/{pool_address}/ohlcv/day"
-                gecko_resp = req.get(ohlcv_url, timeout=5)
-                if gecko_resp.status_code == 200:
-                    ohlcv_raw = gecko_resp.json().get('data', {}).get('attributes', {}).get('ohlcv_list', [])
-                    if ohlcv_raw:
-                        # [timestamp, open, high, low, close, volume]
-                        ohlcv_df = pd.DataFrame(ohlcv_raw, columns=['ts', 'open', 'high', 'low', 'close', 'vol'])
-                        ohlcv_df['date'] = pd.to_datetime(ohlcv_df['ts'], unit='s')
-                        ohlcv_df = ohlcv_df.sort_values('date')
+                # Intentar buscar por símbolo o dirección
+                dex_url = f"https://api.dexscreener.com/latest/dex/search?q={token}"
+                dex_resp = req.get(dex_url, timeout=5)
+                
+                if dex_resp.status_code == 200:
+                    pairs = dex_resp.json().get('pairs', [])
+                    
+                    # Filtrar por la red correcta. Aceptamos variaciones comunes de ID.
+                    network_variants = [target_network, blockchain]
+                    if target_network == 'ethereum': network_variants.append('eth')
+                    
+                    valid_pairs = [p for p in pairs if str(p.get('chainId')).lower() in network_variants]
+                    
+                    if valid_pairs:
+                        # Ordenar por liquidez USD descendente para pillar el pool principal
+                        valid_pairs.sort(key=lambda x: float(x.get('liquidity', {}).get('usd', 0)), reverse=True)
+                        pool_address = valid_pairs[0].get('pairAddress')
+                        
+                        # Si el token era una dirección, ahora podemos usar su símbolo real para el título
+                        if len(token) > 20: 
+                            token = valid_pairs[0].get('baseToken', {}).get('symbol', token)
+                
+                if pool_address:
+                    ohlcv_url = f"https://api.geckoterminal.com/api/v2/networks/{gecko_net}/pools/{pool_address}/ohlcv/day"
+                    gecko_resp = req.get(ohlcv_url, timeout=5)
+                    if gecko_resp.status_code == 200:
+                        ohlcv_raw = gecko_resp.json().get('data', {}).get('attributes', {}).get('ohlcv_list', [])
+                        if ohlcv_raw:
+                            ohlcv_df = pd.DataFrame(ohlcv_raw, columns=['ts', 'open', 'high', 'low', 'close', 'vol'])
+                            ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['ts'], unit='s')
+                            ohlcv_df = ohlcv_df.sort_values('timestamp')
             except Exception as e:
-                logger.error(f"[WhaleChart] Error obteniendo OHLCV: {e}")
+                logger.error(f"[WhaleChart] Error en fallback DEX: {e}")
 
         # 4. Obtener Operaciones de la Ballena
         txs = WhaleTransaction.objects.filter(wallet=wallet).filter(
@@ -786,15 +804,15 @@ def whale_trade_chart_ajax(request, wallet_id):
 
         # 5. Calcular Indicadores Técnicos
         if not ohlcv_df.empty:
+            if 'timestamp' not in ohlcv_df.columns and 'date' in ohlcv_df.columns:
+                ohlcv_df = ohlcv_df.rename(columns={'date': 'timestamp'})
+            
             ohlcv_df['ema9'] = ohlcv_df['close'].ewm(span=9, adjust=False).mean()
             ohlcv_df['ema21'] = ohlcv_df['close'].ewm(span=21, adjust=False).mean()
             ohlcv_df['ema50'] = ohlcv_df['close'].ewm(span=50, adjust=False).mean()
             ohlcv_df['ema200'] = ohlcv_df['close'].ewm(span=200, adjust=False).mean()
             ohlcv_df['rsi'] = calculate_rsi(ohlcv_df, period=14)
             ohlcv_df = macd(ohlcv_df)
-            
-            # Renombrar columna de fecha para DataService
-            ohlcv_df = ohlcv_df.rename(columns={'date': 'timestamp'})
         
         # 6. Preparar Operaciones para el Gráfico
         df_trades = pd.DataFrame(trades)
