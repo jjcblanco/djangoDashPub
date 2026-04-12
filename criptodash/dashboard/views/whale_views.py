@@ -700,20 +700,43 @@ def whale_trade_chart_ajax(request, wallet_id):
 
         # 2. Obtener Pool Address para el Token (DexScreener API)
         pool_address = None
-        network = 'solana' if blockchain == 'solana' else 'eth'
-        if blockchain == 'base': network = 'base'
+        # Mapeo de redes para DexScreener y GeckoTerminal
+        network_mapping = {
+            'solana': 'solana',
+            'ethereum': 'ethereum',
+            'base': 'base',
+            'hyperliquid': 'hyperliquid',
+            'arbitrum': 'arbitrum',
+            'bsc': 'bsc',
+            'polygon': 'polygon',
+            'optimism': 'optimism'
+        }
+        
+        target_network = network_mapping.get(blockchain, 'ethereum')
+        gecko_net = 'eth' if blockchain == 'ethereum' else target_network
         
         try:
+            # Intentar buscar por símbolo o dirección
             dex_url = f"https://api.dexscreener.com/latest/dex/search?q={token}"
             dex_resp = req.get(dex_url, timeout=5)
+            
             if dex_resp.status_code == 200:
                 pairs = dex_resp.json().get('pairs', [])
-                # Buscar el par con más liquidez en la red correcta
-                valid_pairs = [p for p in pairs if p.get('chainId') in [blockchain, network]]
+                
+                # Filtrar por la red correcta. Aceptamos variaciones comunes de ID.
+                network_variants = [target_network, blockchain]
+                if target_network == 'ethereum': network_variants.append('eth')
+                
+                valid_pairs = [p for p in pairs if str(p.get('chainId')).lower() in network_variants]
+                
                 if valid_pairs:
-                    # Ordenar por liquidez USD descendente
+                    # Ordenar por liquidez USD descendente para pillar el pool principal
                     valid_pairs.sort(key=lambda x: float(x.get('liquidity', {}).get('usd', 0)), reverse=True)
                     pool_address = valid_pairs[0].get('pairAddress')
+                    
+                    # Si el token era una dirección, ahora podemos usar su símbolo real para el título
+                    if len(token) > 20: 
+                        token = valid_pairs[0].get('baseToken', {}).get('symbol', token)
         except Exception as e:
             logger.error(f"[WhaleChart] Error buscando pool: {e}")
 
@@ -721,8 +744,6 @@ def whale_trade_chart_ajax(request, wallet_id):
         ohlcv_df = pd.DataFrame()
         if pool_address:
             try:
-                # Gecko usa 'eth' para ethereum
-                gecko_net = 'eth' if blockchain == 'ethereum' else blockchain
                 ohlcv_url = f"https://api.geckoterminal.com/api/v2/networks/{gecko_net}/pools/{pool_address}/ohlcv/day"
                 gecko_resp = req.get(ohlcv_url, timeout=5)
                 if gecko_resp.status_code == 200:
