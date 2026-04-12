@@ -820,8 +820,8 @@ def whale_trade_chart_ajax(request, wallet_id):
         
         if not df_trades.empty and not ohlcv_df.empty:
             # Normalizar zonas horarias para evitar errores de merge (ambos a naive)
-            df_trades['timestamp'] = pd.to_datetime(df_trades['timestamp']).dt.tz_localize(None)
-            ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['timestamp']).dt.tz_localize(None)
+            df_trades['timestamp'] = pd.to_datetime(df_trades['timestamp'], utc=True).dt.tz_localize(None)
+            ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['timestamp'], utc=True).dt.tz_localize(None)
             
             # Mapear tipos para el gráfico
             df_trades['signal_type'] = df_trades['type'].map({'BUY': 'buy', 'SELL': 'sell'})
