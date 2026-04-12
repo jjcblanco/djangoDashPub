@@ -224,6 +224,8 @@ def hunt_whales_by_pair_task():
                 if created:
                     total_new += 1
                     logger.info(f"[WhaleHunter] ✅ Nueva ballena de ${symbol}: {wallet_address[:10]} (vol: ${volume:,.0f})")
+                    # Disparar sincronización inmediata en background
+                    sync_wallet_task.delay(whale.id)
                 else:
                     total_already_existed += 1
                     existing_pairs = whale.target_pairs or ''
@@ -231,6 +233,8 @@ def hunt_whales_by_pair_task():
                         whale.target_pairs = f"{existing_pairs},{symbol}" if existing_pairs else symbol
                         whale.save(update_fields=['target_pairs'])
                         total_updated += 1
+                        # Disparar sincronización para capturar el nuevo par
+                        sync_wallet_task.delay(whale.id)
             except Exception as e:
                 logger.error(f"[WhaleHunter] Error creando wallet {wallet_address[:10]}: {e}")
 
