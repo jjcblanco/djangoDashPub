@@ -1,0 +1,248 @@
+
+================================================================================
+ENVIRONMENT CHECKS
+================================================================================
+
+[HIGH] Configuration: DEBUG mode is enabled in production
+   Recomendación: Set DEBUG=False in production environment
+INFO: SECRET_KEY appears to be strong (50 chars)
+
+[MEDIUM] Configuration: ALLOWED_HOSTS contains '*' wildcard
+   Recomendación: Specify exact hostnames instead of wildcard
+INFO: Binance API keys are configured
+
+================================================================================
+DATABASE CHECKS
+================================================================================
+INFO: Database connection successful
+INFO: Total users in system: 1
+
+[LOW] Authentication: 1 users may have weak password hashing
+   Recomendación: Consider upgrading password hashing algorithm
+
+================================================================================
+BALANCE AUDIT
+================================================================================
+INFO: Binance REAL USDT:
+INFO:   Total: 333.5563035
+INFO:   Libre: 0.0
+INFO:   Usado (en órdenes): 333.5563035
+INFO: - solbot1.1 (RUNNING):
+INFO:   Local Balance: 79.06490120
+INFO:   Capital en Trades Abiertos: 23.0656889669396334
+INFO: - solbot2 (RUNNING):
+INFO:   Local Balance: 102.17004707
+INFO:   Capital en Trades Abiertos: 0
+INFO: - btcbot1 (RUNNING):
+INFO:   Local Balance: 102.41438720
+INFO:   Capital en Trades Abiertos: 0
+INFO: - AtomBot (STOPPED):
+INFO:   Local Balance: 99.63917810
+INFO:   Capital en Trades Abiertos: 0
+INFO: - BNB_Bot (RUNNING):
+INFO:   Local Balance: 3.08311315
+INFO:   Capital en Trades Abiertos: 96.9910500000000000
+INFO: - Solbottrend (ERROR):
+INFO:   Local Balance: 0.00201481
+INFO:   Capital en Trades Abiertos: 0
+INFO: - ETHUpperbot (RUNNING):
+INFO:   Local Balance: 1.00000000
+INFO:   Capital en Trades Abiertos: 0
+INFO: - XRPUpperBot (ERROR):
+INFO:   Local Balance: 1.00000000
+INFO:   Capital en Trades Abiertos: 0
+INFO: - soluppperbot (ERROR):
+INFO:   Local Balance: 0.00302092
+INFO:   Capital en Trades Abiertos: 0
+INFO: - solusdt2 (ERROR):
+INFO:   Local Balance: 0.00352263
+INFO:   Capital en Trades Abiertos: 0
+INFO: - solusdt2 (ERROR):
+INFO:   Local Balance: 0.00352263
+INFO:   Capital en Trades Abiertos: 0
+INFO: 
+Suma Total Balances Locales: 388.38370771
+INFO: Discrepancia (Real - Local): -54.82740421
+
+[HIGH] Financial: Balance discrepancy detected: bots think they have more money than available on Binance
+   Recomendación: Check for shared funds between bots or improperly closed trades
+
+================================================================================
+BOT AUDIT
+================================================================================
+INFO: 
+Bot: solbot1.1 (ID: 2)
+INFO: Estrategia: GRID
+INFO: Estado: RUNNING | Is_Live: True
+INFO: Balance Inicial: 100.00000000 | Actual: 79.06490120
+INFO: Retorno: -20.93509880
+INFO: PNL Total: 2.13059017 | Realizado: 2.13059017
+INFO: Operaciones: 8 (Ganadoras: 8, Perdedoras: 0)
+INFO: Win Rate: 100.00%
+INFO: Operaciones Abiertas: 2
+INFO: 
+Bot: solbot2 (ID: 3)
+INFO: Estrategia: GRID
+INFO: Estado: RUNNING | Is_Live: True
+INFO: Balance Inicial: 100.00000000 | Actual: 102.17004707
+INFO: Retorno: 2.17004707
+INFO: PNL Total: 2.17004707 | Realizado: 2.17004707
+INFO: Operaciones: 12 (Ganadoras: 12, Perdedoras: 0)
+INFO: Win Rate: 100.00%
+INFO: Operaciones Abiertas: 0
+INFO: 
+Bot: btcbot1 (ID: 4)
+INFO: Estrategia: GRID
+INFO: Estado: RUNNING | Is_Live: True
+INFO: Balance Inicial: 100.00000000 | Actual: 102.41438720
+INFO: Retorno: 2.41438720
+INFO: PNL Total: 2.41438720 | Realizado: 2.41438720
+INFO: Operaciones: 20 (Ganadoras: 20, Perdedoras: 0)
+INFO: Win Rate: 100.00%
+INFO: Operaciones Abiertas: 0
+INFO: 
+Bot: AtomBot (ID: 5)
+INFO: Estrategia: GRID
+INFO: Estado: STOPPED | Is_Live: True
+INFO: Balance Inicial: 100.00000000 | Actual: 99.63917810
+INFO: Retorno: -0.36082190
+INFO: PNL Total: -0.36082190 | Realizado: -0.36082190
+INFO: Operaciones: 19 (Ganadoras: 9, Perdedoras: 10)
+INFO: Win Rate: 47.37%
+INFO: Operaciones Abiertas: 0
+
+[LOW] Bot Operations: Bot AtomBot is STOPPED but marked as live
+   Recomendación: Review bot status consistency
+INFO: 
+Bot: BNB_Bot (ID: 6)
+INFO: Estrategia: GRID
+INFO: Estado: RUNNING | Is_Live: True
+INFO: Balance Inicial: 100.00000000 | Actual: 3.08311315
+INFO: Retorno: -96.91688685
+INFO: PNL Total: 0.07416315 | Realizado: 0.07416315
+INFO: Operaciones: 44 (Ganadoras: 12, Perdedoras: 32)
+INFO: Win Rate: 27.27%
+INFO: Operaciones Abiertas: 10
+INFO: 
+Bot: Solbottrend (ID: 7)
+INFO: Estrategia: DAYTRADING
+INFO: Estado: ERROR | Is_Live: True
+INFO: Balance Inicial: 0.00201481 | Actual: 0.00201481
+INFO: Retorno: 0E-8
+INFO: PNL Total: 0 | Realizado: 0
+INFO: Operaciones: 0 (Ganadoras: 0, Perdedoras: 0)
+INFO: Win Rate: 0.00%
+INFO: Operaciones Abiertas: 0
+
+[MEDIUM] Bot Operations: Bot Solbottrend is in ERROR state: [Errno 22] Invalid argument
+   Recomendación: Investigate and restart or fix the bot
+INFO: 
+Bot: ETHUpperbot (ID: 10)
+INFO: Estrategia: DAYTRADING
+INFO: Estado: RUNNING | Is_Live: True
+INFO: Balance Inicial: 0.00201481 | Actual: 1.00000000
+INFO: Retorno: 0.99798519
+INFO: PNL Total: -0.15384181 | Realizado: -0.15384181
+INFO: Operaciones: 1 (Ganadoras: 0, Perdedoras: 1)
+INFO: Win Rate: 0.00%
+INFO: Operaciones Abiertas: 0
+INFO: 
+Bot: XRPUpperBot (ID: 11)
+INFO: Estrategia: DAYTRADING
+INFO: Estado: ERROR | Is_Live: True
+INFO: Balance Inicial: 0.00201481 | Actual: 1.00000000
+INFO: Retorno: 0.99798519
+INFO: PNL Total: -0.13339058 | Realizado: -0.13339058
+INFO: Operaciones: 1 (Ganadoras: 0, Perdedoras: 1)
+INFO: Win Rate: 0.00%
+INFO: Operaciones Abiertas: 0
+
+[MEDIUM] Bot Operations: Bot XRPUpperBot is in ERROR state: [Errno 22] Invalid argument
+   Recomendación: Investigate and restart or fix the bot
+INFO: 
+Bot: soluppperbot (ID: 12)
+INFO: Estrategia: DAYTRADING
+INFO: Estado: ERROR | Is_Live: True
+INFO: Balance Inicial: 0.00302092 | Actual: 0.00302092
+INFO: Retorno: 0E-8
+INFO: PNL Total: 0 | Realizado: 0
+INFO: Operaciones: 0 (Ganadoras: 0, Perdedoras: 0)
+INFO: Win Rate: 0.00%
+INFO: Operaciones Abiertas: 0
+
+[MEDIUM] Bot Operations: Bot soluppperbot is in ERROR state: [Errno 22] Invalid argument
+   Recomendación: Investigate and restart or fix the bot
+INFO: 
+Bot: solusdt2 (ID: 13)
+INFO: Estrategia: DAYTRADING
+INFO: Estado: ERROR | Is_Live: False
+INFO: Balance Inicial: 0.00352263 | Actual: 0.00352263
+INFO: Retorno: 0E-8
+INFO: PNL Total: 0 | Realizado: 0
+INFO: Operaciones: 0 (Ganadoras: 0, Perdedoras: 0)
+INFO: Win Rate: 0.00%
+INFO: Operaciones Abiertas: 0
+
+[MEDIUM] Bot Operations: Bot solusdt2 is in ERROR state: [Errno 22] Invalid argument
+   Recomendación: Investigate and restart or fix the bot
+INFO: 
+Bot: solusdt2 (ID: 14)
+INFO: Estrategia: DAYTRADING
+INFO: Estado: ERROR | Is_Live: True
+INFO: Balance Inicial: 0.00352263 | Actual: 0.00352263
+INFO: Retorno: 0E-8
+INFO: PNL Total: 0 | Realizado: 0
+INFO: Operaciones: 0 (Ganadoras: 0, Perdedoras: 0)
+INFO: Win Rate: 0.00%
+INFO: Operaciones Abiertas: 0
+
+[MEDIUM] Bot Operations: Bot solusdt2 is in ERROR state: [Errno 22] Invalid argument
+   Recomendación: Investigate and restart or fix the bot
+
+================================================================================
+TRADE AUDIT
+================================================================================
+
+[MEDIUM] Trading: 12 open trades older than 7 days
+   Recomendación: Review and close stale positions
+INFO: 
+Últimos 10 trades:
+INFO: 2026-03-08 13:25:41 | Bot: AtomBot | BUY 5.22000000 @ 1.89440000 | Status: CLOSED | PNL: -0.91359083
+INFO: 2026-03-06 14:09:51 | Bot: BNB_Bot | BUY 0.01500000 @ 631.16777778 | Status: OPEN | PNL: 0E-8
+INFO: 2026-03-06 14:09:39 | Bot: BNB_Bot | BUY 0.01500000 @ 631.16777778 | Status: CLOSED | PNL: -0.01890173
+INFO: 2026-03-06 13:56:55 | Bot: BNB_Bot | BUY 0.01500000 @ 635.32000000 | Status: OPEN | PNL: 0E-8
+INFO: 2026-03-06 13:56:43 | Bot: BNB_Bot | BUY 0.01500000 @ 635.32000000 | Status: CLOSED | PNL: -0.01905960
+INFO: 2026-03-06 13:56:18 | Bot: BNB_Bot | BUY 0.01500000 @ 635.32000000 | Status: CLOSED | PNL: -0.01905960
+INFO: 2026-03-06 13:33:39 | Bot: BNB_Bot | BUY 0.01500000 @ 635.32000000 | Status: CLOSED | PNL: 0.04657470
+INFO: 2026-03-06 12:10:00 | Bot: BNB_Bot | BUY 0.01500000 @ 635.32000000 | Status: CLOSED | PNL: -0.01905960
+INFO: 2026-03-06 09:34:22 | Bot: BNB_Bot | BUY 0.01500000 @ 639.47222222 | Status: OPEN | PNL: 0E-8
+INFO: 2026-03-06 09:18:02 | Bot: BNB_Bot | BUY 0.01500000 @ 639.47222222 | Status: CLOSED | PNL: -0.01921747
+
+================================================================================
+ERROR LOG ANALYSIS
+================================================================================
+INFO: whale_debug.log contains 47 error lines
+
+[MEDIUM] System Health: 47 network/connection errors in logs
+   Recomendación: Check API connectivity and network configuration
+INFO: Sample errors from log:
+INFO:   Error resolviendo token HFHMybtPneaeEMrgyuzNLhrxtUBV3MyUqJBr8sc8pump: HTTPSConnectionPool(host='toke...
+INFO:   Error resolviendo token C2hH5X3GGSo4UtFV4evV2r56aMBy2m3KjCeW3wNipump: HTTPSConnectionPool(host='toke...
+INFO:   Error resolviendo token 7FXiYKAXyoyCbEbyPRZdF6hZYkkZnGyYd8rp6kcqpump: HTTPSConnectionPool(host='toke...
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+INFO: Audit completed at: 2026-04-13 19:41:29.848250
+INFO: Total findings: 12
+INFO: Critical findings: 0
+INFO: High findings: 2
+INFO: Medium findings: 8
+INFO: Low findings: 2
+INFO: Errors during audit: 0
+INFO: 
+Overall Risk Level: HIGH
+INFO: 
+Top Recommendations:
+INFO: 1. Set DEBUG=False in production environment
+INFO: 2. Check for shared funds between bots or improperly closed trades
