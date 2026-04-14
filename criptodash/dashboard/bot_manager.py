@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.utils import timezone
 from .models import LiveBot, LiveTrade, TradingPair, GlobalSettings
 from .backtester import GridStrategy, DayTradingStrategy
+from .optimized_strategies import OptimizedDayTradingStrategy
 from .ccxttest1 import historical_fetch_ohlcv, binance as exchange
 from .utils.notifications import send_telegram_message
 
@@ -400,6 +401,75 @@ class BotManager:
         return {'bot_id': bot.id, 'status': 'bootstrapped', 'limit_buys': buy_orders, 'market_buys': market_buys}
 
     @staticmethod
+    def _migrate_to_optimized_params(params):
+        """
+        Migrate legacy DayTradingStrategy parameters to OptimizedDayTradingStrategy.
+        """
+        migrated = params.copy()
+        
+        # Map old parameter names to new ones
+        mapping = {
+            'ema_fast': 'ema_fast',  # same
+            'ema_med': 'ema_slow',   # old ema_med (21) becomes ema_slow
+            'ema_trend': 'ema_trend', # same
+            'rsi_period': 'rsi_period',
+            'rsi_buy': 'rsi_upper_static',
+            'rsi_sell': 'rsi_lower_static',
+            'atr_sl': 'atr_sl_multiplier',
+            'atr_tp': 'atr_tp_multiplier',
+            'min_adx': 'min_adx',
+            'cooldown_bars': 'cooldown_bars',
+            'risk_per_trade_pct': 'risk_per_trade_pct',
+            'use_volume_filter': True,
+            'volume_ma_period': 20,
+            'max_positions': 3,
+            'market_regime_filter': True,
+            'rsi_upper_dynamic': False,  # Use static thresholds initially
+            'rsi_lower_dynamic': False,
+        }
+        
+        # Apply mapping for existing keys
+        for old_key, new_key in mapping.items():
+            if old_key in migrated and new_key not in migrated:
+                migrated[new_key] = migrated[old_key]
+        
+        # Remove old keys that are not needed
+        keys_to_remove = ['ema_slow', 'ema_med', 'rsi_buy', 'rsi_sell', 'atr_sl', 'atr_tp',
+                         'use_candles', 'min_strength', 'strategy_mode', 
+                         'use_bollinger_filter', 'allow_late_entry']
+        for key in keys_to_remove:
+            migrated.pop(key, None)
+        
+        # Ensure required keys exist with defaults
+        defaults = {
+            'ema_fast': 9,
+            'ema_slow': 21,
+            'ema_trend': 200,
+            'rsi_period': 14,
+            'rsi_upper_static': 60,
+            'rsi_lower_static': 40,
+            'rsi_upper_dynamic': False,
+            'rsi_lower_dynamic': False,
+            'atr_period': 14,
+            'atr_sl_multiplier': 1.5,
+            'atr_tp_multiplier': 3.0,
+            'use_volume_filter': True,
+            'volume_ma_period': 20,
+            'min_adx': 20,
+            'risk_per_trade_pct': 1.0,
+            'max_positions': 3,
+            'cooldown_bars': 5,
+            'market_regime_filter': True,
+            'use_optimized_strategy': True,
+        }
+        
+        for key, default_val in defaults.items():
+            if key not in migrated:
+                migrated[key] = default_val
+        
+        return migrated
+
+    @staticmethod
     def _manage_daytrading_bot(bot, df):
         """Lógica para bots de Day Trading en tiempo real."""
         # Casting preventivo de parámetros para evitar TypeError
@@ -414,7 +484,15 @@ class BotManager:
             except:
                 clean_params[k] = v
         
-        strategy = DayTradingStrategy(parameters=clean_params)
+        # Determine which strategy to use
+        use_optimized = clean_params.get('use_optimized_strategy', True)
+        
+        # Migrate parameters for optimized strategy if needed
+        if use_optimized:
+            clean_params = BotManager._migrate_to_optimized_params(clean_params)
+            strategy = OptimizedDayTradingStrategy(parameters=clean_params)
+        else:
+            strategy = DayTradingStrategy(parameters=clean_params)
         df_with_signals = strategy.generate_signals(df)
         last_row = df_with_signals.iloc[-1]
         signal = last_row.get('signal')
