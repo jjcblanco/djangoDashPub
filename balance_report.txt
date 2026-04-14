@@ -1,0 +1,148 @@
+=== DETAILED BALANCE DISCREPANCY ANALYSIS ===
+
+Total bot balance: $379.95937164
+Total live bot balance: $379.95584901
+Binance USDT free: $0.00000000
+Binance USDT total: $333.55630350
+
+DISCREPANCY (Bot Total - Binance Total): $46.39954551
+DISCREPANCY: $46.40 USD
+
+Open trades: 12
+Waiting trades: 0
+
+Open trade details:
+  Bot 2 (solbot1.1): 0.12283503 SOL/USDT @ $92.77777778 = $11.39636112
+  Bot 2 (solbot1.1): 0.12283503 SOL/USDT @ $95.00000000 = $11.66932785
+  Bot 6 (BNB_Bot): 0.01500000 BNB/USDT @ $651.92888889 = $9.77893333
+  Bot 6 (BNB_Bot): 0.01500000 BNB/USDT @ $654.18000000 = $9.81270000
+  Bot 6 (BNB_Bot): 0.01500000 BNB/USDT @ $654.18000000 = $9.81270000
+  Bot 6 (BNB_Bot): 0.01500000 BNB/USDT @ $654.18000000 = $9.81270000
+  Bot 6 (BNB_Bot): 0.01500000 BNB/USDT @ $654.24000000 = $9.81360000
+  Bot 6 (BNB_Bot): 0.01500000 BNB/USDT @ $647.77666667 = $9.71665000
+  Bot 6 (BNB_Bot): 0.01500000 BNB/USDT @ $643.62444444 = $9.65436667
+  Bot 6 (BNB_Bot): 0.01500000 BNB/USDT @ $639.47222222 = $9.59208333
+  Bot 6 (BNB_Bot): 0.01500000 BNB/USDT @ $635.32000000 = $9.52980000
+  Bot 6 (BNB_Bot): 0.01500000 BNB/USDT @ $631.16777778 = $9.46751667
+
+Waiting trade details:
+
+Total open trade value: $120.05673897
+Total waiting trade value: $0.00000000
+
+Total allocated (bot balance + open + waiting): $500.01258798
+Discrepancy after accounting for trades: $166.45628448
+
+=== LIVE BOT DETAILS ===
+
+Bot 2: solbot1.1
+  Pair: SOL/USDT
+  Strategy: GRID
+  Status: RUNNING
+  Current balance: $76.93431103
+  Initial balance: $100.00000000
+  PnL: $-23.06568897
+  Open trades: 2
+    - BUY 0.12283503 @ $92.77777778
+    - BUY 0.12283503 @ $95.00000000
+  Waiting trades: 0
+
+Bot 3: solbot2
+  Pair: SOL/USDT
+  Strategy: GRID
+  Status: RUNNING
+  Current balance: $100.00000000
+  Initial balance: $100.00000000
+  PnL: $0.00000000
+
+Bot 4: btcbot1
+  Pair: BTC/USDT
+  Strategy: GRID
+  Status: RUNNING
+  Current balance: $100.00000000
+  Initial balance: $100.00000000
+  PnL: $0.00000000
+
+Bot 5: AtomBot
+  Pair: ATOM/USDT
+  Strategy: GRID
+  Status: STOPPED
+  Current balance: $100.00000000
+  Initial balance: $100.00000000
+  PnL: $0.00000000
+
+Bot 6: BNB_Bot
+  Pair: BNB/USDT
+  Strategy: GRID
+  Status: RUNNING
+  Current balance: $3.00895000
+  Initial balance: $100.00000000
+  PnL: $-96.99105000
+  Open trades: 10
+    - BUY 0.01500000 @ $651.92888889
+    - BUY 0.01500000 @ $654.18000000
+    - BUY 0.01500000 @ $654.18000000
+    - BUY 0.01500000 @ $654.18000000
+    - BUY 0.01500000 @ $654.24000000
+    - BUY 0.01500000 @ $647.77666667
+    - BUY 0.01500000 @ $643.62444444
+    - BUY 0.01500000 @ $639.47222222
+    - BUY 0.01500000 @ $635.32000000
+    - BUY 0.01500000 @ $631.16777778
+  Waiting trades: 0
+
+Bot 7: Solbottrend
+  Pair: SOL/USDT
+  Strategy: DAYTRADING
+  Status: PAUSED
+  Current balance: $0.00201481
+  Initial balance: $0.00201481
+  PnL: $0.00000000
+
+Bot 10: ETHUpperbot
+  Pair: ETH/USDT
+  Strategy: DAYTRADING
+  Status: PAUSED
+  Current balance: $0.00201481
+  Initial balance: $0.00201481
+  PnL: $0.00000000
+
+Bot 11: XRPUpperBot
+  Pair: XRP/USDT
+  Strategy: DAYTRADING
+  Status: PAUSED
+  Current balance: $0.00201481
+  Initial balance: $0.00201481
+  PnL: $0.00000000
+
+Bot 12: soluppperbot
+  Pair: SOL/USDT
+  Strategy: DAYTRADING
+  Status: PAUSED
+  Current balance: $0.00302092
+  Initial balance: $0.00302092
+  PnL: $0.00000000
+
+Bot 14: solusdt2
+  Pair: SOL/USDT
+  Strategy: DAYTRADING
+  Status: PAUSED
+  Current balance: $0.00352263
+  Initial balance: $0.00352263
+  PnL: $0.00000000
+
+=== DISCREPANCY ANALYSIS ===
+The discrepancy of $46.40 could be caused by:
+1. Commissions/fees not properly deducted
+2. Timing differences (orders in flight)
+3. Binance balance includes other assets not tracked
+4. Errors in trade closing calculations
+5. Missing trade records
+
+Profitable live bots: 0
+Total profit from these bots: $0.00000000
+
+Losing live bots: 2
+Total loss from these bots: $-120.05673897
+
+Total commission paid (all trades): $2.32689203
