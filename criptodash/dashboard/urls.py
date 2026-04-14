@@ -52,6 +52,7 @@ urlpatterns = [
     path('whale-insights/api/consensus/', views.whale_consensus_ajax, name='whale_consensus_ajax'),
     path('whale-insights/chart/<int:wallet_id>/', views.whale_trade_chart_ajax, name='whale_trade_chart_ajax'),
     path('whale-insights/hunt/', views.trigger_whale_hunt, name='trigger_whale_hunt'),
+    path('whale-insights/learn-patterns/', views.learn_patterns, name='learn_patterns'),
     # CRUD Targets de Caza
     path('whale-insights/targets/', views.hunt_targets_list, name='hunt_targets_list'),
     path('whale-insights/targets/add/', views.hunt_targets_add, name='hunt_targets_add'),

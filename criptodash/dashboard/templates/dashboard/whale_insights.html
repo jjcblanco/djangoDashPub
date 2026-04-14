@@ -469,9 +469,66 @@
                             </div>
                             <hr class="opacity-10">
                         </div>
-                        {% endif %}
+{% endif %}
 
-                        {% for insight in insights %}
+<!-- PATRONES APRENDIDOS DE BALLENAS -->
+{% if patterns %}
+<div class="mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="text-muted small fw-bold mb-0"><i class="fas fa-brain me-1 text-primary"></i>PATRONES APRENDIDOS (Whale Intelligence)</h6>
+        <button class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size: 0.7rem;" onclick="triggerPatternLearning(this)">
+            <i class="fas fa-graduation-cap me-1"></i>Re-aprender
+        </button>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th style="font-size: 0.75rem;">Patrón</th>
+                    <th style="font-size: 0.75rem;">Condiciones</th>
+                    <th style="font-size: 0.75rem;" class="text-end">PnL Avg</th>
+                    <th style="font-size: 0.75rem;" class="text-end">Win Rate</th>
+                    <th style="font-size: 0.75rem;" class="text-end">Muestras</th>
+                    <th style="font-size: 0.75rem;" class="text-end">Confianza</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pattern in patterns %}
+                <tr>
+                    <td style="font-size: 0.75rem;">
+                        <span class="badge bg-info">{{ pattern.pattern_name|truncatechars:20 }}</span>
+                    </td>
+                    <td style="font-size: 0.75rem;">
+                        <small class="text-muted">
+                            {% for key, value in pattern.conditions.items %}
+                                {{ key }}: {{ value }}<br>
+                            {% endfor %}
+                        </small>
+                    </td>
+                    <td style="font-size: 0.75rem;" class="text-end {% if pattern.avg_pnl > 0 %}text-success{% else %}text-danger{% endif %}">
+                        {{ pattern.avg_pnl|floatformat:2 }}%
+                    </td>
+                    <td style="font-size: 0.75rem;" class="text-end">
+                        {{ pattern.win_rate|floatformat:2 }}%
+                    </td>
+                    <td style="font-size: 0.75rem;" class="text-end">
+                        {{ pattern.sample_size }}
+                    </td>
+                    <td style="font-size: 0.75rem;" class="text-end">
+                        <div class="progress" style="height: 4px; width: 40px; margin-left: auto;">
+                            <div class="progress-bar bg-success" role="progressbar" style="width: {% widthratio pattern.win_rate 1 100 %}%"></div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <hr class="opacity-10">
+</div>
+{% endif %}
+
+{% for insight in insights %}
                         <div class="card mb-3 insight-card border-0 shadow-sm">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between">
@@ -1476,8 +1533,39 @@
                 document.getElementById('modalError').innerText = "Error al conectar con el motor de análisis.";
                 document.getElementById('modalError').style.display = 'block';
             });
-    }
-    </script>
+}
+
+// Trigger pattern learning
+function triggerPatternLearning(button) {
+    const originalText = button.innerHTML;
+    button.innerHTML = '<div class="spinner-border spinner-border-sm me-1"></div> Aprendiendo...';
+    button.disabled = true;
+    
+    fetch('/whale-insights/learn-patterns/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'Content-Type': 'application/json',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert('✅ ' + data.message + ' Se encontraron ' + data.patterns_count + ' patrones.');
+            location.reload(); // Reload to show updated patterns
+        } else {
+            alert('❌ ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Error de conexión: ' + error);
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+</script>
     <script>
     function showWhaleDNA(walletId) {
         const el = document.querySelector(`[data-wallet-dna-icon="${walletId}"]`);
