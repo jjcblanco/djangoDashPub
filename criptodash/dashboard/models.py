@@ -387,3 +387,74 @@ class ConsensusSignal(models.Model):
     def is_active(self):
         from django.utils import timezone
         return self.status == 'ACTIVE' and (self.expires_at is None or self.expires_at > timezone.now())
+
+
+class WhalePattern(models.Model):
+    """
+    Patrones aprendidos de trades exitosos de ballenas.
+    """
+    pattern_name = models.CharField(max_length=100)
+    conditions = models.JSONField(
+        help_text="Condiciones de indicadores ej: {'rsi_14__lt': 40, 'volume_ratio__gt': 1.5}"
+    )
+    timeframe = models.CharField(max_length=10, default='4h', help_text="Timeframe del contexto (1h, 4h, 1d)")
+    sample_size = models.IntegerField(default=0, help_text="Número de trades que cumplen este patrón")
+    win_rate = models.FloatField(default=0.0, help_text="Tasa de aciertos (0-1)")
+    avg_pnl = models.FloatField(default=0.0, help_text="PnL promedio en %")
+    total_trades = models.IntegerField(default=0, help_text="Total trades analizados para este patrón")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True, help_text="Si el patrón está activo para generar señales")
+
+    class Meta:
+        ordering = ['-win_rate', '-sample_size']
+        verbose_name = "Whale Pattern"
+        verbose_name_plural = "Whale Patterns"
+
+    def __str__(self):
+        return f"{self.pattern_name} (Win: {self.win_rate:.1%}, N={self.sample_size})"
+
+    def match_context(self, context):
+        """
+        Verifica si un contexto de mercado cumple con las condiciones del patrón.
+        context: dict con indicadores (rsi_14, volume_ratio, etc.)
+        """
+        if not context:
+            return False
+        
+        for key, value in self.conditions.items():
+            # key puede ser 'rsi_14__lt', 'volume_ratio__gt', 'in_uptrend'
+            if '__' in key:
+                field, op = key.rsplit('__', 1)
+                if field not in context or context[field] is None:
+                    return False
+                if op == 'lt':
+                    if not (context[field] < value):
+                        return False
+                elif op == 'lte':
+                    if not (context[field] <= value):
+                        return False
+                elif op == 'gt':
+                    if not (context[field] > value):
+                        return False
+                elif op == 'gte':
+                    if not (context[field] >= value):
+                        return False
+                elif op == 'eq':
+                    if not (context[field] == value):
+                        return False
+                elif op == 'neq':
+                    if not (context[field] != value):
+                        return False
+                elif op == 'in':
+                    if context[field] not in value:
+                        return False
+                else:
+                    # default equality
+                    if not (context[field] == value):
+                        return False
+            else:
+                # equality
+                if key not in context or context[key] != value:
+                    return False
+        return True
