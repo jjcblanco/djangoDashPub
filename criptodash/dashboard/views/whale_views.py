@@ -12,8 +12,9 @@ from django.core.cache import cache
 import logging
 logger = logging.getLogger(__name__)
 
-from ..models import WhaleWallet, WhaleTransaction, PatternInsight, TradingPair, ShadowTrade
+from ..models import WhaleWallet, WhaleTransaction, PatternInsight, TradingPair, ShadowTrade, WhalePattern
 from ..services import SolanaWhaleTracker, PatternEngine
+from ..whale_pattern_learner import WhalePatternLearner
 from dashboard.services import get_top_scored_whales
 from dashboard.whale_scoring import WhaleScoringEngine
 from dashboard.whale_analysis import WhaleAnalysisEngine
@@ -73,6 +74,16 @@ def whale_insights(request):
             )
         insights = insights_qs[:20]
 
+        # ── Whale Patterns (Learned) ────────────────────────────────────
+        patterns_qs = WhalePattern.objects.filter(is_active=True).order_by('-avg_pnl')
+        if active_pair:
+            # Filter patterns that mention this pair in conditions or name
+            patterns_qs = patterns_qs.filter(
+                Q(conditions__contains=active_pair) |
+                Q(pattern_name__icontains=active_pair)
+            )
+        patterns = patterns_qs[:20]
+
         # ── PnL por wallet (desde caché) ────────────────────────────────
         for wallet in wallets:
             cache_key = f"wallet_score_{wallet.id}"
@@ -99,6 +110,7 @@ def whale_insights(request):
         context = {
             'wallets': wallets,
             'insights': insights,
+            'patterns': patterns,
             'shadow_trades': shadow_trades,
             'hot_tokens': hot_tokens,
             'page_title': 'Whale Insights & Alpha',
@@ -879,3 +891,28 @@ def whale_trade_chart_ajax(request, wallet_id):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
+@login_required
+@require_POST
+@ajax_rate_limit(max_calls=5, period_seconds=60)
+def learn_patterns(request):
+    """Ejecuta el aprendizaje de patrones a partir de trades cerrados."""
+    try:
+        # Llamar al learner
+        patterns = WhalePatternLearner.analyze_trades(min_trades=1, min_win_rate=0.6)
+        
+        # Contar patrones activos en DB después del aprendizaje
+        active_patterns = WhalePattern.objects.filter(is_active=True).count()
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Aprendizaje completado. {len(patterns)} patrones procesados.',
+            'patterns_count': active_patterns,
+        })
+    except Exception as e:
+        import traceback
+        logger.error(f"Error en learn_patterns: {str(e)}\n{traceback.format_exc()}")
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error interno: {str(e)}',
+            'patterns_count': 0,
+        }, status=500)
