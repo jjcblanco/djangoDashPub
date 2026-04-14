@@ -94,7 +94,7 @@ Bot 6: BNB_Bot
 Bot 7: Solbottrend
   Pair: SOL/USDT
   Strategy: DAYTRADING
-  Status: PAUSED
+  Status: RUNNING
   Current balance: $0.00201481
   Initial balance: $0.00201481
   PnL: $0.00000000
@@ -102,7 +102,7 @@ Bot 7: Solbottrend
 Bot 10: ETHUpperbot
   Pair: ETH/USDT
   Strategy: DAYTRADING
-  Status: PAUSED
+  Status: RUNNING
   Current balance: $0.00201481
   Initial balance: $0.00201481
   PnL: $0.00000000
@@ -110,7 +110,7 @@ Bot 10: ETHUpperbot
 Bot 11: XRPUpperBot
   Pair: XRP/USDT
   Strategy: DAYTRADING
-  Status: PAUSED
+  Status: RUNNING
   Current balance: $0.00201481
   Initial balance: $0.00201481
   PnL: $0.00000000
@@ -118,7 +118,7 @@ Bot 11: XRPUpperBot
 Bot 12: soluppperbot
   Pair: SOL/USDT
   Strategy: DAYTRADING
-  Status: PAUSED
+  Status: RUNNING
   Current balance: $0.00302092
   Initial balance: $0.00302092
   PnL: $0.00000000
@@ -126,7 +126,7 @@ Bot 12: soluppperbot
 Bot 14: solusdt2
   Pair: SOL/USDT
   Strategy: DAYTRADING
-  Status: PAUSED
+  Status: RUNNING
   Current balance: $0.00352263
   Initial balance: $0.00352263
   PnL: $0.00000000
