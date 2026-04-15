@@ -1,5 +1,6 @@
 from celery import shared_task
 import logging
+import time
 from django.utils import timezone
 from dashboard.utils.notifications import send_telegram_message
 
@@ -108,7 +109,7 @@ def sync_all_whales_task():
     count = 0
     for wallet in active_wallets:
         sync_wallet_task.delay(wallet.id)
-        if i % 3 == 0:  # Cada 3 wallets
+        if count % 3 == 0:  # Cada 3 wallets
             time.sleep(1)
         count += 1
     

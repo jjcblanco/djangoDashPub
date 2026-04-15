@@ -257,12 +257,13 @@ def fix_stuck_wallets():
 def check_api_configurations():
     """Check API key configurations"""
     import os
+    from pathlib import Path
     
     print("\n" + "="*60)
     print("API CONFIGURATION CHECK")
     print("="*60)
     
-    # Check environment variables
+    # Check environment variables AND .env file
     api_keys = {
         'ETH_API_KEY': 'Etherscan API Key (Ethereum)',
         'BASE_API_KEY': 'Basescan API Key (Base)',
@@ -272,15 +273,40 @@ def check_api_configurations():
         'TELEGRAM_CHAT_ID': 'Telegram Chat ID',
     }
     
+    # Try to load from .env using python-decouple if available
+    env_values = {}
+    try:
+        from decouple import Config, RepositoryEnv
+        env_path = Path(__file__).resolve().parent / '.env'
+        if env_path.exists():
+            env_config = Config(RepositoryEnv(str(env_path)))
+            for key in api_keys.keys():
+                try:
+                    env_values[key] = env_config(key)
+                except:
+                    env_values[key] = None
+        else:
+            print("  ⚠️ .env file not found at:", env_path)
+    except ImportError:
+        print("  ⚠️ python-decouple not available, only checking os.environ")
+    except Exception as e:
+        print(f"  ⚠️ Error loading .env: {e}")
+    
     print("🔑 API KEYS STATUS:")
     for key, description in api_keys.items():
-        value = os.environ.get(key)
-        if value:
-            # Don't show full key, just indication
-            masked = value[:8] + '...' if len(value) > 8 else '***'
-            print(f"  ✅ {description}: Configured ({masked})")
+        env_value = os.environ.get(key)
+        dotenv_value = env_values.get(key)
+        
+        if env_value:
+            # Found in environment variables
+            masked = env_value[:8] + '...' if len(env_value) > 8 else '***'
+            print(f"  ✅ {description}: Configured in ENVIRONMENT ({masked})")
+        elif dotenv_value:
+            # Found in .env file
+            masked = dotenv_value[:8] + '...' if len(dotenv_value) > 8 else '***'
+            print(f"  ✅ {description}: Configured in .env FILE ({masked})")
         else:
-            print(f"  ❌ {description}: MISSING")
+            print(f"  ❌ {description}: MISSING (not in env vars or .env)")
     
     # Check from Django settings
     try:
