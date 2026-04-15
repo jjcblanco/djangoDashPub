@@ -1,6 +1,7 @@
 from celery import shared_task
 import logging
 from django.utils import timezone
+from dashboard.utils.notifications import send_telegram_message
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +148,7 @@ def _seed_hunt_targets():
 
 
 @shared_task
-def hunt_whales_by_pair_task():
+def hunt_whales_by_pair_task(filter_high_volume=False, filter_recent_activity=False, filter_profitable=False, filter_min_volume=None, filter_min_tx_count=1):
     """
     Escanea los targets activos en WhaleHuntTarget (administrables desde el
     panel del dashboard) y añade automáticamente los mayores compradores.
@@ -167,6 +168,7 @@ def hunt_whales_by_pair_task():
     total_updated = 0
     total_buyers_found = 0
     total_filtered_by_vol = 0
+    total_filtered_by_tx = 0
     total_already_existed = 0
     scanned = 0
     errors = []
@@ -176,6 +178,12 @@ def hunt_whales_by_pair_task():
         token_address = target.contract_address
         symbol = target.token_symbol
         min_vol = target.min_volume_usd
+        # Aplicar filtro de volumen alto si está activo
+        if filter_high_volume:
+            min_vol = max(min_vol, 10000)  # mínimo $10,000
+        # Sobrescribir volumen mínimo global si se especifica
+        if filter_min_volume is not None:
+            min_vol = max(min_vol, filter_min_volume)
         scanned += 1
 
         logger.info(f"[WhaleHunter] Escaneando ${symbol} ({blockchain}) → {token_address[:12]}...")
@@ -205,6 +213,11 @@ def hunt_whales_by_pair_task():
                 if wallet_address:
                     total_filtered_by_vol += 1
                 continue
+            
+            tx_count = buyer.get('tx_count', 0)
+            if tx_count < filter_min_tx_count:
+                total_filtered_by_tx += 1
+                continue
 
             if blockchain in ['ethereum', 'base']:
                 wallet_address = wallet_address.lower()
@@ -224,6 +237,17 @@ def hunt_whales_by_pair_task():
                 if created:
                     total_new += 1
                     logger.info(f"[WhaleHunter] ✅ Nueva ballena de ${symbol}: {wallet_address[:10]} (vol: ${volume:,.0f})")
+                    # Notificación Telegram
+                    msg = (
+                        f"🐋 <b>Nueva ballena descubierta</b>\n\n"
+                        f"👤 <b>Address:</b> <code>{wallet_address[:10]}...</code>\n"
+                        f"🌐 <b>Red:</b> {blockchain.upper()}\n"
+                        f"🎯 <b>Token:</b> ${symbol}\n"
+                        f"💰 <b>Volumen comprado:</b> ${volume:,.0f}\n"
+                        f"📈 <b>Targets activos:</b> {symbol}\n\n"
+                        f"<i>Ballena añadida automáticamente por el sistema de caza.</i>"
+                    )
+                    send_telegram_message(msg)
                     # Disparar sincronización inmediata en background
                     sync_wallet_task.delay(whale.id)
                 else:
@@ -238,7 +262,7 @@ def hunt_whales_by_pair_task():
             except Exception as e:
                 logger.error(f"[WhaleHunter] Error creando wallet {wallet_address[:10]}: {e}")
 
-    logger.info(f"[WhaleHunter] Caza completada: {total_new} nuevas, {total_updated} actualizadas, {total_buyers_found} compradores encontrados, {total_filtered_by_vol} filtrados por vol.")
+    logger.info(f"[WhaleHunter] Caza completada: {total_new} nuevas, {total_updated} actualizadas, {total_buyers_found} compradores encontrados, {total_filtered_by_vol} filtrados por vol., {total_filtered_by_tx} filtrados por tx.")
     return {
         'new': total_new,
         'updated': total_updated,
@@ -246,6 +270,24 @@ def hunt_whales_by_pair_task():
         'total_buyers_found': total_buyers_found,
         'already_existed': total_already_existed,
         'filtered_by_vol': total_filtered_by_vol,
+        'filtered_by_tx': total_filtered_by_tx,
         'errors': errors,
     }
+
+
+@shared_task
+def analyze_wallet_task(wallet_id):
+    """
+    Tarea para analizar y categorizar automáticamente una wallet.
+    """
+    from dashboard.models import WhaleWallet
+    from dashboard.services import PatternEngine
+    
+    try:
+        wallet = WhaleWallet.objects.get(id=wallet_id)
+        # Ejecutar análisis de patrones (esto ya incluye categorización)
+        PatternEngine.analyze_wallet(wallet)
+        logger.info(f"[AnalyzeWallet] Wallet {wallet.id} analizada y categorizada.")
+    except Exception as e:
+        logger.error(f"[AnalyzeWallet] Error analizando wallet {wallet_id}: {e}")
 

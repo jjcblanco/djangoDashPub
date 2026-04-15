@@ -47,7 +47,6 @@ pip install django reportlab psutil
 ls -la
 # Should see: manage.py, criptodash/, dashboard/, etc.
 ```
-
 ## Step 4: Run the Security Audit
 
 ### Basic audit (text report only):

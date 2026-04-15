@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',
     'django.contrib.sites',
     'django_plotly_dash',  # Añadir esta app
     'dashboard',  
@@ -121,6 +122,7 @@ BINANCE_APIKEY = config('BINANCE_APIKEY', default=config('BINANCE_API_KEY', defa
 BINANCE_SECRET = config('BINANCE_SECRET', default=config('BINANCE_API_SECRET', default=config('BINANCE_API_SECRET_KEY', default=config('BINANCE_SECRET_KEY', default=None))))
 
 WSGI_APPLICATION = 'criptodash.wsgi.application'
+ASGI_APPLICATION = 'criptodash.asgi.application'
 
 
 # Database
@@ -225,7 +227,14 @@ SOCIALACCOUNT_PROVIDERS = {
             'client_id': GOOGLE_CLIENT_ID,
             'secret': GOOGLE_CLIENT_SECRET,
             'key': ''
-        }
+}
+
+# Configuración de Django Channels
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
     }
 }
 
@@ -260,6 +269,11 @@ CELERY_BEAT_SCHEDULE = {
     'sync-all-whales-every-15-min': {
         'task': 'dashboard.tasks.sync_all_whales_task',
         'schedule': 900.0,  # 15 minutos (900 segundos)
+    },
+    'auto-hunt-whales-every-6-hours': {
+        'task': 'dashboard.tasks.hunt_whales_by_pair_task',
+        'schedule': 21600.0,  # 6 horas (21600 segundos)
+        'kwargs': {'filter_high_volume': True, 'filter_min_tx_count': 2}  # Filtros por defecto: volumen alto y al menos 2 transacciones
     },
 }
 

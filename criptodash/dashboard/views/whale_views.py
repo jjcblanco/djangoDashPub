@@ -12,7 +12,7 @@ from django.core.cache import cache
 import logging
 logger = logging.getLogger(__name__)
 
-from ..models import WhaleWallet, WhaleTransaction, PatternInsight, TradingPair, ShadowTrade, WhalePattern
+from ..models import WhaleWallet, WhaleTransaction, PatternInsight, TradingPair, ShadowTrade, WhalePattern, ConsensusSignal
 from ..services import SolanaWhaleTracker, PatternEngine
 from ..whale_pattern_learner import WhalePatternLearner
 from dashboard.services import get_top_scored_whales
@@ -22,6 +22,7 @@ from dashboard.data_service import generar_grafico_desde_señales, DataManager
 from dashboard.indicadores import calculate_rsi, macd
 from ..ccxttest1 import _ensure_binance_initialized, binance
 from .utils import ajax_rate_limit
+from dashboard.utils.notifications import send_telegram_message
 
 @login_required
 def whale_insights(request):
@@ -95,6 +96,19 @@ def whale_insights(request):
                 wallet.pnl_stats = {'total_pnl': 0, 'win_rate': 0, 'status': 'Cargando...'}
                 wallet.score_data = {'score': 0, 'tier': 'Calculando...', 'category': {'name': 'Pendiente', 'color': 'gray'}}
 
+        # ── Aggregate Metrics ─────────────────────────────────────────
+        total_wallets = len(wallets)
+        total_pnl = 0
+        total_win_rate = 0
+        wallets_with_cache = 0
+        for wallet in wallets:
+            if hasattr(wallet, 'pnl_stats') and wallet.pnl_stats:
+                total_pnl += wallet.pnl_stats.get('pnl_usdt', 0) or wallet.pnl_stats.get('total_pnl', 0)
+                total_win_rate += wallet.pnl_stats.get('win_rate', 0)
+                wallets_with_cache += 1
+        avg_win_rate = total_win_rate / wallets_with_cache if wallets_with_cache > 0 else 0
+        active_signals = ConsensusSignal.objects.filter(status='ACTIVE').count()
+
         # ── Shadow Trades: filtrar por par ──────────────────────────────
         shadow_qs = ShadowTrade.objects.filter(status='OPEN').order_by('-created_at')
         if active_pair:
@@ -115,6 +129,10 @@ def whale_insights(request):
             'hot_tokens': hot_tokens,
             'page_title': 'Whale Insights & Alpha',
             'top_scored_whales': top_whales,
+            'total_wallets': total_wallets,
+            'avg_win_rate': avg_win_rate,
+            'total_pnl': total_pnl,
+            'active_signals': active_signals,
             'pairs': TradingPair.objects.all(),
             # filtro por par
             'available_pairs': available_pairs,
@@ -168,6 +186,70 @@ def follow_whale(request):
     except Exception as e:
         messages.error(request, f"Error al seguir billetera: {e}")
         
+    return redirect('whale_insights')
+
+@login_required
+@require_POST
+def bulk_import_whales(request):
+    """Importa múltiples billeteras desde una lista de direcciones."""
+    try:
+        addresses_text = request.POST.get('addresses', '').strip()
+        blockchain = request.POST.get('blockchain', 'solana')
+        wallet_category = request.POST.get('wallet_category', 'OBSERVATION')
+        filter_mode = request.POST.get('filter_mode', 'OPEN')
+        auto_categorize = request.POST.get('auto_categorize') == 'on'
+        
+        if not addresses_text:
+            messages.error(request, "Debes proporcionar al menos una dirección.")
+            return redirect('whale_insights')
+            
+        addresses = [addr.strip() for addr in addresses_text.splitlines() if addr.strip()]
+        # Normalizar direcciones
+        if blockchain in ['ethereum', 'base']:
+            addresses = [addr.lower() for addr in addresses]
+        
+        created_count = 0
+        skipped_count = 0
+        for address in addresses:
+            if WhaleWallet.objects.filter(address=address, blockchain=blockchain).exists():
+                skipped_count += 1
+                continue
+                
+            WhaleWallet.objects.create(
+                address=address,
+                name=f'Whale {address[:8]}',
+                blockchain=blockchain,
+                wallet_category=wallet_category,
+                filter_mode=filter_mode,
+                target_token='',
+                is_active=True
+            )
+            created_count += 1
+        
+        if auto_categorize and created_count > 0:
+            # Encolar tareas de sincronización para cada nueva wallet (background)
+            from dashboard.tasks import sync_wallet_task
+            for wallet in WhaleWallet.objects.filter(address__in=addresses, blockchain=blockchain):
+                sync_wallet_task.delay(wallet.id, deep_sync=False)
+        
+        # Notificación Telegram
+        if created_count > 0:
+            msg = (
+                f"🐋 <b>Importación masiva de ballenas</b>\n\n"
+                f"📥 <b>Nuevas ballenas:</b> {created_count}\n"
+                f"🌐 <b>Red:</b> {blockchain.upper()}\n"
+                f"🏷️ <b>Categoría:</b> {wallet_category}\n"
+                f"🔧 <b>Filtro:</b> {filter_mode}\n"
+                f"🤖 <b>Categorización automática:</b> {'Sí' if auto_categorize else 'No'}\n\n"
+                f"<i>Las ballenas han sido añadidas al sistema de seguimiento.</i>"
+            )
+            send_telegram_message(msg)
+        
+        messages.success(request, f"Importación completada: {created_count} nuevas billeteras añadidas, {skipped_count} ya existían.")
+        
+    except Exception as e:
+        messages.error(request, f"Error en importación: {e}")
+    
     return redirect('whale_insights')
 
 @login_required
@@ -475,7 +557,31 @@ def trigger_whale_hunt(request):
 
     # Ejecutar síncronamente para dar feedback real al usuario
     try:
-        result = hunt_whales_by_pair_task()
+        # Leer filtros avanzados desde POST JSON (si existen)
+        filter_high_volume = False
+        filter_recent_activity = False
+        filter_profitable = False
+        filter_min_volume = None
+        filter_min_tx_count = 1
+        if request.method == 'POST' and request.content_type == 'application/json':
+            import json
+            try:
+                data = json.loads(request.body)
+                filter_high_volume = data.get('filterHighVolume', False)
+                filter_recent_activity = data.get('filterRecentActivity', False)
+                filter_profitable = data.get('filterProfitable', False)
+                filter_min_volume = data.get('filterMinVolume')
+                filter_min_tx_count = data.get('filterMinTxCount', 1)
+            except Exception:
+                pass  # Si hay error, usar valores por defecto
+        
+        result = hunt_whales_by_pair_task(
+            filter_high_volume=filter_high_volume,
+            filter_recent_activity=filter_recent_activity,
+            filter_profitable=filter_profitable,
+            filter_min_volume=filter_min_volume,
+            filter_min_tx_count=filter_min_tx_count,
+        )
         new_count = result.get('new', 0) if isinstance(result, dict) else 0
         updated_count = result.get('updated', 0) if isinstance(result, dict) else 0
         buyers_found = result.get('total_buyers_found', 0) if isinstance(result, dict) else 0
@@ -889,6 +995,28 @@ def whale_trade_chart_ajax(request, wallet_id):
         import traceback
         logger.error(f"Error Chart Ajax: {str(e)}\n{traceback.format_exc()}")
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+def whale_live_metrics(request):
+    """Devuelve métricas agregadas en tiempo real para actualización del dashboard."""
+    from ..models import WhaleWallet, ConsensusSignal, ShadowTrade
+    from django.db.models import Count, Q, Sum, Avg
+    
+    total_whales = WhaleWallet.objects.filter(is_active=True).count()
+    avg_win_rate = ShadowTrade.objects.filter(status='CLOSED').aggregate(avg=Avg('pnl_pct'))['avg'] or 0
+    total_pnl = ShadowTrade.objects.filter(status='CLOSED').aggregate(total=Sum('pnl_usd'))['total'] or 0
+    active_signals = ConsensusSignal.objects.filter(status='ACTIVE').count()
+    
+    return JsonResponse({
+        'status': 'ok',
+        'metrics': {
+            'total_whales': total_whales,
+            'avg_win_rate': round(avg_win_rate, 2),
+            'total_pnl': round(total_pnl, 2),
+            'active_signals': active_signals,
+        }
+    })
 
 
 @login_required
