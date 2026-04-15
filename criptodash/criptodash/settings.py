@@ -227,6 +227,8 @@ SOCIALACCOUNT_PROVIDERS = {
             'client_id': GOOGLE_CLIENT_ID,
             'secret': GOOGLE_CLIENT_SECRET,
             'key': ''
+        }
+    }
 }
 
 # Configuración de Django Channels
@@ -234,8 +236,6 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels.layers.InMemoryChannelLayer',
     },
-}
-    }
 }
 
 SOCIALACCOUNT_AUTO_SIGNUP = True
