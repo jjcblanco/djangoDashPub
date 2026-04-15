@@ -108,6 +108,8 @@ def sync_all_whales_task():
     count = 0
     for wallet in active_wallets:
         sync_wallet_task.delay(wallet.id)
+        if i % 3 == 0:  # Cada 3 wallets
+            time.sleep(1)
         count += 1
     
     logger.info(f"Encolada sincronización en background para {count} ballenas activas.")
