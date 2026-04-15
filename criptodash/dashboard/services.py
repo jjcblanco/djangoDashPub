@@ -70,7 +70,9 @@ class EVMWhaleTracker:
         self.blockchain = blockchain
         self.api_url = self.API_CONFIG.get(blockchain, self.API_CONFIG['ethereum'])
         # Podríamos cargar keys de .env aquí si existen
-        self.api_key = os.environ.get(f"{blockchain.upper()}_API_KEY", "")
+        from decouple import config
+        self.api_key = config(f"{blockchain.upper()}_API_KEY", default="")
+        #self.api_key = os.environ.get(f"{blockchain.upper()}_API_KEY", "")
 
     def sync_wallet(self, wallet_obj, max_new=10, **kwargs):
         """Sincroniza transferencias de tokens ERC20."""
