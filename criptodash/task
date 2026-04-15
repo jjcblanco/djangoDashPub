@@ -146,3 +146,134 @@
      stuck = WhaleWallet.objects.filter(sync_status='SYNCING',   
      last_sync__lt=cutoff)                                        
      print(f"\nWallets atascadas en SYNCING: {stuck.count()}")   
+
+
+
+
+
+  python whale_diagnostic.py --all
+✅ Django setup complete (project: /var/www/clients/client2/web5/web/criptodash)
+🔍 RUNNING COMPREHENSIVE WHALE TRACKING DIAGNOSTICS
+============================================================
+
+============================================================
+WALLET SYNC STATUS REPORT
+============================================================
+📊 Total Wallets: 73
+✅ Active Wallets: 73
+
+📈 STATUS BREAKDOWN:
+  IDLE: 73 (100.0%)
+  SYNCING: 0 (0.0%)
+  ERROR: 0 (0.0%)
+
+🕒 LAST SYNC ANALYSIS:
+  <1 hour: 0 wallets
+  1-6 hours: 73 wallets
+  6-24 hours: 0 wallets
+  >24 hours: 0 wallets
+  Never synced: 0 wallets
+
+============================================================
+BLOCKCHAIN ANALYSIS
+============================================================
+
+SOLANA:
+  Total: 19
+  Active: 19
+  IDLE: 19
+  Latest sync: 2026-04-15 17:13:22.003116+00:00 (5.1 hours ago)
+  Sample: ID 40 - hbtcejkxpxdj...
+
+ETHEREUM:
+  Total: 44
+  Active: 44
+  IDLE: 44
+  Latest sync: 2026-04-15 18:35:20.945272+00:00 (3.8 hours ago)
+  Sample: ID 28 - 0x5b43453fce...
+
+BASE: No wallets
+
+HYPERLIQUID:
+  Total: 10
+  Active: 10
+  IDLE: 10
+  Latest sync: 2026-04-15 17:13:22.111430+00:00 (5.1 hours ago)
+  Sample: ID 13 - 0x5b5d51203a...
+
+============================================================
+PROBLEMATIC WALLETS
+============================================================
+
+✅ No wallets with ERROR status
+
+✅ No wallets stuck in SYNCING
+
+============================================================
+TRANSACTION ACTIVITY
+============================================================
+  Last 1 hour: 0 transactions
+  Last 6 hours: 346 transactions
+  Last 24 hours: 1209 transactions
+  Last 7 days: 2564 transactions
+
+📊 TRANSACTION TYPES (Last 24h):
+  SWAP: 1209
+
+============================================================
+API CONFIGURATION CHECK
+============================================================
+🔑 API KEYS STATUS:
+  ✅ Etherscan API Key (Ethereum): Configured (NVTVKK7B...)
+  ✅ Basescan API Key (Base): Configured (NVTVKK7B...)
+  ✅ Binance API Key: Configured (nytMtrEU...)
+  ✅ Binance Secret: Configured (YrRZNfRn...)
+  ❌ Telegram Bot Token: MISSING
+  ❌ Telegram Chat ID: MISSING
+
+⚙️ DJANGO SETTINGS CHECK:
+  Celery Broker: redis://localhost:6379/0
+  Redis available: True
+  Django Channels: ✅ Installed
+  ASGI Application: criptodash.asgi.application
+
+============================================================
+RATE LIMIT CONFIGURATION
+============================================================
+  ❌ Could not import blockchain utilities: No module named 'dashboard.utils.blockchain'
+
+============================================================
+CELERY STATUS CHECK
+============================================================
+👷 CELERY CONFIGURATION:
+  Celery App: ✅ Configured
+  Total registered tasks: 10
+  Whale-related tasks: 0
+
+⏰ CELERY BEAT SCHEDULE:
+  Scheduled tasks: 2
+    ✅ sync-all-whales-every-15-min: 900.0
+    ✅ auto-hunt-whales-every-6-hours: 21600.0
+
+============================================================
+UI ENDPOINTS CHECK
+============================================================
+🌐 ENDPOINT AVAILABILITY:
+Invalid HTTP_HOST header: 'testserver'. You may need to add 'testserver' to ALLOWED_HOSTS.
+Traceback (most recent call last):
+  File "/var/www/clients/client2/web5/web/venv/lib/python3.13/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+  File "/var/www/clients/client2/web5/web/venv/lib/python3.13/site-packages/django/utils/deprecation.py", line 308, in __call__
+    response = self.process_request(request)
+  File "/var/www/clients/client2/web5/web/venv/lib/python3.13/site-packages/django/middleware/common.py", line 48, in process_request
+    host = request.get_host()
+  File "/var/www/clients/client2/web5/web/venv/lib/python3.13/site-packages/django/http/request.py", line 205, in get_host
+    raise DisallowedHost(msg)
+django.core.exceptions.DisallowedHost: Invalid HTTP_HOST header: 'testserver'. You may need to add 'testserver' to ALLOWED_HOSTS.
+  ❌ Whale Insights Dashboard: HTTP 400 (/whale-insights/)
+  ❌ Wallet List API: Error - Reverse for 'whale_wallet_list' not found. 'whale_
+  ❌ Hunt Targets API: Error - Reverse for 'whale_hunt_targets' not found. 'whale
+  ❌ Consensus Signals API: Error - Reverse for 'consensus_signals' not found. 'consen
+
+🔌 WEBSOCKET ENDPOINTS:
+  ⚠️ No WebSocket patterns found
