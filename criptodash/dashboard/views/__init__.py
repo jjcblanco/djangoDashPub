@@ -60,8 +60,10 @@ from .whale_views import (
     hunt_targets_toggle,
     hunt_targets_delete,
     whale_consensus_ajax,
+    whale_live_metrics,
     whale_trade_chart_ajax,
     learn_patterns,
+    bulk_import_whales,
 )
 
 # Importar vistas de simulaciones / shadow trading (NUEVO)
@@ -145,6 +147,7 @@ __all__ = [
     'hunt_targets_toggle',
     'hunt_targets_delete',
     'learn_patterns',
+    'bulk_import_whales',
     'simulate_whale_trade',
     'close_shadow_trade',
 
