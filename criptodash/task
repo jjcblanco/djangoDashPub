@@ -1,41 +1,148 @@
-Day Trading Strategy Implementation
-Planning
- Research indicator availability
- Create Implementation Plan
- Design DayTradingStrategy class logic
-Execution
- Implement 
-DayTradingStrategy
- in 
-backtester.py
- Add strategy to 
-backtest_views.py
- Add strategy option to 
-backtest.html
-Verification
- Run backtest in 5m/15m timeframes
- Verify signal accuracy
- Update walkthrough
-Candlestick Analysis Enhancement
- Implement detection functions for Engulfing, Hammer, and Shooting Star in 
-indicadores.py
- Integrate pattern detection into 
-DayTradingStrategy
- as confirmation filters
- Verify enhancement results with backtests
-Debugging: Zero Signals Issue
- Standardize 
-DayTradingStrategy
- scoring to reach 5 points
- Propagate form parameters (ADX, Strength, SL/TP) to backtest engine
- Add "Use Candlestick Filters" toggle to UI for better control
-Grid Trading Strategy
- Implement GridStrategy class in 
-backtester.py
- Implement simulate_grid_trading with Global Stop Loss logic
- Create UI fields for Grid Range, Levels and Stop Price in 
-backtest.html
- Integrate Grid logic into 
-backtest_view
- Verify functionality with a debug script
- 
+🐋 GUÍA COMPLETA DE LA NUEVA UI DE WHALE  
+     TRACKING
+                                                
+     📊 1. Overview Tab - Dashboard Principal  
+     Métricas en tiempo real (se actualizan    t 
+     cada 30s automáticamente):
+     - Ballenas Seguidas: Total wallets activas 
+     - Win Rate Promedio: % trades ganadores ( )
+     calculado de ShadowTrades)
+     - PnL Total Simulado: Ganancia/pérdida    
+     estimada total
+     - Señales Activas: Consensos detectados ( 
+     3+ ballenas mismo token)
+
+     Acciones rápidas desde aquí:              )
+     - 🔄 Sincronizar: Botón arriba-derecha →  
+     Encola sync para TODAS las wallets activas
+     - 🎯 Cazar: Busca ballenas                 
+     automáticamente en targets configurados   )
+     - 🌐 Filtrar por token: Selector de pares
+     Muestra sólo wallets que operan ese     )
+     token
+     
+     👛 2. Wallets Tab - Gestión de Ballenas   
+     Cada wallet muestra:
+     - 🔄 Sync Status: IDLE (listo), SYNCING ( 
+     en proceso), ERROR (falló)
+     - 📅 Last Sync: Última sincronización     )
+     exitosa
+     - 🏷️ Category: Categoría automática (     
+     Smart Money, Sniper, Observation, etc.)    
+     - 🎯 Target Pairs: Tokens que opera esta  )
+     ballena    - 📊 Performance: Win rate y PnL simulado 
+     
+     Acciones por wallet (botones en cada fila)
+     :
+     1. 🔄 Sync Now → Sincroniza esta wallet   
+     inmediatamente
+     2. 📊 View History → Modal con últimas    )
+     transacciones + contexto de mercado       
+     3. 🧠 View Analysis → ADN de trading,     
+     patrones detectados                        
+     4. 📥 Download CSV → Exporta historial    )
+     completo 5. 🚫 Unfollow → Elimina del seguimiento  )
+     
+     🧠 3. Patterns Tab - Inteligencia de      
+     Trading
+     Funcionalidades:
+     - Patrones Aprendidos: El sistema detecta 
+     automáticamente patrones exitosos
+     - ADN por Ballena:                        )
+       - Sniper: Hold time <1h
+       - Day Trader: 1-24h  
+       - Swing Trader: >24h                     
+     - Preferencias RSI: Rangos donde cada     )
+     ballena suele entrar  - Score Predictivo: Confianza basada en   
+     historial
+     
+     🔍 4. Discovery Tab - Descubrimiento      
+     Automático
+     Buscar tokens en tiempo real:
+     1. 🔍 Search Tokens: Integración con      )
+     DexScreener API
+     2. Ver Top Traders: Mayores compradores   
+     de cualquier token                         
+     3. Añadir como Target: Configurar token   )
+     para caza automática4. Señales de Consenso: Detecta cuando 3+ 
+     ballenas compran mismo token
+     
+     Flujo típico:
+     
+     Buscar "PEPE" → Ver top traders → "Seguir 
+     Address" →                                )
+     Añade contrato como target → Auto-hunt    
+     buscará ballenas de PEPE
+                                                
+     🎯 5. Hunting Tab - Caza Automática       )
+     Filtros avanzados (guardados en localStorage):
+     - 🔥 High Volume Only: > $10,000 por      
+     transacción
+     - 📈 Min Transactions: Mínimo 1, 2, 3+    
+     transacciones
+     - 💰 Global Min Volume: Volumen mínimo    
+     personalizado                             )
+     - 🎯 Targets Personalizados: Configurar   
+     qué tokens buscar
+                                                
+     Programación automática:                  )
+     - ⏰t Cada 6 horas: Auto-hunt con filtros- 🤖 Celery Beat: Tarea auto-hunt-whales- 
+     every-6-hours
+     - 📲 Notificaciones Telegram: Alertas de  
+     nuevas ballenas encontradas
+
+     ---                                       )
+     
+     🔧 DIAGNÓSTICO: ¿POR QUÉ PARECE QUE NO SE 
+     ACTUALIZAN?                                
+                                               )
+     ✅  Lo que SÍ está funcionando (según logs1. Celery activo - Procesando tareas      
+     sync_wallet_task
+     2. Wallets Hyperliquid - Sincronizando    
+     100 txs cada una
+     3. Redis funcionando - Celery necesita    
+     Redis para colas                          )
+     
+     ❓🔧 Posibles problemas:
+                                                
+     1. Sólo wallets Hyperliquid se actualizan  # Verificar qué blockchains tienen wallets)
+     cd /var/www/clients/client2/web5/web/     
+     criptodash
+     source /var/www/javierblanco.com.ar/web/  
+     venv/bin/activate
+     python manage.py shell
+
+     from dashboard.models import WhaleWallet  )
+     from collections import Counter
+     
+     # Contar wallets por blockchain            
+     wallets = WhaleWallet.objects.all()       )
+     blockchain_counts = Counter(w.blockchain for w in wallets)  
+     print("Wallets por blockchain:", dict(blockchain_counts))    
+
+     # Ver última sync por blockchain
+     for blockchain in ['solana', 'ethereum', 'base', 
+     'hyperliquid']:
+         w = wallets.filter(blockchain=blockchain).order_by('-   
+     last_sync').first()
+         if w:                                                    
+             print(f"{blockchain}: Última sync {w.last_sync} (    
+     wallet {w.id})")
+     2. Wallets en estado ERROR o atascadas
+
+     # En el mismo shell de Django:                               
+     from datetime import timedelta
+     from django.utils import timezone                            
+
+     # Wallets con error
+     error_wallets = WhaleWallet.objects.filter(                  
+     sync_status='ERROR')
+     print(f"Wallets con ERROR: {error_wallets.count()}")        
+     for w in error_wallets:  
+         print(f"  {w.id}: {w.address[:12]}... ({w.blockchain})") 
+                                                                  
+     # Wallets atascadas en SYNCING (>30 min)
+     cutoff = timezone.now() - timedelta(minutes=30)
+     stuck = WhaleWallet.objects.filter(sync_status='SYNCING',   
+     last_sync__lt=cutoff)                                        
+     print(f"\nWallets atascadas en SYNCING: {stuck.count()}")   
