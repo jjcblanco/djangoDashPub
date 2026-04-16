@@ -106,15 +106,68 @@ def sync_all_whales_task():
     
     # --- Encolar sincronización de todas las wallets activas ---
     active_wallets = WhaleWallet.objects.filter(is_active=True, sync_status='IDLE')
-    count = 0
-    for wallet in active_wallets:
-        sync_wallet_task.delay(wallet.id)
-        if count % 3 == 0:  # Cada 3 wallets
-            time.sleep(1)
-        count += 1
     
-    logger.info(f"Encolada sincronización en background para {count} ballenas activas.")
-    return count
+    # Separar por blockchain para manejar rate limits específicos
+    wallets_by_blockchain = {}
+    for wallet in active_wallets:
+        chain = wallet.blockchain
+        if chain not in wallets_by_blockchain:
+            wallets_by_blockchain[chain] = []
+        wallets_by_blockchain[chain].append(wallet)
+    
+    total_count = 0
+    
+    # Procesar cada blockchain con estrategias de rate limiting diferentes
+    for blockchain, wallets in wallets_by_blockchain.items():
+        logger.info(f"Procesando {len(wallets)} wallets de {blockchain}")
+        
+        if blockchain in ['ethereum', 'base']:
+            # Ethereum y Base usan Etherscan API: rate limit estricto (5 calls/sec)
+            # Procesar en batches de 5 con 1 segundo entre batches
+            BATCH_SIZE = 5
+            DELAY_SECONDS = 1.0
+            
+            for i in range(0, len(wallets), BATCH_SIZE):
+                batch = wallets[i:i + BATCH_SIZE]
+                
+                # Encolar batch
+                for wallet in batch:
+                    sync_wallet_task.delay(wallet.id)
+                    total_count += 1
+                
+                # Esperar entre batches si no es el último
+                if i + BATCH_SIZE < len(wallets):
+                    time.sleep(DELAY_SECONDS)
+                    
+        elif blockchain == 'solana':
+            # Solana RPC puede tener rate limits
+            # Procesar en batches de 10 con 0.5 segundos entre batches
+            BATCH_SIZE = 10
+            DELAY_SECONDS = 0.5
+            
+            for i in range(0, len(wallets), BATCH_SIZE):
+                batch = wallets[i:i + BATCH_SIZE]
+                
+                for wallet in batch:
+                    sync_wallet_task.delay(wallet.id)
+                    total_count += 1
+                
+                if i + BATCH_SIZE < len(wallets):
+                    time.sleep(DELAY_SECONDS)
+                    
+        else:
+            # Hyperliquid y otros: menos restrictivos
+            # Procesar más rápido pero con pequeño delay
+            for i, wallet in enumerate(wallets):
+                sync_wallet_task.delay(wallet.id)
+                total_count += 1
+                
+                # Pequeño delay cada 5 wallets
+                if i % 5 == 0 and i > 0:
+                    time.sleep(0.2)
+    
+    logger.info(f"Encolada sincronización en background para {total_count} ballenas activas.")
+    return total_count
 
 
 # ───────────────────────────────────────────
