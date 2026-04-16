@@ -36,9 +36,9 @@ def test_env():
     for key in keys:      
         value = os.environ.get(key)                            
     if value: 
-        print(f"  ✅  {key}: {value[:8]}...")             t             
+        print(f"  ✅  {key}: {value[:8]}...")
     else:
-        print(f"  ❌  {key}: NOT SET")                     
+        print(f"  ❌  {key}: NOT SET") 
                                                             
 if __name__ == '__main__':                                     
     test_env()                                                 
