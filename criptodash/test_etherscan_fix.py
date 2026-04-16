@@ -34,16 +34,15 @@ TEST_WALLETS = {
 }
 
 def test_chain(chain_name, config):
-    api_url = config['api_url']
-    chainid = config.get('chainid')
+    chainid = config['chainid']
     print(f"\n{'='*50}")
-    print(f"[TEST] {chain_name.upper()} ({'V2 chainid=' + str(chainid) if chainid else 'endpoint directo'})")
-    print(f"   URL: {api_url}")
+    print(f"[TEST] {chain_name.upper()} (chainid={chainid})")
     print(f"   Wallet: {config['label']}")
     print(f"   Address: {config['address'][:12]}...")
     print(f"   API Key: {API_KEY[:12]}...")
     
     params = {
+        'chainid': chainid,
         'module': 'account',
         'action': 'tokentx',
         'address': config['address'],
@@ -54,15 +53,13 @@ def test_chain(chain_name, config):
         'sort': 'desc',
         'apikey': API_KEY,
     }
-    if chainid is not None:
-        params['chainid'] = chainid
     headers = {
         'User-Agent': 'WhaleTracker/1.0',
         'Accept': 'application/json',
     }
     
     try:
-        resp = requests.get(api_url, params=params, headers=headers, timeout=12)
+        resp = requests.get(API_URL, params=params, headers=headers, timeout=12)
         print(f"\n   HTTP Status: {resp.status_code}")
         
         if resp.status_code != 200:
