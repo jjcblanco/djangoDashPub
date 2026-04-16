@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-import os                                                     t     import requests                                                
+import os
+import requests
                                                                     
      def test_etherscan():                                          
          key = os.environ.get('ETH_API_KEY')                        
