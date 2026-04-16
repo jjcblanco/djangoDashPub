@@ -60,27 +60,34 @@ class SolanaWhaleTracker:
         return new_txs
 
 class EVMWhaleTracker:
-    """Rastreador para redes EVM (Ethereum, Base, etc) usando APIs compatibles con Etherscan V2."""
-    API_CONFIG = {
-        'ethereum': 'https://api.etherscan.io/api/v2',
-        'base': 'https://api.basescan.org/api/v2',
+    """Rastreador para redes EVM (Ethereum, Base, etc) usando Etherscan V2 API unificada.
+    
+    Etherscan V2 usa un endpoint único para todas las cadenas,
+    diferenciándolas por el parámetro chainid.
+    Plan gratuito: 5 calls/sec.
+    """
+    API_URL = 'https://api.etherscan.io/v2/api'
+    CHAIN_IDS = {
+        'ethereum': 1,
+        'base': 8453,
     }
 
     def __init__(self, blockchain):
         self.blockchain = blockchain
-        self.api_url = self.API_CONFIG.get(blockchain, self.API_CONFIG['ethereum'])
-        # Cargar keys de .env usando python-decouple
+        self.chain_id = self.CHAIN_IDS.get(blockchain, 1)
+        # Cargar key de .env usando python-decouple
         from decouple import config
         self.api_key = config(f"{blockchain.upper()}_API_KEY", default="")
         if not self.api_key:
-            import logging
-            logger = logging.getLogger(__name__)
+            # Fallback: intentar con ETH_API_KEY
+            self.api_key = config('ETH_API_KEY', default="")
+        if not self.api_key:
             logger.warning(f"[EVM Tracker] No API key for {blockchain}. API calls will fail.")
 
     def sync_wallet(self, wallet_obj, max_new=10, **kwargs):
-        """Sincroniza transferencias de tokens ERC20 usando Etherscan V2 API."""
-        # Etherscan V2 API parameters
+        """Sincroniza transferencias de tokens ERC20 usando Etherscan V2."""
         params = {
+            'chainid': self.chain_id,
             'module': 'account',
             'action': 'tokentx',
             'address': wallet_obj.address,
@@ -92,18 +99,15 @@ class EVMWhaleTracker:
             'apikey': self.api_key
         }
         
-        # V2 API requires User-Agent header
         headers = {
             'User-Agent': 'WhaleTracker/1.0',
             'Accept': 'application/json'
         }
         
         try:
-            resp = requests.get(self.api_url, params=params, headers=headers, timeout=12)
+            resp = requests.get(self.API_URL, params=params, headers=headers, timeout=12)
             if resp.status_code != 200:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"[EVM Tracker V2] HTTP {resp.status_code} for {wallet_obj.address[:10]}")
+                logger.error(f"[EVM Tracker] HTTP {resp.status_code} for {wallet_obj.address[:10]} ({self.blockchain})")
                 return 0
             
             data = resp.json()
@@ -353,7 +357,8 @@ class PatternEngine:
             try:
                 if wallet_obj.blockchain == 'solana':
                     raw = tx.raw_data
-                    if not raw or 'meta' not in raw: c                    # Mapeo de balances para el dueño de la billetera
+                    if not raw or 'meta' not in raw: continue
+                    # Mapeo de balances para el dueño de la billetera
                     pre_balances = {b['mint']: b['uiTokenAmount']['uiAmount'] or 0 
                                    for b in raw['meta'].get('preTokenBalances', []) 
                                    if b.get('owner') == wallet_obj.address}
@@ -642,6 +647,43 @@ class PatternEngine:
             return True
         except:
             return True
+
+    @staticmethod
+    def is_token_reputable(symbol, contract_address, blockchain='solana'):
+        """Verifica si un token es reputado consultando DexScreener por liquidez y volumen."""
+        if not contract_address:
+            return False
+        
+        # Tokens conocidos son siempre reputados
+        KNOWN_TOKENS = {
+            'SOL', 'ETH', 'BTC', 'WETH', 'WBTC', 'USDC', 'USDT', 'DAI',
+            'BONK', 'WIF', 'JUP', 'PEPE', 'SHIB', 'LINK', 'UNI', 'AAVE',
+            'ARB', 'OP', 'MATIC', 'RENDER', 'FET', 'INJ', 'SUI', 'APT',
+        }
+        if symbol and symbol.upper() in KNOWN_TOKENS:
+            return True
+        
+        try:
+            url = f"https://api.dexscreener.com/latest/dex/tokens/{contract_address}"
+            resp = requests.get(url, timeout=5)
+            if resp.status_code != 200:
+                return False
+            
+            data = resp.json()
+            pairs = data.get('pairs', [])
+            if not pairs:
+                return False
+            
+            # Tomar el par con más liquidez
+            best_pair = max(pairs, key=lambda p: float(p.get('liquidity', {}).get('usd', 0) or 0))
+            liquidity = float(best_pair.get('liquidity', {}).get('usd', 0) or 0)
+            volume_24h = float(best_pair.get('volume', {}).get('h24', 0) or 0)
+            
+            # Mínimo: $30k liquidez Y $5k volumen 24h
+            return liquidity >= 30000 and volume_24h >= 5000
+        except Exception as e:
+            logger.warning(f"[is_token_reputable] Error verificando {contract_address[:12]}: {e}")
+            return False
 
     @staticmethod
     def _check_cohort_consensus(symbol, exclude_wallet_id):
