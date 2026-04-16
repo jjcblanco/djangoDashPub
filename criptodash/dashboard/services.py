@@ -60,44 +60,74 @@ class SolanaWhaleTracker:
         return new_txs
 
 class EVMWhaleTracker:
-    """Rastreador para redes EVM (Ethereum, Base, etc) usando APIs compatibles con Etherscan."""
+    """Rastreador para redes EVM (Ethereum, Base, etc) usando APIs compatibles con Etherscan V2."""
     API_CONFIG = {
-        'ethereum': 'https://api.etherscan.io/api',
-        'base': 'https://api.basescan.org/api',
+        'ethereum': 'https://api.etherscan.io/api/v2',
+        'base': 'https://api.basescan.org/api/v2',
     }
 
     def __init__(self, blockchain):
         self.blockchain = blockchain
         self.api_url = self.API_CONFIG.get(blockchain, self.API_CONFIG['ethereum'])
-        # Podríamos cargar keys de .env aquí si existen
+        # Cargar keys de .env usando python-decouple
         from decouple import config
         self.api_key = config(f"{blockchain.upper()}_API_KEY", default="")
-        #self.api_key = os.environ.get(f"{blockchain.upper()}_API_KEY", "")
+        if not self.api_key:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"[EVM Tracker] No API key for {blockchain}. API calls will fail.")
 
     def sync_wallet(self, wallet_obj, max_new=10, **kwargs):
-        """Sincroniza transferencias de tokens ERC20."""
-        # limit=50 para background, menos para web (ignorado si max_new es bajo)
+        """Sincroniza transferencias de tokens ERC20 usando Etherscan V2 API."""
+        # Etherscan V2 API parameters
         params = {
             'module': 'account',
             'action': 'tokentx',
             'address': wallet_obj.address,
-            'sort': 'desc',
+            'startblock': 0,
+            'endblock': 99999999,
             'page': 1,
             'offset': 50,
+            'sort': 'desc',
             'apikey': self.api_key
         }
+        
+        # V2 API requires User-Agent header
+        headers = {
+            'User-Agent': 'WhaleTracker/1.0',
+            'Accept': 'application/json'
+        }
+        
         try:
-            resp = requests.get(self.api_url, params=params, timeout=12)
-            if resp.status_code != 200: return 0
+            resp = requests.get(self.api_url, params=params, headers=headers, timeout=12)
+            if resp.status_code != 200:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"[EVM Tracker V2] HTTP {resp.status_code} for {wallet_obj.address[:10]}")
+                return 0
             
             data = resp.json()
-            if data.get('status') != '1': return 0
+            if data.get('status') != '1':
+                error_msg = data.get('message', 'Unknown V2 API error')
+                result_msg = data.get('result', 'No result')
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"[EVM Tracker V2] API error for {wallet_obj.address[:10]}: {error_msg} - Result: {result_msg}")
+                
+                # Special handling for common V2 errors
+                if 'rate limit' in error_msg.lower():
+                    logger.warning(f"[EVM Tracker V2] Rate limit hit for {self.blockchain}")
+                elif 'invalid api key' in error_msg.lower():
+                    logger.error(f"[EVM Tracker V2] Invalid API key for {self.blockchain}")
+                
+                return 0
             
             transfers = data.get('result', [])
             new_txs = 0
             
             for tx in transfers:
-                if new_txs >= max_new: break
+                if new_txs >= max_new:
+                    break
                 
                 # Usamos blockNumber + hash para unicidad si hay múltiples transferencias en un hash
                 unique_hash = f"{tx['hash']}_{tx.get('logIndex', '0')}"
@@ -119,6 +149,8 @@ class EVMWhaleTracker:
                         if mkt_ctx:
                             raw_with_context['market_context'] = mkt_ctx
                 except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
                     logger.warning(f"[EVM] No se pudo capturar contexto de mercado para {tx.get('tokenSymbol')}: {e}")
                 
                 WhaleTransaction.objects.create(
@@ -134,8 +166,11 @@ class EVMWhaleTracker:
                 new_txs += 1
             return new_txs
         except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
             logger.error(f"[EVM Tracker] Error sincronizando wallet {wallet_obj.address[:10]}: {e}")
             return 0
+
 class HyperliquidWhaleTracker:
     """Rastreador para la red Hyperliquid L1 usando su API de Info."""
     API_URL = "https://api.hyperliquid.xyz/info"

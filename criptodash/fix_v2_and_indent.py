@@ -14,7 +14,7 @@ def backup_file(file_path):
     backup_path = file_path + '.backup'
     if os.path.exists(file_path):
         shutil.copy2(file_path, backup_path)
-        print(f"✅ Created backup: {backup_path}")
+        print(f"[OK] Created backup: {backup_path}")
         return backup_path
     return None
 
@@ -142,10 +142,10 @@ def fix_evm_tracker_class(content):
     new_content = re.sub(pattern, new_class, content, flags=re.DOTALL)
     
     if new_content != content:
-        print("✅ Replaced EVMWhaleTracker class with V2-compliant version")
+        print("[OK] Replaced EVMWhaleTracker class with V2-compliant version")
         return new_content
     else:
-        print("⚠️ Could not find EVMWhaleTracker class to replace")
+        print("[WARNING] Could not find EVMWhaleTracker class to replace")
         return content
 
 def fix_imports(content):
@@ -157,13 +157,13 @@ def fix_imports(content):
         if import_line in content:
             new_import_line = 'import requests\nimport os\nimport json\nimport time\nimport logging\nfrom datetime import datetime'
             content = content.replace(import_line, new_import_line)
-            print("✅ Added datetime import")
+            print("[OK] Added datetime import")
     
     return content
 
 def check_indentation(file_path):
     """Check for mixed tabs/spaces indentation"""
-    with open(file_path, 'r') as f:
+    with open(file_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
     
     tab_lines = []
@@ -172,7 +172,7 @@ def check_indentation(file_path):
             tab_lines.append(i)
     
     if tab_lines:
-        print(f"⚠️ Found tabs on lines: {tab_lines[:10]}")
+        print(f"[WARNING] Found tabs on lines: {tab_lines[:10]}")
         print("  Converting tabs to spaces...")
         
         # Convert tabs to 4 spaces
@@ -180,17 +180,17 @@ def check_indentation(file_path):
         for line in lines:
             new_lines.append(line.replace('\t', '    '))
         
-        with open(file_path, 'w') as f:
+        with open(file_path, 'w', encoding='utf-8') as f:
             f.writelines(new_lines)
         
-        print(f"✅ Converted tabs to spaces")
+        print(f"[OK] Converted tabs to spaces")
         return True
     
     return False
 
 def test_v2_api_quick():
     """Quick test of V2 API"""
-    print("\n🧪 Quick V2 API test...")
+    print("\n[TEST] Quick V2 API test...")
     
     test_code = '''
 import os
@@ -238,56 +238,56 @@ except Exception as e:
 '''
     
     test_file = os.path.join(os.path.dirname(__file__), 'quick_v2_test.py')
-    with open(test_file, 'w') as f:
+    with open(test_file, 'w', encoding='utf-8') as f:
         f.write(test_code)
     
-    print(f"📄 Created test script: {test_file}")
+    print(f"[+] Created test script: {test_file}")
     return test_file
 
 def main():
-    print("🔧 Fixing V2 API Migration and Indentation Issues")
+    print("[FIX] Fixing V2 API Migration and Indentation Issues")
     print("="*60)
     
     file_path = os.path.join(os.path.dirname(__file__), 'dashboard', 'services.py')
     
     if not os.path.exists(file_path):
-        print(f"❌ File not found: {file_path}")
+        print(f"[ERROR] File not found: {file_path}")
         return
     
-    print(f"📄 Target file: {file_path}")
+    print(f"[+] Target file: {file_path}")
     
     # Create backup
     backup = backup_file(file_path)
     
     # Check indentation
-    print("\n🔍 Checking indentation...")
+    print("\n[CHECK] Checking indentation...")
     check_indentation(file_path)
     
     # Read current content
-    with open(file_path, 'r') as f:
+    with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
     
     # Fix imports
     content = fix_imports(content)
     
     # Fix EVMWhaleTracker class
-    print("\n🔧 Updating EVMWhaleTracker for V2 API...")
+    print("\n[FIX] Updating EVMWhaleTracker for V2 API...")
     new_content = fix_evm_tracker_class(content)
     
     if new_content == content:
-        print("⚠️ No changes made to EVMWhaleTracker class")
+        print("[WARNING] No changes made to EVMWhaleTracker class")
         print("  The class may already be updated or pattern didn't match")
     else:
         # Write updated content
-        with open(file_path, 'w') as f:
+        with open(file_path, 'w', encoding='utf-8') as f:
             f.write(new_content)
-        print("✅ Updated services.py with V2 API fixes")
+        print("[OK] Updated services.py with V2 API fixes")
     
     # Create test script
     test_file = test_v2_api_quick()
     
-    print("\n✅ Fixes applied successfully!")
-    print("\n🚀 Next steps:")
+    print("\n[OK] Fixes applied successfully!")
+    print("\n[NEXT] Next steps:")
     print(f"1. Test V2 API: python {test_file}")
     print("2. Restart Celery: sudo systemctl restart celery")
     print("3. Trigger sync: python manage.py shell")
@@ -296,11 +296,11 @@ def main():
     print("4. Check logs: sudo journalctl -u celery -f")
     print("   Look for 'synced X txs' where X > 0")
     
-    print("\n📝 If Celery still crashes with IndentationError:")
+    print("\n[NOTE] If Celery still crashes with IndentationError:")
     print("   Check line 103 in services.py for mixed tabs/spaces")
     print("   You can manually fix with: sed -i 's/\\t/    /g' dashboard/services.py")
     
-    print("\n💡 If API still fails:")
+    print("\n[TIP] If API still fails:")
     print("   - Wait 5-10 minutes after key creation")
     print("   - Check Etherscan dashboard: https://etherscan.io/myapikey")
     print("   - Consider getting new API keys")
