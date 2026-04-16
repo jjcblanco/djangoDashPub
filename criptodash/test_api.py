@@ -5,7 +5,8 @@ import requests
 def test_etherscan():                                          
         key = os.environ.get('ETH_API_KEY')                        
         if not key:                                                
-            print("❌  ETH_API_KEY not in environment")           t             return False
+            print("❌  ETH_API_KEY not in environment")           t             
+            return False
                                                                 
         # Test with Vitalik's address
         url = "https://api.etherscan.io/api"
@@ -24,7 +25,7 @@ def test_etherscan():
                 print(f"✅  Etherscan API working: {len(data.get('result', []))} transactions")
                 return True
             else:
-                print(f"❌2 Etherscan error: {data.get('message', 'Unknown')}")                                                  
+                print(f"❌2 Etherscan error: {data.get('message', 'Unknown')}")
                 return False                                       
         except Exception as e:                                     
             print(f"❌  Connection error: {e}")                    
