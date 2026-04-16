@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+""" 
 Diagnose Django URL configuration errors in Celery
 Run: python diagnose_celery_django.py
 """
