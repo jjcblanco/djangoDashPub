@@ -8,7 +8,7 @@ import os
 import sys
 import time
 import django
-
+ 
 # Setup Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'criptodash.settings')
 try:
