@@ -170,7 +170,7 @@ class EVMWhaleTracker:
             logger = logging.getLogger(__name__)
             logger.error(f"[EVM Tracker] Error sincronizando wallet {wallet_obj.address[:10]}: {e}")
             return 0
-
+ 
 class HyperliquidWhaleTracker:
     """Rastreador para la red Hyperliquid L1 usando su API de Info."""
     API_URL = "https://api.hyperliquid.xyz/info"
