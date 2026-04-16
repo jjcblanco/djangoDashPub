@@ -34,13 +34,13 @@ def test_env():
     print("🔍 Environment check:")
     keys = ['ETH_API_KEY', 'BASE_API_KEY', 'BINANCE_APIKEY'] 
     for key in keys:      
-    value = os.environ.get(key)                            
+        value = os.environ.get(key)                            
     if value: 
         print(f"  ✅  {key}: {value[:8]}...")             t             
     else:
         print(f"  ❌  {key}: NOT SET")                     
                                                             
-    if __name__ == '__main__':                                     
-        test_env()                                                 
-        print()
-        test_etherscan()  
+if __name__ == '__main__':                                     
+    test_env()                                                 
+    print()
+    test_etherscan()  
