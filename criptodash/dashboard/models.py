@@ -458,3 +458,160 @@ class WhalePattern(models.Model):
                 if key not in context or context[key] != value:
                     return False
         return True
+
+
+# ============================================================
+# MÓDULO DE SCALPING
+# ============================================================
+
+class ScalpingBot(models.Model):
+    """Bot de scalping especializado en timeframes cortos (1m-5m)."""
+
+    STRATEGY_CHOICES = [
+        ('EMA_CROSS',  'EMA Cross (5/20) + Volumen'),
+        ('BB_SQUEEZE', 'Bollinger Squeeze + Momentum'),
+        ('VWAP_RSI',   'VWAP + RSI Bounce'),
+    ]
+    TIMEFRAME_CHOICES = [
+        ('1m',  '1 Minuto'),
+        ('3m',  '3 Minutos'),
+        ('5m',  '5 Minutos'),
+        ('15m', '15 Minutos'),
+    ]
+    STATUS_CHOICES = [
+        ('RUNNING', 'Running'),
+        ('PAUSED',  'Paused'),
+        ('STOPPED', 'Stopped'),
+        ('ERROR',   'Error'),
+    ]
+
+    name             = models.CharField(max_length=100)
+    pair             = models.ForeignKey('Pair', on_delete=models.CASCADE, related_name='scalping_bots')
+    strategy_type    = models.CharField(max_length=20, choices=STRATEGY_CHOICES, default='EMA_CROSS')
+    timeframe        = models.CharField(max_length=5, choices=TIMEFRAME_CHOICES, default='5m')
+    status           = models.CharField(max_length=10, choices=STATUS_CHOICES, default='STOPPED')
+    is_live          = models.BooleanField(default=False, help_text='Si True, ejecuta ordenes reales en Binance')
+
+    # Capital y riesgo
+    capital_usdt     = models.DecimalField(max_digits=20, decimal_places=2, default=100)
+    max_position_pct = models.DecimalField(max_digits=5, decimal_places=2, default=50, help_text='% del capital por trade')
+    sl_atr_mult      = models.DecimalField(max_digits=5, decimal_places=2, default=1.5, help_text='SL = N x ATR')
+    tp_atr_mult      = models.DecimalField(max_digits=5, decimal_places=2, default=2.5, help_text='TP = N x ATR')
+
+    # Parametros flexibles por estrategia
+    parameters       = models.JSONField(default=dict, blank=True)
+
+    # Estadisticas acumuladas
+    total_trades     = models.IntegerField(default=0)
+    winning_trades   = models.IntegerField(default=0)
+    total_pnl_usdt   = models.DecimalField(max_digits=20, decimal_places=4, default=0)
+    last_error       = models.TextField(null=True, blank=True)
+
+    created_at       = models.DateTimeField(auto_now_add=True)
+    updated_at       = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Scalping Bot'
+        verbose_name_plural = 'Scalping Bots'
+
+    def __str__(self):
+        mode = 'LIVE' if self.is_live else 'SIM'
+        return f'{self.name} [{self.strategy_type} {self.timeframe}] ({mode})'
+
+    @property
+    def win_rate(self):
+        if self.total_trades == 0:
+            return 0.0
+        return round((self.winning_trades / self.total_trades) * 100, 1)
+
+
+class ScalpingTrade(models.Model):
+    """Trade individual ejecutado por un ScalpingBot."""
+
+    STATUS_CHOICES = [
+        ('OPEN',          'Abierta'),
+        ('CLOSED_TP',     'Cerrada (Take Profit)'),
+        ('CLOSED_SL',     'Cerrada (Stop Loss)'),
+        ('CLOSED_MANUAL', 'Cerrada (Manual)'),
+    ]
+
+    bot                 = models.ForeignKey(ScalpingBot, on_delete=models.CASCADE, related_name='trades')
+    side                = models.CharField(max_length=4, choices=[('BUY', 'Buy'), ('SELL', 'Sell')])
+    entry_price         = models.DecimalField(max_digits=20, decimal_places=8)
+    exit_price          = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    stop_loss           = models.DecimalField(max_digits=20, decimal_places=8)
+    take_profit         = models.DecimalField(max_digits=20, decimal_places=8)
+    quantity            = models.DecimalField(max_digits=20, decimal_places=8)
+    pnl_usdt            = models.DecimalField(max_digits=20, decimal_places=4, default=0)
+    pnl_pct             = models.DecimalField(max_digits=10, decimal_places=4, default=0)
+    status              = models.CharField(max_length=20, choices=STATUS_CHOICES, default='OPEN')
+    entry_order_id      = models.CharField(max_length=100, null=True, blank=True)
+    exit_order_id       = models.CharField(max_length=100, null=True, blank=True)
+    indicators_snapshot = models.JSONField(null=True, blank=True)
+    entry_time          = models.DateTimeField(auto_now_add=True)
+    exit_time           = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-entry_time']
+
+    def __str__(self):
+        return f'{self.side} {self.bot.pair} @ {self.entry_price} ({self.status})'
+
+
+class ScalpAlert(models.Model):
+    """Alerta de oportunidad generada por el scanner de scalping."""
+
+    pair                = models.ForeignKey('Pair', on_delete=models.CASCADE, related_name='scalp_alerts')
+    timeframe           = models.CharField(max_length=5, default='5m')
+    strategy            = models.CharField(max_length=20)
+    signal_type         = models.CharField(max_length=4, choices=[('BUY', 'Compra'), ('SELL', 'Venta')])
+    price_at_alert      = models.DecimalField(max_digits=20, decimal_places=8)
+    suggested_sl        = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    suggested_tp        = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    confidence          = models.FloatField(default=0.0)
+    indicators_snapshot = models.JSONField(null=True, blank=True)
+    telegram_sent       = models.BooleanField(default=False)
+    is_active           = models.BooleanField(default=True)
+    created_at          = models.DateTimeField(auto_now_add=True)
+    expires_at          = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Scalp Alert'
+        verbose_name_plural = 'Scalp Alerts'
+
+    def __str__(self):
+        return f'{self.signal_type} {self.pair} [{self.strategy}] conf={self.confidence:.0%}'
+
+
+class PairScanResult(models.Model):
+    """Ranking de oportunidades de scalping generado por el scanner."""
+
+    pair                 = models.ForeignKey('Pair', on_delete=models.CASCADE, related_name='scan_results')
+    timeframe            = models.CharField(max_length=5, default='5m')
+    scanned_at           = models.DateTimeField(auto_now_add=True)
+
+    # Scores 0-100
+    volatility_score     = models.FloatField(default=0)
+    volume_score         = models.FloatField(default=0)
+    trend_score          = models.FloatField(default=0)
+    signal_score         = models.FloatField(default=0)
+    total_score          = models.FloatField(default=0)
+
+    # Snapshot de mercado
+    current_price        = models.DecimalField(max_digits=20, decimal_places=8, null=True)
+    atr_pct              = models.FloatField(null=True, help_text='ATR como % del precio')
+    volume_24h_usdt      = models.FloatField(null=True)
+    adx_value            = models.FloatField(null=True)
+
+    signals_found        = models.JSONField(default=list)
+    recommended_strategy = models.CharField(max_length=20, null=True, blank=True)
+
+    class Meta:
+        ordering = ['-total_score', '-scanned_at']
+        verbose_name = 'Pair Scan Result'
+        verbose_name_plural = 'Pair Scan Results'
+
+    def __str__(self):
+        return f'{self.pair} score={self.total_score:.1f} @ {self.scanned_at.strftime("%H:%M")}'

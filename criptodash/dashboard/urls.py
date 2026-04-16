@@ -65,6 +65,18 @@ urlpatterns = [
     path('bots/risk-settings/', views.update_risk_settings, name='update_risk_settings'),
     path('bots/test-telegram/', views.test_telegram_view, name='test_telegram_view'),
 
+    # ── SCALPING MODULE ──────────────────────────────────────────
+    path('scalping/', views.scalping_dashboard, name='scalping_dashboard'),
+    path('scalping/bots/create/', views.scalping_create_bot, name='scalping_create_bot'),
+    path('scalping/bots/<int:bot_id>/action/', views.scalping_bot_action, name='scalping_bot_action'),
+    path('scalping/trades/<int:trade_id>/close/', views.scalping_close_trade, name='scalping_close_trade'),
+    path('scalping/alerts/<int:alert_id>/dismiss/', views.scalping_dismiss_alert, name='scalping_dismiss_alert'),
+    path('scalping/scan/', views.scalping_trigger_scan, name='scalping_trigger_scan'),
+    # API endpoints (polling)
+    path('scalping/api/alerts/', views.scalping_api_alerts, name='scalping_api_alerts'),
+    path('scalping/api/scan-results/', views.scalping_api_scan_results, name='scalping_api_scan_results'),
+    path('scalping/api/bot-stats/', views.scalping_api_bot_stats, name='scalping_api_bot_stats'),
+
     # REST API V1
     path('api/v1/', include(router.urls)),
     path('api/v1/token/', api_views.CustomObtainAuthToken.as_view(), name='api_token'),

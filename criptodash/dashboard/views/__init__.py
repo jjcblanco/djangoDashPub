@@ -73,6 +73,19 @@ from .shadow_views import (
     whale_live_prices,
 )
 
+# Importar vistas de scalping
+from .scalping_views import (
+    scalping_dashboard,
+    scalping_api_alerts,
+    scalping_api_scan_results,
+    scalping_api_bot_stats,
+    scalping_create_bot,
+    scalping_bot_action,
+    scalping_dismiss_alert,
+    scalping_trigger_scan,
+    scalping_close_trade,
+)
+
 # Importar vistas de datos
 from .data_views import import_data
 
@@ -150,6 +163,17 @@ __all__ = [
     'bulk_import_whales',
     'simulate_whale_trade',
     'close_shadow_trade',
+
+    # Scalping views
+    'scalping_dashboard',
+    'scalping_api_alerts',
+    'scalping_api_scan_results',
+    'scalping_api_bot_stats',
+    'scalping_create_bot',
+    'scalping_bot_action',
+    'scalping_dismiss_alert',
+    'scalping_trigger_scan',
+    'scalping_close_trade',
 
     # Dash app
     'app',
