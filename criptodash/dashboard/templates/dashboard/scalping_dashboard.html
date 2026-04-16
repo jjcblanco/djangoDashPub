@@ -1,0 +1,878 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scalping Dashboard | CriptoDash</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary:   #0a0d14;
+            --bg-card:      #111520;
+            --bg-card2:     #161c2d;
+            --border:       rgba(99,179,237,0.1);
+            --accent:       #63b3ed;
+            --accent2:      #9f7aea;
+            --green:        #48bb78;
+            --red:          #fc8181;
+            --yellow:       #f6e05e;
+            --text:         #e2e8f0;
+            --text-muted:   #718096;
+            --text-dim:     #4a5568;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            background: var(--bg-primary);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+        }
+        /* ── HEADER ── */
+        .header {
+            background: linear-gradient(135deg, #0f1629 0%, #1a1040 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky; top: 0; z-index: 100;
+        }
+        .header-left { display: flex; align-items: center; gap: 1rem; }
+        .logo { font-size: 1.4rem; font-weight: 800;
+            background: linear-gradient(135deg, #63b3ed, #9f7aea);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .badge-live { background: var(--red); color: #fff; font-size: 0.6rem;
+            padding: 2px 6px; border-radius: 4px; font-weight: 700;
+            animation: pulse-badge 1.5s infinite; }
+        @keyframes pulse-badge { 0%,100%{opacity:1} 50%{opacity:.5} }
+        .nav-back { color: var(--text-muted); text-decoration: none; font-size: 0.85rem;
+            display: flex; align-items: center; gap: .4rem; transition: color .2s; }
+        .nav-back:hover { color: var(--accent); }
+        .header-right { display: flex; align-items: center; gap: 1rem; }
+        .scan-status { font-size: 0.75rem; color: var(--text-muted); }
+        .scan-status span { color: var(--green); }
+        /* ── LAYOUT ── */
+        .container { max-width: 1600px; margin: 0 auto; padding: 1.5rem 2rem; }
+        .grid-main { display: grid; grid-template-columns: 1fr 380px; gap: 1.5rem; }
+        .grid-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.5rem; }
+        /* ── CARDS ── */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        .card-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            background: rgba(255,255,255,0.02);
+        }
+        .card-title { font-size: 0.85rem; font-weight: 600; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: .08em; display: flex; align-items: center; gap: .5rem; }
+        .card-body { padding: 1.25rem; }
+        /* ── STAT CARDS ── */
+        .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.2rem 1.4rem;
+            position: relative; overflow: hidden;
+        }
+        .stat-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+        }
+        .stat-card.blue::before  { background: linear-gradient(90deg,#63b3ed,#4299e1); }
+        .stat-card.green::before { background: linear-gradient(90deg,#48bb78,#38a169); }
+        .stat-card.purple::before{ background: linear-gradient(90deg,#9f7aea,#805ad5); }
+        .stat-card.yellow::before{ background: linear-gradient(90deg,#f6e05e,#ecc94b); }
+        .stat-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+        .stat-value { font-size: 1.8rem; font-weight: 700; margin-top: .3rem; font-family: 'JetBrains Mono', monospace; }
+        .stat-value.green { color: var(--green); }
+        .stat-value.red   { color: var(--red); }
+        .stat-sub { font-size: 0.72rem; color: var(--text-dim); margin-top: .2rem; }
+        /* ── PAIR TABLE ── */
+        .pair-table { width: 100%; border-collapse: collapse; }
+        .pair-table th { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;
+            letter-spacing: .06em; padding: .6rem .8rem; text-align: left;
+            border-bottom: 1px solid var(--border); font-weight: 500; }
+        .pair-table td { padding: .65rem .8rem; border-bottom: 1px solid rgba(255,255,255,0.03);
+            font-size: 0.83rem; vertical-align: middle; }
+        .pair-table tr:hover td { background: rgba(99,179,237,0.04); }
+        .pair-table tr:last-child td { border-bottom: none; }
+        .symbol-cell { font-family: 'JetBrains Mono', monospace; font-weight: 600;
+            color: var(--accent); font-size: 0.9rem; }
+        /* Score bars */
+        .score-bar-wrap { display: flex; align-items: center; gap: .5rem; }
+        .score-bar { height: 5px; border-radius: 3px; flex: 1;
+            background: rgba(255,255,255,0.07); overflow: hidden; }
+        .score-bar-fill { height: 100%; border-radius: 3px; transition: width .5s ease; }
+        .score-num { font-size: 0.78rem; font-family: 'JetBrains Mono', monospace;
+            color: var(--text-muted); width: 28px; text-align: right; }
+        .score-fill-high   { background: linear-gradient(90deg, #48bb78, #38a169); }
+        .score-fill-medium { background: linear-gradient(90deg, #f6e05e, #ecc94b); }
+        .score-fill-low    { background: linear-gradient(90deg, #fc8181, #e53e3e); }
+        .badge-strategy { font-size: 0.68rem; padding: 2px 7px; border-radius: 4px;
+            font-weight: 600; letter-spacing: .04em; }
+        .badge-ema    { background: rgba(99,179,237,0.15); color: var(--accent); }
+        .badge-bb     { background: rgba(159,122,234,0.15); color: var(--accent2); }
+        .badge-vwap   { background: rgba(72,187,120,0.15); color: var(--green); }
+        .badge-signal-buy  { background: rgba(72,187,120,0.2); color: var(--green);
+            font-size: 0.72rem; padding: 2px 8px; border-radius: 4px; font-weight: 700; }
+        .badge-signal-sell { background: rgba(252,129,129,0.2); color: var(--red);
+            font-size: 0.72rem; padding: 2px 8px; border-radius: 4px; font-weight: 700; }
+        /* ── ALERTS FEED ── */
+        .alert-feed { display: flex; flex-direction: column; gap: .75rem; max-height: 480px; overflow-y: auto; }
+        .alert-feed::-webkit-scrollbar { width: 4px; }
+        .alert-feed::-webkit-scrollbar-track { background: transparent; }
+        .alert-feed::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .alert-item {
+            background: var(--bg-card2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: .9rem 1rem;
+            position: relative;
+            transition: transform .15s, box-shadow .15s;
+            cursor: pointer;
+        }
+        .alert-item:hover { transform: translateX(-2px); box-shadow: 2px 0 12px rgba(99,179,237,0.1); }
+        .alert-item.buy-alert  { border-left: 3px solid var(--green); }
+        .alert-item.sell-alert { border-left: 3px solid var(--red); }
+        .alert-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .5rem; }
+        .alert-pair { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 0.9rem; }
+        .alert-signal { font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+        .signal-buy  { background: rgba(72,187,120,0.2);  color: var(--green); }
+        .signal-sell { background: rgba(252,129,129,0.2); color: var(--red); }
+        .alert-body { font-size: 0.78rem; color: var(--text-muted); display: grid;
+            grid-template-columns: 1fr 1fr; gap: .25rem; }
+        .alert-body span { font-family: 'JetBrains Mono', monospace; color: var(--text); }
+        .alert-conf { position: absolute; top: .7rem; right: 2.5rem;
+            font-size: 0.72rem; color: var(--text-dim); }
+        .alert-dismiss { position: absolute; top: .5rem; right: .5rem;
+            background: none; border: none; color: var(--text-dim);
+            cursor: pointer; font-size: 1rem; line-height: 1;
+            transition: color .2s; padding: .2rem; }
+        .alert-dismiss:hover { color: var(--red); }
+        .conf-bar { height: 3px; background: rgba(255,255,255,0.06); border-radius: 2px;
+            margin-top: .5rem; overflow: hidden; }
+        .conf-fill { height: 100%; border-radius: 2px;
+            background: linear-gradient(90deg, #9f7aea, #63b3ed); }
+        /* ── BOT CARDS ── */
+        .bots-grid { display: flex; flex-direction: column; gap: .8rem; }
+        .bot-card {
+            background: var(--bg-card2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem 1.1rem;
+            transition: box-shadow .2s;
+        }
+        .bot-card:hover { box-shadow: 0 0 20px rgba(99,179,237,0.08); }
+        .bot-header { display: flex; align-items: center; justify-content: space-between; }
+        .bot-name { font-weight: 600; font-size: 0.9rem; }
+        .bot-mode-live { background: rgba(252,129,129,0.2); color: var(--red);
+            font-size: 0.65rem; padding: 2px 7px; border-radius: 4px; font-weight: 700; }
+        .bot-mode-sim  { background: rgba(246,224,94,0.15); color: var(--yellow);
+            font-size: 0.65rem; padding: 2px 7px; border-radius: 4px; font-weight: 700; }
+        .bot-status-badge {
+            font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; font-weight: 600;
+        }
+        .status-running { background: rgba(72,187,120,0.2); color: var(--green); }
+        .status-paused  { background: rgba(246,224,94,0.15); color: var(--yellow); }
+        .status-stopped { background: rgba(255,255,255,0.07); color: var(--text-muted); }
+        .status-error   { background: rgba(252,129,129,0.2); color: var(--red); }
+        .bot-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: .5rem;
+            margin-top: .7rem; }
+        .bot-stat { text-align: center; }
+        .bot-stat-val { font-size: 0.9rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+        .bot-stat-lbl { font-size: 0.65rem; color: var(--text-muted); margin-top: 1px; }
+        .bot-actions { display: flex; gap: .4rem; margin-top: .75rem; flex-wrap: wrap; }
+        .btn { border: none; border-radius: 7px; padding: .35rem .8rem;
+            font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all .2s; }
+        .btn-start  { background: rgba(72,187,120,0.2);  color: var(--green); }
+        .btn-pause  { background: rgba(246,224,94,0.15); color: var(--yellow); }
+        .btn-stop   { background: rgba(255,255,255,0.07); color: var(--text-muted); }
+        .btn-live   { background: rgba(252,129,129,0.15); color: var(--red); }
+        .btn-delete { background: rgba(252,129,129,0.10); color: var(--red); }
+        .btn-primary { background: linear-gradient(135deg, #4299e1, #805ad5);
+            color: #fff; padding: .5rem 1.1rem; font-size: 0.82rem; border-radius: 8px; }
+        .btn:hover { filter: brightness(1.2); transform: translateY(-1px); }
+        /* ── TRADES TABLE ── */
+        .trades-table { width: 100%; border-collapse: collapse; }
+        .trades-table th { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;
+            letter-spacing: .05em; padding: .5rem .8rem; border-bottom: 1px solid var(--border); }
+        .trades-table td { padding: .6rem .8rem; border-bottom: 1px solid rgba(255,255,255,0.03);
+            font-size: 0.8rem; }
+        .trades-table tr:hover td { background: rgba(255,255,255,0.02); }
+        .trades-table tr:last-child td { border-bottom: none; }
+        .pnl-pos { color: var(--green); font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+        .pnl-neg { color: var(--red);   font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+        .trade-open { color: var(--yellow); font-size: 0.72rem; }
+        /* ── MODAL ── */
+        .modal-overlay { display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.7); z-index: 1000;
+            align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        .modal-overlay.active { display: flex; }
+        .modal { background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 16px; width: 480px; max-width: 95vw; padding: 1.5rem; }
+        .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 1.2rem;
+            background: linear-gradient(135deg,#63b3ed,#9f7aea);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .form-group { margin-bottom: 1rem; }
+        .form-label { font-size: 0.78rem; color: var(--text-muted); margin-bottom: .35rem;
+            display: block; font-weight: 500; }
+        .form-control { width: 100%; background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border); border-radius: 8px;
+            color: var(--text); padding: .55rem .8rem; font-size: 0.85rem;
+            font-family: 'Inter', sans-serif; transition: border-color .2s; }
+        .form-control:focus { outline: none; border-color: var(--accent); }
+        select.form-control option { background: var(--bg-card); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+        .modal-actions { display: flex; gap: .75rem; margin-top: 1.25rem; justify-content: flex-end; }
+        .btn-cancel { background: rgba(255,255,255,0.07); color: var(--text-muted);
+            border: none; border-radius: 8px; padding: .5rem 1rem; cursor: pointer;
+            font-size: 0.83rem; font-weight: 500; }
+        /* ── EMPTY STATE ── */
+        .empty { text-align: center; padding: 2rem; color: var(--text-muted); }
+        .empty-icon { font-size: 2.5rem; margin-bottom: .5rem; opacity: .4; }
+        .empty p { font-size: 0.85rem; }
+        /* ── REFRESH INDICATOR ── */
+        .refresh-dot { width: 7px; height: 7px; border-radius: 50%;
+            background: var(--green); display: inline-block;
+            animation: blink 2s infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+        /* ── SCORE COLOR ── */
+        .score-high   { color: var(--green); font-weight: 700; }
+        .score-medium { color: var(--yellow); font-weight: 600; }
+        .score-low    { color: var(--text-muted); }
+        /* ── ADX pill ── */
+        .adx-pill { font-size: 0.7rem; padding: 1px 6px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; }
+        .adx-strong { background: rgba(72,187,120,.2); color: var(--green); }
+        .adx-medium { background: rgba(246,224,94,.15); color: var(--yellow); }
+        .adx-weak   { background: rgba(255,255,255,.06); color: var(--text-muted); }
+        /* ── Scan button ── */
+        .btn-scan { background: linear-gradient(135deg,#2d3748,#1a202c);
+            border: 1px solid var(--border); color: var(--accent); border-radius: 8px;
+            padding: .4rem .9rem; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+            display: flex; align-items: center; gap: .4rem; transition: all .2s; }
+        .btn-scan:hover { border-color: var(--accent); background: rgba(99,179,237,0.08); }
+        .btn-scan.scanning { opacity: .6; cursor: not-allowed; }
+        @media (max-width: 1200px) {
+            .grid-main { grid-template-columns: 1fr; }
+            .grid-bottom { grid-template-columns: 1fr; }
+            .stats-row { grid-template-columns: repeat(2,1fr); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+    <div class="header-left">
+        <a href="{% url 'bot_dashboard' %}" class="nav-back">← Volver</a>
+        <div class="logo">⚡ Scalping</div>
+        <span class="badge-live">BETA</span>
+    </div>
+    <div class="header-right">
+        <div class="scan-status">
+            <span class="refresh-dot"></span>
+            Último scan:
+            <span id="last-scan-time">{% if last_scan %}{{ last_scan|date:"H:i:s" }}{% else %}–{% endif %}</span>
+        </div>
+        <button class="btn-scan" id="btn-trigger-scan" onclick="triggerScan()">
+            🔍 Escanear Ahora
+        </button>
+        <button class="btn btn-primary" onclick="openCreateModal()">+ Nuevo Bot</button>
+    </div>
+</header>
+
+<div class="container">
+
+    <!-- STATS ROW -->
+    <div class="stats-row">
+        <div class="stat-card blue">
+            <div class="stat-label">Total Trades</div>
+            <div class="stat-value">{{ global_stats.total_trades|default:0 }}</div>
+            <div class="stat-sub">Acumulados</div>
+        </div>
+        <div class="stat-card green">
+            <div class="stat-label">PnL Total</div>
+            <div class="stat-value {% if global_stats.total_pnl|default:0 >= 0 %}green{% else %}red{% endif %}">
+                {{ global_stats.total_pnl|default:0|floatformat:2 }}
+            </div>
+            <div class="stat-sub">USDT acumulado</div>
+        </div>
+        <div class="stat-card purple">
+            <div class="stat-label">Bots Activos</div>
+            <div class="stat-value">{{ bots|length }}</div>
+            <div class="stat-sub">configurados</div>
+        </div>
+        <div class="stat-card yellow">
+            <div class="stat-label">Alertas Activas</div>
+            <div class="stat-value" id="alerts-count">{{ active_alerts|length }}</div>
+            <div class="stat-sub">últimas 2h</div>
+        </div>
+    </div>
+
+    <!-- MAIN GRID -->
+    <div class="grid-main">
+
+        <!-- LEFT: PAIR SCANNER TABLE -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">🏆 Top Oportunidades de Scalping</div>
+                <div style="display:flex;gap:.5rem;align-items:center;">
+                    <select id="tf-select" class="form-control" style="width:80px;padding:.3rem .5rem;font-size:.75rem;" onchange="triggerScan()">
+                        <option value="1m">1m</option>
+                        <option value="3m">3m</option>
+                        <option value="5m" selected>5m</option>
+                        <option value="15m">15m</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body" style="padding:0;">
+                <div id="pairs-table-wrap">
+                    {% if top_pairs %}
+                    <table class="pair-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Par</th>
+                                <th>Precio</th>
+                                <th>Score Total</th>
+                                <th>Volatilidad</th>
+                                <th>Volumen</th>
+                                <th>Tendencia</th>
+                                <th>Señal</th>
+                                <th>Estrategia</th>
+                                <th>ADX</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pairs-tbody">
+                        {% for r in top_pairs %}
+                            <tr>
+                                <td style="color:var(--text-dim);font-size:.8rem;">{{ forloop.counter }}</td>
+                                <td class="symbol-cell">{{ r.pair.symbol }}</td>
+                                <td style="font-family:'JetBrains Mono',monospace;font-size:.82rem;">
+                                    ${{ r.current_price|floatformat:4 }}
+                                </td>
+                                <td>
+                                    {% if r.total_score >= 70 %}
+                                        <span class="score-high">{{ r.total_score|floatformat:1 }}</span>
+                                    {% elif r.total_score >= 45 %}
+                                        <span class="score-medium">{{ r.total_score|floatformat:1 }}</span>
+                                    {% else %}
+                                        <span class="score-low">{{ r.total_score|floatformat:1 }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="score-bar-wrap">
+                                        <div class="score-bar">
+                                            <div class="score-bar-fill {% if r.volatility_score >= 70 %}score-fill-high{% elif r.volatility_score >= 45 %}score-fill-medium{% else %}score-fill-low{% endif %}"
+                                                style="width:{{ r.volatility_score }}%"></div>
+                                        </div>
+                                        <span class="score-num">{{ r.volatility_score|floatformat:0 }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="score-bar-wrap">
+                                        <div class="score-bar">
+                                            <div class="score-bar-fill {% if r.volume_score >= 70 %}score-fill-high{% elif r.volume_score >= 45 %}score-fill-medium{% else %}score-fill-low{% endif %}"
+                                                style="width:{{ r.volume_score }}%"></div>
+                                        </div>
+                                        <span class="score-num">{{ r.volume_score|floatformat:0 }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="score-bar-wrap">
+                                        <div class="score-bar">
+                                            <div class="score-bar-fill {% if r.trend_score >= 70 %}score-fill-high{% elif r.trend_score >= 45 %}score-fill-medium{% else %}score-fill-low{% endif %}"
+                                                style="width:{{ r.trend_score }}%"></div>
+                                        </div>
+                                        <span class="score-num">{{ r.trend_score|floatformat:0 }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if r.signals_found %}
+                                        {% with sig=r.signals_found.0 %}
+                                            {% if sig.signal == 'BUY' %}
+                                                <span class="badge-signal-buy">▲ BUY</span>
+                                            {% else %}
+                                                <span class="badge-signal-sell">▼ SELL</span>
+                                            {% endif %}
+                                        {% endwith %}
+                                    {% else %}
+                                        <span style="color:var(--text-dim);font-size:.75rem;">–</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if r.recommended_strategy == 'EMA_CROSS' %}
+                                        <span class="badge-strategy badge-ema">EMA</span>
+                                    {% elif r.recommended_strategy == 'BB_SQUEEZE' %}
+                                        <span class="badge-strategy badge-bb">BB</span>
+                                    {% elif r.recommended_strategy == 'VWAP_RSI' %}
+                                        <span class="badge-strategy badge-vwap">VWAP</span>
+                                    {% else %}
+                                        <span style="color:var(--text-dim);font-size:.75rem;">–</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if r.adx_value %}
+                                        {% if r.adx_value >= 30 %}
+                                            <span class="adx-pill adx-strong">{{ r.adx_value|floatformat:0 }}</span>
+                                        {% elif r.adx_value >= 20 %}
+                                            <span class="adx-pill adx-medium">{{ r.adx_value|floatformat:0 }}</span>
+                                        {% else %}
+                                            <span class="adx-pill adx-weak">{{ r.adx_value|floatformat:0 }}</span>
+                                        {% endif %}
+                                    {% else %}–{% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="empty">
+                        <div class="empty-icon">🔍</div>
+                        <p>Sin resultados aún. Haz clic en <strong>Escanear Ahora</strong> para analizar los pares.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT: ALERTS FEED -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">🔔 Alertas de Señal</div>
+                <span id="alerts-count-badge" style="background:rgba(99,179,237,.15);color:var(--accent);
+                    font-size:.7rem;padding:2px 7px;border-radius:4px;font-weight:600;">
+                    {{ active_alerts|length }}
+                </span>
+            </div>
+            <div class="card-body" style="padding:.75rem;">
+                <div class="alert-feed" id="alerts-feed">
+                    {% for alert in active_alerts %}
+                    <div class="alert-item {% if alert.signal_type == 'BUY' %}buy-alert{% else %}sell-alert{% endif %}"
+                         id="alert-{{ alert.id }}">
+                        <div class="alert-header">
+                            <span class="alert-pair">{{ alert.pair.symbol }}</span>
+                            <span class="alert-signal {% if alert.signal_type == 'BUY' %}signal-buy{% else %}signal-sell{% endif %}">
+                                {% if alert.signal_type == 'BUY' %}▲ BUY{% else %}▼ SELL{% endif %}
+                            </span>
+                        </div>
+                        <div class="alert-conf">{{ alert.confidence|floatformat:0 }}%</div>
+                        <button class="alert-dismiss" onclick="dismissAlert({{ alert.id }})" title="Desestimar">✕</button>
+                        <div class="alert-body">
+                            <div>💵 Precio: <span>${{ alert.price_at_alert|floatformat:6 }}</span></div>
+                            <div>🎯 TP: <span>{% if alert.suggested_tp %}${{ alert.suggested_tp|floatformat:6 }}{% else %}–{% endif %}</span></div>
+                            <div>🛑 SL: <span>{% if alert.suggested_sl %}${{ alert.suggested_sl|floatformat:6 }}{% else %}–{% endif %}</span></div>
+                            <div>⏱ TF: <span>{{ alert.timeframe }}</span></div>
+                        </div>
+                        <div class="conf-bar">
+                            <div class="conf-fill" style="width:{{ alert.confidence|floatformat:0 }}%"></div>
+                        </div>
+                        <div style="margin-top:.4rem;font-size:.68rem;color:var(--text-dim);">
+                            {{ alert.strategy }} · {{ alert.created_at|date:"H:i:s" }}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="empty" style="padding:1.5rem;">
+                        <div class="empty-icon">🔕</div>
+                        <p>Sin alertas activas. Las señales aparecerán automáticamente.</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM GRID -->
+    <div class="grid-bottom">
+
+        <!-- MIS BOTS -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">🤖 Mis Bots de Scalping</div>
+                <button class="btn btn-primary" style="font-size:.72rem;padding:.3rem .8rem;"
+                    onclick="openCreateModal()">+ Nuevo</button>
+            </div>
+            <div class="card-body">
+                <div class="bots-grid" id="bots-grid">
+                {% for bot in bots %}
+                    <div class="bot-card" id="botcard-{{ bot.id }}">
+                        <div class="bot-header">
+                            <div>
+                                <span class="bot-name">{{ bot.name }}</span>
+                                <span style="color:var(--text-muted);font-size:.75rem;margin-left:.4rem;">
+                                    {{ bot.pair.symbol }} [{{ bot.timeframe }}]
+                                </span>
+                            </div>
+                            <div style="display:flex;gap:.4rem;align-items:center;">
+                                {% if bot.is_live %}
+                                    <span class="bot-mode-live">LIVE</span>
+                                {% else %}
+                                    <span class="bot-mode-sim">SIM</span>
+                                {% endif %}
+                                <span class="bot-status-badge status-{{ bot.status|lower }}">{{ bot.status }}</span>
+                            </div>
+                        </div>
+                        <div style="font-size:.72rem;color:var(--text-dim);margin-top:.3rem;">
+                            {{ bot.get_strategy_type_display }}
+                            · SL×{{ bot.sl_atr_mult }} / TP×{{ bot.tp_atr_mult }} ATR
+                            · Capital {{ bot.capital_usdt }} USDT
+                        </div>
+                        <div class="bot-stats">
+                            <div class="bot-stat">
+                                <div class="bot-stat-val">{{ bot.total_trades }}</div>
+                                <div class="bot-stat-lbl">Trades</div>
+                            </div>
+                            <div class="bot-stat">
+                                <div class="bot-stat-val {% if bot.win_rate >= 50 %}pnl-pos{% else %}pnl-neg{% endif %}">
+                                    {{ bot.win_rate }}%
+                                </div>
+                                <div class="bot-stat-lbl">Win Rate</div>
+                            </div>
+                            <div class="bot-stat">
+                                <div class="bot-stat-val {% if bot.total_pnl_usdt >= 0 %}pnl-pos{% else %}pnl-neg{% endif %}">
+                                    {{ bot.total_pnl_usdt|floatformat:2 }}
+                                </div>
+                                <div class="bot-stat-lbl">PnL USDT</div>
+                            </div>
+                        </div>
+                        {% if bot.last_error %}
+                        <div style="font-size:.7rem;color:var(--red);margin-top:.4rem;background:rgba(252,129,129,.08);
+                            padding:.3rem .5rem;border-radius:4px;">⚠ {{ bot.last_error|truncatechars:80 }}</div>
+                        {% endif %}
+                        <div class="bot-actions">
+                            {% if bot.status != 'RUNNING' %}
+                            <button class="btn btn-start" onclick="botAction({{ bot.id }}, 'start')">▶ Start</button>
+                            {% endif %}
+                            {% if bot.status == 'RUNNING' %}
+                            <button class="btn btn-pause" onclick="botAction({{ bot.id }}, 'pause')">⏸ Pausa</button>
+                            <button class="btn btn-stop"  onclick="botAction({{ bot.id }}, 'stop')">⏹ Stop</button>
+                            {% endif %}
+                            <button class="btn {% if bot.is_live %}btn-stop{% else %}btn-live{% endif %}"
+                                onclick="botAction({{ bot.id }}, 'toggle_live')">
+                                {% if bot.is_live %}→ Sim{% else %}→ Live{% endif %}
+                            </button>
+                            <button class="btn btn-delete" onclick="botAction({{ bot.id }}, 'delete')">🗑</button>
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="empty">
+                        <div class="empty-icon">🤖</div>
+                        <p>Crea tu primer bot de scalping con el botón "Nuevo".</p>
+                    </div>
+                {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- TRADES RECIENTES -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">📋 Trades Recientes (24h)</div>
+                <span style="font-size:.72rem;color:var(--text-muted);">{{ recent_trades|length }} trades</span>
+            </div>
+            <div class="card-body" style="padding:0;max-height:420px;overflow-y:auto;">
+                {% if recent_trades %}
+                <table class="trades-table">
+                    <thead>
+                        <tr>
+                            <th>Par</th>
+                            <th>Lado</th>
+                            <th>Entrada</th>
+                            <th>Salida</th>
+                            <th>PnL</th>
+                            <th>Estado</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for t in recent_trades %}
+                        <tr>
+                            <td style="font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--accent);">
+                                {{ t.bot.pair.symbol }}
+                            </td>
+                            <td>
+                                {% if t.side == 'BUY' %}
+                                    <span class="badge-signal-buy">▲ BUY</span>
+                                {% else %}
+                                    <span class="badge-signal-sell">▼ SELL</span>
+                                {% endif %}
+                            </td>
+                            <td style="font-family:'JetBrains Mono',monospace;">${{ t.entry_price|floatformat:4 }}</td>
+                            <td style="font-family:'JetBrains Mono',monospace;">
+                                {% if t.exit_price %}${{ t.exit_price|floatformat:4 }}{% else %}<span class="trade-open">Abierto</span>{% endif %}
+                            </td>
+                            <td>
+                                {% if t.status == 'OPEN' %}
+                                    <span class="trade-open">–</span>
+                                {% elif t.pnl_usdt >= 0 %}
+                                    <span class="pnl-pos">+{{ t.pnl_usdt|floatformat:2 }}</span>
+                                {% else %}
+                                    <span class="pnl-neg">{{ t.pnl_usdt|floatformat:2 }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span style="font-size:.7rem;
+                                    {% if t.status == 'CLOSED_TP' %}color:var(--green)
+                                    {% elif t.status == 'CLOSED_SL' %}color:var(--red)
+                                    {% elif t.status == 'OPEN' %}color:var(--yellow)
+                                    {% else %}color:var(--text-muted){% endif %}">
+                                    {{ t.status }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if t.status == 'OPEN' %}
+                                <button class="btn btn-stop" style="font-size:.68rem;padding:.2rem .5rem;"
+                                    onclick="closeTrade({{ t.id }})">Cerrar</button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty" style="padding:2rem;">
+                    <div class="empty-icon">📭</div>
+                    <p>Sin trades en las últimas 24 horas.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL CREAR BOT -->
+<div class="modal-overlay" id="create-modal">
+    <div class="modal">
+        <div class="modal-title">⚡ Crear Bot de Scalping</div>
+        <div class="form-group">
+            <label class="form-label">Nombre del bot</label>
+            <input type="text" id="bot-name" class="form-control" placeholder="Mi Scalp Bot BTC">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Par</label>
+                <input type="text" id="bot-pair" class="form-control" placeholder="BTC/USDT" value="BTC/USDT">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Timeframe</label>
+                <select id="bot-tf" class="form-control">
+                    <option value="1m">1 Minuto</option>
+                    <option value="3m">3 Minutos</option>
+                    <option value="5m" selected>5 Minutos</option>
+                    <option value="15m">15 Minutos</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Estrategia</label>
+            <select id="bot-strategy" class="form-control">
+                <option value="EMA_CROSS">EMA Cross (5/20) + Volumen</option>
+                <option value="BB_SQUEEZE">Bollinger Squeeze + Momentum</option>
+                <option value="VWAP_RSI">VWAP + RSI Bounce</option>
+            </select>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Capital (USDT)</label>
+                <input type="number" id="bot-capital" class="form-control" value="100" min="10">
+            </div>
+            <div class="form-group">
+                <label class="form-label">% por trade</label>
+                <input type="number" id="bot-pct" class="form-control" value="50" min="10" max="100">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">SL (× ATR)</label>
+                <input type="number" id="bot-sl" class="form-control" value="1.5" step="0.1" min="0.5">
+            </div>
+            <div class="form-group">
+                <label class="form-label">TP (× ATR)</label>
+                <input type="number" id="bot-tp" class="form-control" value="2.5" step="0.1" min="1.0">
+            </div>
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:.75rem;">
+            <input type="checkbox" id="bot-live" style="width:16px;height:16px;accent-color:var(--red);">
+            <label for="bot-live" class="form-label" style="margin:0;cursor:pointer;">
+                Modo LIVE (ejecuta en Binance real) — recomendamos empezar en simulado
+            </label>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="createBot()">Crear Bot</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const CSRF = '{{ csrf_token }}';
+
+    // ── Polling automático cada 30s ──
+    setInterval(() => {
+        refreshAlerts();
+        refreshScanResults();
+    }, 30000);
+
+    function refreshAlerts() {
+        fetch('/scalping/api/alerts/?minutes=60')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('alerts-count').textContent = data.count;
+                document.getElementById('alerts-count-badge').textContent = data.count;
+                if (data.count === 0) return;
+                const feed = document.getElementById('alerts-feed');
+                feed.innerHTML = '';
+                data.alerts.forEach(a => {
+                    const cls = a.signal === 'BUY' ? 'buy-alert' : 'sell-alert';
+                    const sigCls = a.signal === 'BUY' ? 'signal-buy' : 'signal-sell';
+                    const arrow = a.signal === 'BUY' ? '▲' : '▼';
+                    feed.innerHTML += `
+                    <div class="alert-item ${cls}" id="alert-${a.id}">
+                        <div class="alert-header">
+                            <span class="alert-pair">${a.pair}</span>
+                            <span class="alert-signal ${sigCls}">${arrow} ${a.signal}</span>
+                        </div>
+                        <div class="alert-conf">${a.confidence}%</div>
+                        <button class="alert-dismiss" onclick="dismissAlert(${a.id})">✕</button>
+                        <div class="alert-body">
+                            <div>💵 Precio: <span>$${a.price}</span></div>
+                            <div>🎯 TP: <span>${a.tp ? '$'+a.tp : '–'}</span></div>
+                            <div>🛑 SL: <span>${a.sl ? '$'+a.sl : '–'}</span></div>
+                            <div>⏱ TF: <span>${a.timeframe}</span></div>
+                        </div>
+                        <div class="conf-bar"><div class="conf-fill" style="width:${a.confidence}%"></div></div>
+                        <div style="margin-top:.4rem;font-size:.68rem;color:var(--text-dim);">
+                            ${a.strategy} · ${a.created_at}
+                        </div>
+                    </div>`;
+                });
+            }).catch(() => {});
+    }
+
+    function refreshScanResults() {
+        fetch('/scalping/api/scan-results/')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.pairs || data.pairs.length === 0) return;
+                document.getElementById('last-scan-time').textContent = data.scanned_at || '–';
+            }).catch(() => {});
+    }
+
+    // ── Escaneo manual ──
+    function triggerScan() {
+        const btn = document.getElementById('btn-trigger-scan');
+        const tf  = document.getElementById('tf-select').value;
+        btn.classList.add('scanning');
+        btn.textContent = '🔄 Escaneando...';
+        fetch('/scalping/scan/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify({timeframe: tf}),
+        }).then(r => r.json()).then(d => {
+            btn.classList.remove('scanning');
+            btn.textContent = '✅ Iniciado';
+            setTimeout(() => { btn.innerHTML = '🔍 Escanear Ahora'; }, 2500);
+        }).catch(() => {
+            btn.classList.remove('scanning');
+            btn.textContent = '🔍 Escanear Ahora';
+        });
+    }
+
+    // ── Acciones de bot ──
+    function botAction(botId, action) {
+        if (action === 'delete' && !confirm('¿Eliminar este bot y todos sus trades?')) return;
+        if (action === 'toggle_live' && !confirm('¿Cambiar modo del bot? En modo LIVE se ejecutan órdenes reales en Binance.')) return;
+
+        fetch(`/scalping/bots/${botId}/action/`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify({action}),
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                if (action === 'delete') {
+                    document.getElementById(`botcard-${botId}`)?.remove();
+                } else {
+                    alert(d.message || `Acción "${action}" ejecutada.`);
+                    location.reload();
+                }
+            } else {
+                alert('Error: ' + (d.error || 'Desconocido'));
+            }
+        });
+    }
+
+    // ── Desestimar alerta ──
+    function dismissAlert(alertId) {
+        fetch(`/scalping/alerts/${alertId}/dismiss/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': CSRF},
+        }).then(() => {
+            const el = document.getElementById(`alert-${alertId}`);
+            if (el) { el.style.opacity = '0'; el.style.transform = 'translateX(20px)';
+                setTimeout(() => el.remove(), 300); }
+        });
+    }
+
+    // ── Cerrar trade manual ──
+    function closeTrade(tradeId) {
+        if (!confirm('¿Cerrar este trade al precio actual?')) return;
+        fetch(`/scalping/trades/${tradeId}/close/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': CSRF},
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                alert(`Trade cerrado. PnL: ${d.pnl_usdt > 0 ? '+' : ''}${parseFloat(d.pnl_usdt).toFixed(2)} USDT`);
+                location.reload();
+            } else {
+                alert('Error: ' + (d.error || 'Desconocido'));
+            }
+        });
+    }
+
+    // ── Crear bot ──
+    function openCreateModal() {
+        document.getElementById('create-modal').classList.add('active');
+    }
+    function closeModal() {
+        document.getElementById('create-modal').classList.remove('active');
+    }
+    document.getElementById('create-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+
+    function createBot() {
+        const payload = {
+            name:            document.getElementById('bot-name').value || 'Scalp Bot',
+            pair:            document.getElementById('bot-pair').value.toUpperCase(),
+            strategy_type:   document.getElementById('bot-strategy').value,
+            timeframe:       document.getElementById('bot-tf').value,
+            capital_usdt:    parseFloat(document.getElementById('bot-capital').value),
+            max_position_pct:parseFloat(document.getElementById('bot-pct').value),
+            sl_atr_mult:     parseFloat(document.getElementById('bot-sl').value),
+            tp_atr_mult:     parseFloat(document.getElementById('bot-tp').value),
+            is_live:         document.getElementById('bot-live').checked,
+        };
+        fetch('/scalping/bots/create/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify(payload),
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                closeModal();
+                alert(d.message);
+                location.reload();
+            } else {
+                alert('Error: ' + (d.error || 'Desconocido'));
+            }
+        });
+    }
+</script>
+</body>
+</html>

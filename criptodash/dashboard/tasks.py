@@ -347,3 +347,267 @@ def analyze_wallet_task(wallet_id):
     except Exception as e:
         logger.error(f"[AnalyzeWallet] Error analizando wallet {wallet_id}: {e}")
 
+
+# ================================================================
+# MÓDULO DE SCALPING — TAREAS CELERY
+# ================================================================
+
+@shared_task
+def scan_scalping_pairs_task(timeframe='5m', top_n=15):
+    """
+    Escanea los pares de Binance y rankea las oportunidades de scalping.
+    Guarda PairScanResult y crea ScalpAlerts para señales de alta confianza.
+    Ejecutar cada 5 minutos via Celery Beat.
+    """
+    from dashboard.pair_scanner import scan_all_pairs, save_scan_results
+    try:
+        logger.info(f"[ScalpScanner] Iniciando escaneo {timeframe}...")
+        results = scan_all_pairs(timeframe=timeframe, top_n=top_n, run_signals=True)
+        if results:
+            save_scan_results(results, timeframe=timeframe)
+            logger.info(f"[ScalpScanner] {len(results)} pares analizados y guardados.")
+        else:
+            logger.warning("[ScalpScanner] No se obtuvieron resultados del scan.")
+        return {'scanned': len(results), 'timeframe': timeframe}
+    except Exception as e:
+        logger.error(f"[ScalpScanner] Error en scan: {e}")
+        return {'error': str(e)}
+
+
+@shared_task
+def run_scalping_bot_task(bot_id):
+    """
+    Evalúa la estrategia de un ScalpingBot y ejecuta trade si hay señal.
+    En modo simulado: crea ScalpingTrade en BD.
+    En modo live: coloca orden real en Binance via CCXT.
+    Ejecutar cada 1 minuto para cada bot activo.
+    """
+    from dashboard.models import ScalpingBot, ScalpingTrade, Pair
+    from dashboard.pair_scanner import fetch_ohlcv_df, _get_exchange
+    from dashboard.scalping_strategies import run_strategy
+    from django.utils import timezone
+
+    try:
+        bot = ScalpingBot.objects.get(id=bot_id)
+    except ScalpingBot.DoesNotExist:
+        logger.error(f"[ScalpBot] Bot {bot_id} no existe.")
+        return
+
+    if bot.status != 'RUNNING':
+        return
+
+    # Verificar que no hay trade abierto ya
+    open_trade = ScalpingTrade.objects.filter(bot=bot, status='OPEN').first()
+    if open_trade:
+        logger.debug(f"[ScalpBot] Bot {bot.name} tiene trade abierto, skip.")
+        return
+
+    try:
+        exchange = _get_exchange()
+        if not exchange:
+            raise Exception("No se pudo conectar a Binance.")
+
+        symbol = bot.pair.symbol
+        df = fetch_ohlcv_df(exchange, symbol, bot.timeframe, limit=120)
+        if df is None or len(df) < 50:
+            raise Exception(f"Datos insuficientes para {symbol}.")
+
+        result = run_strategy(
+            bot.strategy_type, df,
+            sl_atr_mult=float(bot.sl_atr_mult),
+            tp_atr_mult=float(bot.tp_atr_mult),
+            params=bot.parameters,
+        )
+
+        if not result['signal']:
+            logger.debug(f"[ScalpBot] {bot.name}: sin señal.")
+            return
+
+        signal    = result['signal']
+        price     = result['entry']
+        sl        = result['sl']
+        tp        = result['tp']
+        confidence= result['confidence']
+        indicators= result['indicators']
+
+        # Calcular cantidad
+        capital   = float(bot.capital_usdt) * float(bot.max_position_pct) / 100
+        quantity  = round(capital / price, 6)
+
+        entry_order_id = None
+
+        if bot.is_live:
+            # ── MODO LIVE: colocar orden en Binance ──
+            try:
+                side_ccxt = 'buy' if signal == 'BUY' else 'sell'
+                order = exchange.create_market_order(symbol, side_ccxt, quantity)
+                entry_order_id = str(order.get('id', ''))
+                price = float(order.get('price') or order.get('average') or price)
+                logger.info(f"[ScalpBot LIVE] Orden {side_ccxt} {quantity} {symbol} @ {price} (ID: {entry_order_id})")
+            except Exception as e:
+                logger.error(f"[ScalpBot LIVE] Error colocando orden: {e}")
+                bot.last_error = str(e)
+                bot.status = 'ERROR'
+                bot.save()
+                return
+        else:
+            logger.info(f"[ScalpBot SIM] {signal} {quantity} {symbol} @ {price} | SL={sl} TP={tp} conf={confidence:.0%}")
+
+        # Guardar trade
+        ScalpingTrade.objects.create(
+            bot                 = bot,
+            side                = signal,
+            entry_price         = price,
+            stop_loss           = sl,
+            take_profit         = tp,
+            quantity            = quantity,
+            status              = 'OPEN',
+            entry_order_id      = entry_order_id,
+            indicators_snapshot = indicators,
+        )
+
+        bot.total_trades += 1
+        bot.save(update_fields=['total_trades', 'updated_at'])
+
+        # Alerta Telegram
+        mode_txt = '🔴 LIVE' if bot.is_live else '🟡 SIM'
+        emoji = '🟢' if signal == 'BUY' else '🔴'
+        msg = (
+            f"{emoji} <b>Scalping {signal}</b> {mode_txt}\n\n"
+            f"🤖 <b>Bot:</b> {bot.name}\n"
+            f"📊 <b>Par:</b> {symbol} [{bot.timeframe}]\n"
+            f"📈 <b>Estrategia:</b> {bot.get_strategy_type_display()}\n"
+            f"💵 <b>Entrada:</b> <code>{price}</code>\n"
+            f"🛑 <b>Stop Loss:</b> <code>{sl}</code>\n"
+            f"🎯 <b>Take Profit:</b> <code>{tp}</code>\n"
+            f"📦 <b>Cantidad:</b> {quantity}\n"
+            f"🎲 <b>Confianza:</b> <code>{confidence:.0%}</code>"
+        )
+        send_telegram_message(msg)
+
+    except Exception as e:
+        logger.error(f"[ScalpBot] Bot {bot_id} error: {e}")
+        try:
+            bot.last_error = str(e)
+            bot.status = 'ERROR'
+            bot.save(update_fields=['last_error', 'status'])
+        except Exception:
+            pass
+
+
+@shared_task
+def check_scalping_positions_task():
+    """
+    Verifica SL/TP de todos los trades de scalping abiertos.
+    En modo simulado: evalúa precio actual vs SL/TP.
+    En modo live: coloca órdenes de cierre si se toca el nivel.
+    Ejecutar cada 30 segundos.
+    """
+    from dashboard.models import ScalpingTrade, ScalpingBot
+    from dashboard.pair_scanner import _get_exchange
+    from django.utils import timezone
+
+    open_trades = ScalpingTrade.objects.filter(status='OPEN').select_related('bot', 'bot__pair')
+    if not open_trades.exists():
+        return {'checked': 0}
+
+    exchange = _get_exchange()
+    if not exchange:
+        logger.error("[ScalpPositions] No se pudo conectar a Binance.")
+        return {'error': 'No exchange connection'}
+
+    checked = 0
+    closed  = 0
+
+    for trade in open_trades:
+        try:
+            symbol = trade.bot.pair.symbol
+            ticker = exchange.fetch_ticker(symbol)
+            price  = float(ticker.get('last') or ticker.get('close', 0))
+            if price <= 0:
+                continue
+
+            sl = float(trade.stop_loss)
+            tp = float(trade.take_profit)
+            ep = float(trade.entry_price)
+            qty = float(trade.quantity)
+
+            hit_tp = (trade.side == 'BUY'  and price >= tp) or (trade.side == 'SELL' and price <= tp)
+            hit_sl = (trade.side == 'BUY'  and price <= sl) or (trade.side == 'SELL' and price >= sl)
+
+            if not (hit_tp or hit_sl):
+                checked += 1
+                continue
+
+            close_reason = 'CLOSED_TP' if hit_tp else 'CLOSED_SL'
+
+            # Calcular PnL
+            if trade.side == 'BUY':
+                pnl_pct  = (price - ep) / ep * 100
+                pnl_usdt = (price - ep) * qty
+            else:
+                pnl_pct  = (ep - price) / ep * 100
+                pnl_usdt = (ep - price) * qty
+
+            exit_order_id = None
+            if trade.bot.is_live:
+                try:
+                    side_close = 'sell' if trade.side == 'BUY' else 'buy'
+                    order = exchange.create_market_order(symbol, side_close, qty)
+                    exit_order_id = str(order.get('id', ''))
+                    price = float(order.get('price') or order.get('average') or price)
+                except Exception as e:
+                    logger.error(f"[ScalpPositions LIVE] Error cerrando {symbol}: {e}")
+
+            # Actualizar trade
+            trade.exit_price    = price
+            trade.exit_time     = timezone.now()
+            trade.status        = close_reason
+            trade.pnl_usdt      = round(pnl_usdt, 4)
+            trade.pnl_pct       = round(pnl_pct, 4)
+            trade.exit_order_id = exit_order_id
+            trade.save()
+
+            # Actualizar estadísticas del bot
+            bot = trade.bot
+            bot.total_pnl_usdt += pnl_usdt
+            if pnl_usdt > 0:
+                bot.winning_trades += 1
+            bot.save(update_fields=['total_pnl_usdt', 'winning_trades'])
+
+            # Notificación Telegram
+            emoji = '✅' if hit_tp else '❌'
+            mode_txt = '🔴 LIVE' if bot.is_live else '🟡 SIM'
+            msg = (
+                f"{emoji} <b>Scalping CERRADO</b> {mode_txt}\n\n"
+                f"🤖 <b>Bot:</b> {bot.name}\n"
+                f"📊 <b>Par:</b> {symbol}\n"
+                f"{'🎯 Take Profit alcanzado' if hit_tp else '🛑 Stop Loss tocado'}\n"
+                f"💵 <b>Entrada:</b> <code>{ep}</code>\n"
+                f"💵 <b>Salida:</b> <code>{price}</code>\n"
+                f"{'📈' if pnl_usdt > 0 else '📉'} <b>PnL:</b> <code>{pnl_usdt:+.2f} USDT ({pnl_pct:+.2f}%)</code>"
+            )
+            send_telegram_message(msg)
+            closed += 1
+
+        except Exception as e:
+            logger.error(f"[ScalpPositions] Error procesando trade {trade.id}: {e}")
+
+    logger.info(f"[ScalpPositions] Chequeados: {checked + closed}, Cerrados: {closed}")
+    return {'checked': checked, 'closed': closed}
+
+
+@shared_task
+def run_all_scalping_bots_task():
+    """
+    Encola la evaluación de todos los bots de scalping activos.
+    Ejecutar cada 1 minuto via Celery Beat.
+    """
+    from dashboard.models import ScalpingBot
+    bots = ScalpingBot.objects.filter(status='RUNNING')
+    count = 0
+    for bot in bots:
+        run_scalping_bot_task.delay(bot.id)
+        count += 1
+    logger.info(f"[ScalpBots] {count} bots encolados.")
+    return {'bots_queued': count}
