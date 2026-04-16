@@ -28,8 +28,8 @@ def test_etherscan():
             print(f"❌2 Etherscan error: {data.get('message', 'Unknown')}")
             return False                                       
     except Exception as e:                                     
-        print(f"❌  Connection error: {e}")                    
-        return False                                          t     
+        print(f"❌  Connection error: {e}") 
+        return False
 def test_env():
     print("🔍 Environment check:")
     keys = ['ETH_API_KEY', 'BASE_API_KEY', 'BINANCE_APIKEY'] 
