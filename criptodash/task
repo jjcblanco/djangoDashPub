@@ -278,3 +278,10 @@ django.core.exceptions.DisallowedHost: Invalid HTTP_HOST header: 'testserver'. Y
 🔌 WEBSOCKET ENDPOINTS:
   ⚠️ No WebSocket patterns found
 sudo journalctl -u celery --since "5 minutes ago"
+
+ python -m py_compile dashboard/services.py  File "dashboard/services.py", line 172
+    returnreturn 0class HyperliquidWhaleTracker: SyntaxError: invalid decimal literal
+
+
+sudo journalctl -u celery --since "20 minutes ago" | grep -E "error|fail|exception|traceback" -A5 -B2
+sudo journalctl -u celery --since "5 minutes ago" | tail -50
