@@ -3,28 +3,28 @@ import os
 import requests
                                                                     
 def test_etherscan():                                          
-        key = os.environ.get('ETH_API_KEY')                        
-        if not key:                                                
-            print("❌  ETH_API_KEY not in environment")           t             
-            return False
+    key = os.environ.get('ETH_API_KEY')                        
+    if not key:                                                
+        print("❌  ETH_API_KEY not in environment")
+        return False
                                                                 
-        # Test with Vitalik's address
-        url = "https://api.etherscan.io/api"
-        params = {                                                 
-            'module': 'account',
-            'action': 'tokentx',
-            'address': '0x742d35Cc6634C0532925a3b844Bc9e90F1b6f1d6',                  
-            'page': 1,                                             
-            'offset': 1,                                           
-            'apikey': key                                          
-        }                                                          
+    # Test with Vitalik's address
+    url = "https://api.etherscan.io/api"
+    params = {                                                 
+        'module': 'account',
+        'action': 'tokentx',
+        'address': '0x742d35Cc6634C0532925a3b844Bc9e90F1b6f1d6',                  
+        'page': 1,                                             
+        'offset': 1,                                           
+        'apikey': key                                          
+    }                                                          
     try:
-            resp = requests.get(url, params=params, timeout=10) 
-            data = resp.json()
-            if data.get('status') == '1':
-                print(f"✅  Etherscan API working: {len(data.get('result', []))} transactions")
-                return True
-            else:
+        resp = requests.get(url, params=params, timeout=10) 
+        data = resp.json()
+        if data.get('status') == '1':
+            print(f"✅  Etherscan API working: {len(data.get('result', []))} transactions")
+            return True
+        else:
                 print(f"❌2 Etherscan error: {data.get('message', 'Unknown')}")
                 return False                                       
         except Exception as e:                                     
