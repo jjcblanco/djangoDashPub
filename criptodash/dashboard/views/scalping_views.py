@@ -304,10 +304,10 @@ def scalping_trigger_scan(request):
         exchange = _get_exchange()
         if not exchange:
             return JsonResponse({'success': False, 'error': 'No se pudo inicializar CCXT. Revisa configuraciones.'}, status=400)
-        
+
         try:
-            # Una llamada ligera que no gasta rate limit apenas
-            exchange.fetch_balance({'limit': 1})
+            # Una llamada ligera para validar las credenciales
+            exchange.fetch_balance()
         except Exception as e:
             err_str = str(e)
             if "Invalid API-key" in err_str or "code\":-2015" in err_str:
