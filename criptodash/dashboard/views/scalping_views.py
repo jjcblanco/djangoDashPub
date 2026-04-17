@@ -291,14 +291,37 @@ def scalping_dismiss_alert(request, alert_id):
 @login_required
 @require_POST
 def scalping_trigger_scan(request):
-    """Dispara un escaneo manual de pares."""
+    """
+    Dispara un escaneo manual de pares.
+    Ahora incluye una validación rápida de las claves de API antes de encolar.
+    """
     try:
         data      = json.loads(request.body) if request.body else {}
         timeframe = data.get('timeframe', '5m')
+
+        # Validación rápida de conexión para dar feedback inmediato
+        from dashboard.pair_scanner import _get_exchange
+        exchange = _get_exchange()
+        if not exchange:
+            return JsonResponse({'success': False, 'error': 'No se pudo inicializar CCXT. Revisa configuraciones.'}, status=400)
+        
+        try:
+            # Una llamada ligera que no gasta rate limit apenas
+            exchange.fetch_balance({'limit': 1})
+        except Exception as e:
+            err_str = str(e)
+            if "Invalid API-key" in err_str or "code\":-2015" in err_str:
+                return JsonResponse({
+                    'success': False, 
+                    'error': 'API Binance inválida o sin permisos (Error -2015). Revisa permisos de Spot y restricción de IP.'
+                }, status=401)
+            return JsonResponse({'success': False, 'error': f'Error de conexión: {err_str[:100]}'}, status=400)
+
         # Ejecutar de forma asíncrona via Celery
         scan_scalping_pairs_task.delay(timeframe=timeframe, top_n=15)
         return JsonResponse({'success': True, 'message': f'Escaneo {timeframe} iniciado en background.'})
     except Exception as e:
+        logger.error(f'[ScalpTrigger] Error: {e}')
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 

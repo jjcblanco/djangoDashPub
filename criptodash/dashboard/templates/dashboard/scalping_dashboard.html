@@ -770,18 +770,25 @@
         const btn = document.getElementById('btn-trigger-scan');
         const tf  = document.getElementById('tf-select').value;
         btn.classList.add('scanning');
-        btn.textContent = '🔄 Escaneando...';
+        btn.innerHTML = '🔄 Validando...';
         fetch('/scalping/scan/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
             body: JSON.stringify({timeframe: tf}),
         }).then(r => r.json()).then(d => {
             btn.classList.remove('scanning');
-            btn.textContent = '✅ Iniciado';
-            setTimeout(() => { btn.innerHTML = '🔍 Escanear Ahora'; }, 2500);
-        }).catch(() => {
+            if (d.success) {
+                btn.innerHTML = '✅ Iniciado';
+                setTimeout(() => { btn.innerHTML = '🔍 Escanear Ahora'; }, 3000);
+            } else {
+                btn.innerHTML = '❌ Error';
+                alert('Fallo al iniciar escaneo: ' + (d.error || 'Error desconocido'));
+                setTimeout(() => { btn.innerHTML = '🔍 Escanear Ahora'; }, 5000);
+            }
+        }).catch(err => {
             btn.classList.remove('scanning');
-            btn.textContent = '🔍 Escanear Ahora';
+            btn.innerHTML = '❌ Error Red';
+            setTimeout(() => { btn.innerHTML = '🔍 Escanear Ahora'; }, 3000);
         });
     }
 
