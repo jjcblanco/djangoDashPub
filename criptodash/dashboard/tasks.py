@@ -375,7 +375,7 @@ def scan_scalping_pairs_task(timeframe='5m', top_n=15):
 
 
 @shared_task
-def run_scalping_bot_task(bot_id):
+def run_scalping_bot_task(bot_id, force_eval=False):
     """
     Evalúa la estrategia de un ScalpingBot y ejecuta trade si hay señal.
     En modo simulado: crea ScalpingTrade en BD.
@@ -391,16 +391,17 @@ def run_scalping_bot_task(bot_id):
         bot = ScalpingBot.objects.get(id=bot_id)
     except ScalpingBot.DoesNotExist:
         logger.error(f"[ScalpBot] Bot {bot_id} no existe.")
-        return
+        return {'executed': False, 'reason': 'El bot no existe.'}
 
-    if bot.status != 'RUNNING':
-        return
+    if bot.status != 'RUNNING' and not force_eval:
+        return {'executed': False, 'reason': 'El bot está PAUSADO o DETENIDO. Presiona Iniciar primero.'}
+
 
     # Verificar que no hay trade abierto ya
     open_trade = ScalpingTrade.objects.filter(bot=bot, status='OPEN').first()
     if open_trade:
         logger.debug(f"[ScalpBot] Bot {bot.name} tiene trade abierto, skip.")
-        return
+        return {'executed': False, 'reason': 'Ya tiene un trade abierto activo.'}
 
     try:
         exchange = _get_exchange()
@@ -421,7 +422,7 @@ def run_scalping_bot_task(bot_id):
 
         if not result['signal']:
             logger.debug(f"[ScalpBot] {bot.name}: sin señal.")
-            return
+            return {'executed': False, 'reason': 'La estrategia (' + bot.strategy_type + ') evaluó el mercado pero NO encontró una señal fuerte de entrada en esta vela.'}
 
         signal    = result['signal']
         price     = result['entry']
@@ -449,7 +450,7 @@ def run_scalping_bot_task(bot_id):
                 bot.last_error = str(e)
                 bot.status = 'ERROR'
                 bot.save()
-                return
+                return {'executed': False, 'reason': f'Error colocando orden: {str(e)}'}
         else:
             logger.info(f"[ScalpBot SIM] {signal} {quantity} {symbol} @ {price} | SL={sl} TP={tp} conf={confidence:.0%}")
 
@@ -484,6 +485,7 @@ def run_scalping_bot_task(bot_id):
             f"🎲 <b>Confianza:</b> <code>{confidence:.0%}</code>"
         )
         send_telegram_message(msg)
+        return {'executed': True, 'reason': f"Trade {signal} ejecutado correctamente a {price} USDT."}
 
     except Exception as e:
         logger.error(f"[ScalpBot] Bot {bot_id} error: {e}")
@@ -493,6 +495,7 @@ def run_scalping_bot_task(bot_id):
             bot.save(update_fields=['last_error', 'status'])
         except Exception:
             pass
+        return {'executed': False, 'reason': f"Error interno: {str(e)}"}
 
 
 @shared_task
