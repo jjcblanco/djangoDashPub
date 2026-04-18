@@ -285,3 +285,7 @@ sudo journalctl -u celery --since "5 minutes ago"
 
 sudo journalctl -u celery --since "20 minutes ago" | grep -E "error|fail|exception|traceback" -A5 -B2
 sudo journalctl -u celery --since "5 minutes ago" | tail -50
+
+git pull origin main error: Pulling is not possible because you have unmerged files.hint: Fix them up in the work tree, and then use 'git add/rm <file>' hint: as appropriate to mark resolution and make a commit. fatal: Exiting because of an unresolved conflict.
+
+sudo journalctl -u celery --since '2 minutes ago' | grep -E "(batch|ethereum|rate limit|synced)" 

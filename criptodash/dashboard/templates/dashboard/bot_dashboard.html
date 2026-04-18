@@ -525,8 +525,15 @@
                                     {% if trade.exit_price %}
                                     ${{ trade.exit_price|floatformat:4 }}
                                     {% elif trade.status == 'OPEN' and trade.target_price %}
-                                    <span class="text-info" title="Precio Objetivo de Venta">
-                                        ${{ trade.target_price|floatformat:4 }}*
+                                    <span
+                                        data-bs-toggle="tooltip"
+                                        data-bs-placement="top"
+                                        title="Precio objetivo de venta del bot. La operación sigue ABIERTA y esperando alcanzar este precio."
+                                    >
+                                        <small class="text-muted d-block" style="font-size:0.7rem;">${{ trade.target_price|floatformat:4 }}</small>
+                                        <span class="badge bg-warning text-dark" style="font-size:0.65rem;">
+                                            <i class="fas fa-crosshairs me-1"></i>Objetivo
+                                        </span>
                                     </span>
                                     {% else %}
                                     <span class="text-muted">-</span>
@@ -592,6 +599,14 @@
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 
     <script>
+        // Inicializar tooltips de Bootstrap
+        document.addEventListener('DOMContentLoaded', function () {
+            var tooltipEls = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+            tooltipEls.forEach(function (el) {
+                new bootstrap.Tooltip(el);
+            });
+        });
+
         // Inicializar DataTables en español
         $(document).ready(function () {
             $('#activityTable').DataTable({

@@ -268,6 +268,15 @@ def scalping_bot_action(request, bot_id):
             bot.delete()
             return JsonResponse({'success': True, 'message': 'Bot eliminado.'})
 
+        elif action == 'run_now':
+            # Ejecutar el bot sincrónicamente una vez (útil si no hay Celery Beat)
+            from dashboard.tasks import run_scalping_bot_task
+            try:
+                run_scalping_bot_task(bot.id)  # llamada directa, no .delay()
+                return JsonResponse({'success': True, 'message': 'Bot ejecutado. Revisá los trades para ver si hubo señal.'})
+            except Exception as run_err:
+                return JsonResponse({'success': False, 'error': str(run_err)}, status=500)
+
         return JsonResponse({'success': False, 'error': 'Acción desconocida.'}, status=400)
 
     except Exception as e:
@@ -291,14 +300,57 @@ def scalping_dismiss_alert(request, alert_id):
 @login_required
 @require_POST
 def scalping_trigger_scan(request):
-    """Dispara un escaneo manual de pares."""
+    """
+    Dispara un escaneo manual de pares.
+    Si el body incluye sync=true, ejecuta sincrónicamente y devuelve los resultados
+    directamente en el JSON para que el frontend pueda actualizar la tabla al instante.
+    """
     try:
         data      = json.loads(request.body) if request.body else {}
         timeframe = data.get('timeframe', '5m')
-        # Ejecutar de forma asíncrona via Celery
-        scan_scalping_pairs_task.delay(timeframe=timeframe, top_n=15)
-        return JsonResponse({'success': True, 'message': f'Escaneo {timeframe} iniciado en background.'})
+        sync_mode = data.get('sync', False)
+
+        if sync_mode:
+            # ── Modo sincrónico: ejecutar en esta request y devolver resultados ──
+            from dashboard.pair_scanner import scan_all_pairs, save_scan_results
+            logger.info(f'[ScalpScan] Escaneo sincrónico {timeframe} iniciado...')
+            results = scan_all_pairs(timeframe=timeframe, top_n=15, run_signals=True)
+            if results:
+                save_scan_results(results, timeframe=timeframe)
+
+            pairs_data = []
+            for r in results:
+                signals   = r.get('signals_found', [])
+                best_sig  = signals[0] if signals else None
+                pairs_data.append({
+                    'symbol':               r['symbol'],
+                    'price':                r['price'],
+                    'total_score':          round(r['total_score'], 1),
+                    'volatility_score':     round(r['volatility_score'], 1),
+                    'volume_score':         round(r['volume_score'], 1),
+                    'trend_score':          round(r['trend_score'], 1),
+                    'signal_score':         round(r['signal_score'], 1),
+                    'atr_pct':              round(r['atr_pct'], 3) if r.get('atr_pct') else None,
+                    'adx_value':            round(r['adx_value'], 1) if r.get('adx_value') else None,
+                    'recommended_strategy': r.get('recommended_strategy'),
+                    'signals_count':        len(signals),
+                    'best_signal':          best_sig,
+                })
+
+            return JsonResponse({
+                'success':    True,
+                'sync':       True,
+                'pairs':      pairs_data,
+                'scanned_at': timezone.now().strftime('%H:%M:%S'),
+                'count':      len(pairs_data),
+            })
+        else:
+            # ── Modo asíncrono: delegar a Celery (para el beat automático) ──
+            scan_scalping_pairs_task.delay(timeframe=timeframe, top_n=15)
+            return JsonResponse({'success': True, 'sync': False, 'message': f'Escaneo {timeframe} iniciado en background.'})
+
     except Exception as e:
+        logger.error(f'[ScalpScan] Error en escaneo: {e}')
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 

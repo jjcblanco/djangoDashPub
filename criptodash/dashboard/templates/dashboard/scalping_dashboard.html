@@ -553,6 +553,8 @@
                             {% if bot.status == 'RUNNING' %}
                             <button class="btn btn-pause" onclick="botAction({{ bot.id }}, 'pause')">⏸ Pausa</button>
                             <button class="btn btn-stop"  onclick="botAction({{ bot.id }}, 'stop')">⏹ Stop</button>
+                            <button class="btn" style="background:rgba(99,179,237,0.15);color:var(--accent);"
+                                onclick="runBotNow({{ bot.id }})" title="Evalúa la estrategia ahora mismo (útil sin Celery Beat)">⚡ Ejecutar</button>
                             {% endif %}
                             <button class="btn {% if bot.is_live %}btn-stop{% else %}btn-live{% endif %}"
                                 onclick="botAction({{ bot.id }}, 'toggle_live')">
@@ -704,6 +706,25 @@
                 Modo LIVE (ejecuta en Binance real) — recomendamos empezar en simulado
             </label>
         </div>
+
+        <!-- ── CALCULADORA DE COMISIONES ── -->
+        <div id="commission-calc" style="margin-top:1rem;padding:1rem;background:rgba(255,255,255,0.03);
+            border:1px solid rgba(99,179,237,0.15);border-radius:10px;">
+            <div style="font-size:.8rem;font-weight:600;color:var(--accent);margin-bottom:.75rem;">📊 Análisis de Rentabilidad Estimada</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;font-size:.78rem;">
+                <div style="color:var(--text-muted);">💸 Comisión ida+vuelta:</div>
+                <div style="font-family:'JetBrains Mono',monospace;" id="calc-commission">– USDT</div>
+                <div style="color:var(--text-muted);">📏 Break-even mínimo:</div>
+                <div style="font-family:'JetBrains Mono',monospace;color:var(--yellow);">0.20%</div>
+                <div style="color:var(--text-muted);">🎯 R:R (TP/SL mults):</div>
+                <div style="font-family:'JetBrains Mono',monospace;" id="calc-rr">–</div>
+                <div style="color:var(--text-muted);">📐 Tamaño de posición:</div>
+                <div style="font-family:'JetBrains Mono',monospace;" id="calc-size">– USDT</div>
+            </div>
+            <div id="calc-verdict" style="margin-top:.75rem;padding:.5rem .75rem;border-radius:6px;
+                font-size:.78rem;font-weight:600;text-align:center;"></div>
+        </div>
+
         <div class="modal-actions">
             <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
             <button class="btn btn-primary" onclick="createBot()">Crear Bot</button>
@@ -762,26 +783,139 @@
             .then(data => {
                 if (!data.pairs || data.pairs.length === 0) return;
                 document.getElementById('last-scan-time').textContent = data.scanned_at || '–';
+                renderPairsTable(data.pairs, data.scanned_at);
             }).catch(() => {});
     }
 
-    // ── Escaneo manual ──
+    // ── Renderizar tabla de pares (usada por scan sincrónico y polling) ──
+    function renderPairsTable(pairs, scannedAt) {
+        if (!pairs || pairs.length === 0) return;
+        if (scannedAt) document.getElementById('last-scan-time').textContent = scannedAt;
+
+        const stratBadge = s => {
+            if (s === 'EMA_CROSS')  return '<span class="badge-strategy badge-ema">EMA</span>';
+            if (s === 'BB_SQUEEZE') return '<span class="badge-strategy badge-bb">BB</span>';
+            if (s === 'VWAP_RSI')   return '<span class="badge-strategy badge-vwap">VWAP</span>';
+            return '<span style="color:var(--text-dim);font-size:.75rem;">–</span>';
+        };
+        const scoreCls = v => v >= 70 ? 'score-high' : v >= 45 ? 'score-medium' : 'score-low';
+        const barCls   = v => v >= 70 ? 'score-fill-high' : v >= 45 ? 'score-fill-medium' : 'score-fill-low';
+        const adxBadge = v => {
+            if (!v) return '–';
+            const cls = v >= 30 ? 'adx-strong' : v >= 20 ? 'adx-medium' : 'adx-weak';
+            return `<span class="adx-pill ${cls}">${Math.round(v)}</span>`;
+        };
+        const sigBadge = sig => {
+            if (!sig) return '<span style="color:var(--text-dim);font-size:.75rem;">–</span>';
+            return sig.signal === 'BUY'
+                ? '<span class="badge-signal-buy">▲ BUY</span>'
+                : '<span class="badge-signal-sell">▼ SELL</span>';
+        };
+        const scoreBar = (val, label) =>
+            `<div class="score-bar-wrap"><div class="score-bar"><div class="score-bar-fill ${barCls(val)}" style="width:${val}%"></div></div><span class="score-num">${Math.round(val)}</span></div>`;
+
+        let rows = '';
+        pairs.forEach((r, i) => {
+            rows += `<tr>
+                <td style="color:var(--text-dim);font-size:.8rem;">${i+1}</td>
+                <td class="symbol-cell">${r.symbol}</td>
+                <td style="font-family:'JetBrains Mono',monospace;font-size:.82rem;">$${r.price ? r.price.toFixed(4) : '–'}</td>
+                <td><span class="${scoreCls(r.total_score)}">${r.total_score}</span></td>
+                <td>${scoreBar(r.volatility_score)}</td>
+                <td>${scoreBar(r.volume_score)}</td>
+                <td>${scoreBar(r.trend_score)}</td>
+                <td>${sigBadge(r.best_signal)}</td>
+                <td>${stratBadge(r.recommended_strategy)}</td>
+                <td>${adxBadge(r.adx_value)}</td>
+            </tr>`;
+        });
+
+        const wrap = document.getElementById('pairs-table-wrap');
+        wrap.innerHTML = `<table class="pair-table">
+            <thead><tr>
+                <th>#</th><th>Par</th><th>Precio</th><th>Score Total</th>
+                <th>Volatilidad</th><th>Volumen</th><th>Tendencia</th>
+                <th>Señal</th><th>Estrategia</th><th>ADX</th>
+            </tr></thead>
+            <tbody id="pairs-tbody">${rows}</tbody>
+        </table>`;
+    }
+
+    // ── Escaneo manual (sincrónico) ──
     function triggerScan() {
-        const btn = document.getElementById('btn-trigger-scan');
-        const tf  = document.getElementById('tf-select').value;
+        const btn  = document.getElementById('btn-trigger-scan');
+        const tf   = document.getElementById('tf-select').value;
+        const wrap = document.getElementById('pairs-table-wrap');
+
         btn.classList.add('scanning');
-        btn.textContent = '🔄 Escaneando...';
+        btn.innerHTML = '⏳ Escaneando...';
+        btn.disabled = true;
+
+        // Mostrar skeleton de carga en la tabla
+        wrap.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--text-muted);">
+            <div style="font-size:2rem;margin-bottom:.5rem;">🔄</div>
+            <div style="font-size:.85rem;">Analizando ${24} pares en Binance [${tf}]…</div>
+            <div style="font-size:.75rem;color:var(--text-dim);margin-top:.3rem;">
+                Puede tardar 10-20 segundos</div>
+        </div>`;
+
         fetch('/scalping/scan/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-            body: JSON.stringify({timeframe: tf}),
+            body: JSON.stringify({timeframe: tf, sync: true}),
+        })
+        .then(r => r.json())
+        .then(d => {
+            btn.classList.remove('scanning');
+            btn.disabled = false;
+
+            if (d.success && d.sync && d.pairs) {
+                btn.innerHTML = `✅ ${d.count} pares`;
+                setTimeout(() => { btn.innerHTML = '🔍 Escanear Ahora'; }, 3000);
+                renderPairsTable(d.pairs, d.scanned_at);
+                if (d.count === 0) {
+                    wrap.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div>
+                        <p>Sin pares con datos suficientes. Intenta con otro timeframe.</p></div>`;
+                }
+                // Refrescar también las alertas por si el scan generó nuevas
+                setTimeout(refreshAlerts, 1000);
+            } else if (!d.success) {
+                btn.innerHTML = '❌ Error';
+                setTimeout(() => { btn.innerHTML = '🔍 Escanear Ahora'; }, 3000);
+                wrap.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>
+                    <p>Error: ${d.error || 'No se pudo escanear. Verificá la conexión a Binance.'}</p></div>`;
+            }
+        })
+        .catch(err => {
+            btn.classList.remove('scanning');
+            btn.disabled = false;
+            btn.innerHTML = '🔍 Escanear Ahora';
+            wrap.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>
+                <p>Error de conexión. Revisá que el servidor esté corriendo.</p></div>`;
+        });
+    }
+
+    // ── Ejecutar bot manualmente ──
+    function runBotNow(botId) {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = '⏳ Ejecutando...';
+        fetch(`/scalping/bots/${botId}/action/`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify({action: 'run_now'}),
         }).then(r => r.json()).then(d => {
-            btn.classList.remove('scanning');
-            btn.textContent = '✅ Iniciado';
-            setTimeout(() => { btn.innerHTML = '🔍 Escanear Ahora'; }, 2500);
+            btn.disabled = false;
+            btn.textContent = '⚡ Ejecutar';
+            if (d.success) {
+                alert(d.message);
+                location.reload();
+            } else {
+                alert('Error: ' + (d.error || 'Desconocido'));
+            }
         }).catch(() => {
-            btn.classList.remove('scanning');
-            btn.textContent = '🔍 Escanear Ahora';
+            btn.disabled = false;
+            btn.textContent = '⚡ Ejecutar';
         });
     }
 
@@ -839,12 +973,48 @@
     // ── Crear bot ──
     function openCreateModal() {
         document.getElementById('create-modal').classList.add('active');
+        updateCommissionCalc();
     }
     function closeModal() {
         document.getElementById('create-modal').classList.remove('active');
     }
     document.getElementById('create-modal').addEventListener('click', function(e) {
         if (e.target === this) closeModal();
+    });
+
+    // ── Calculadora de comisiones en tiempo real ──
+    function updateCommissionCalc() {
+        const capital  = parseFloat(document.getElementById('bot-capital').value) || 0;
+        const pct      = parseFloat(document.getElementById('bot-pct').value) || 50;
+        const slMult   = parseFloat(document.getElementById('bot-sl').value) || 1.5;
+        const tpMult   = parseFloat(document.getElementById('bot-tp').value) || 2.5;
+
+        const tradeSize  = capital * (pct / 100);
+        const commission = tradeSize * 0.002;  // 0.1% entrada + 0.1% salida
+        const rr         = tpMult / slMult;
+
+        document.getElementById('calc-commission').textContent = commission.toFixed(4) + ' USDT';
+        document.getElementById('calc-size').textContent       = tradeSize.toFixed(2) + ' USDT';
+        document.getElementById('calc-rr').textContent         = rr.toFixed(2) + ':1';
+
+        const verdict = document.getElementById('calc-verdict');
+        if (rr >= 1.5) {
+            verdict.style.background = 'rgba(72,187,120,0.12)';
+            verdict.style.color      = 'var(--green)';
+            verdict.textContent      = `✅ Ratio ${rr.toFixed(2)}:1 — Rentable. Por cada $${commission.toFixed(3)} de comisión, el TP cubre ${(rr * slMult).toFixed(1)}× ATR.`;
+        } else if (rr >= 1.0) {
+            verdict.style.background = 'rgba(246,224,94,0.10)';
+            verdict.style.color      = 'var(--yellow)';
+            verdict.textContent      = `⚠️ Ratio ${rr.toFixed(2)}:1 — Marginal. Recomendamos TP/SL > 1.5 para cubrir comisiones con margen.`;
+        } else {
+            verdict.style.background = 'rgba(252,129,129,0.10)';
+            verdict.style.color      = 'var(--red)';
+            verdict.textContent      = `❌ Ratio ${rr.toFixed(2)}:1 — No rentable. El SL supera al TP.`;
+        }
+    }
+    // Recalcular en cada cambio
+    ['bot-capital','bot-pct','bot-sl','bot-tp'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updateCommissionCalc);
     });
 
     function createBot() {
