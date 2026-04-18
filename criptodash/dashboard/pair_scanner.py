@@ -300,8 +300,8 @@ def save_scan_results(results: list, timeframe: str = '5m'):
         # Crear ScalpAlerts para señales encontradas
         for sig in r.get('signals_found', []):
             confidence = sig.get('confidence', 0)
-            if confidence < 0.55:
-                continue   # Ignorar señales de baja confianza
+            if confidence < 0.45:   # Bajado de 0.55 → más señales visibles
+                continue   # Ignorar señales muy débiles
 
             # Evitar duplicados en los últimos 5 minutos
             recent = ScalpAlert.objects.filter(
