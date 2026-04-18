@@ -848,6 +848,7 @@
         const wrap = document.getElementById('pairs-table-wrap');
 
         btn.classList.add('scanning');
+<<<<<<< HEAD
         btn.innerHTML = '⏳ Escaneando...';
         btn.disabled = true;
 
@@ -859,6 +860,9 @@
                 Puede tardar 10-20 segundos</div>
         </div>`;
 
+=======
+        btn.innerHTML = '🔄 Validando...';
+>>>>>>> 70d63538f910becf2dab6689a00b914b4bf380fd
         fetch('/scalping/scan/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
@@ -905,6 +909,7 @@
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
             body: JSON.stringify({action: 'run_now'}),
         }).then(r => r.json()).then(d => {
+<<<<<<< HEAD
             btn.disabled = false;
             btn.textContent = '⚡ Ejecutar';
             if (d.success) {
@@ -916,6 +921,21 @@
         }).catch(() => {
             btn.disabled = false;
             btn.textContent = '⚡ Ejecutar';
+=======
+            btn.classList.remove('scanning');
+            if (d.success) {
+                btn.innerHTML = '✅ Iniciado';
+                setTimeout(() => { btn.innerHTML = '🔍 Escanear Ahora'; }, 3000);
+            } else {
+                btn.innerHTML = '❌ Error';
+                alert('Fallo al iniciar escaneo: ' + (d.error || 'Error desconocido'));
+                setTimeout(() => { btn.innerHTML = '🔍 Escanear Ahora'; }, 5000);
+            }
+        }).catch(err => {
+            btn.classList.remove('scanning');
+            btn.innerHTML = '❌ Error Red';
+            setTimeout(() => { btn.innerHTML = '🔍 Escanear Ahora'; }, 3000);
+>>>>>>> 70d63538f910becf2dab6689a00b914b4bf380fd
         });
     }
 
