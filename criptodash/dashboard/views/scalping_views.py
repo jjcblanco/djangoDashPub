@@ -302,12 +302,17 @@ def scalping_dismiss_alert(request, alert_id):
 def scalping_trigger_scan(request):
     """
     Dispara un escaneo manual de pares.
+<<<<<<< HEAD
     Si el body incluye sync=true, ejecuta sincrónicamente y devuelve los resultados
     directamente en el JSON para que el frontend pueda actualizar la tabla al instante.
+=======
+    Ahora incluye una validación rápida de las claves de API antes de encolar.
+>>>>>>> 70d63538f910becf2dab6689a00b914b4bf380fd
     """
     try:
         data      = json.loads(request.body) if request.body else {}
         timeframe = data.get('timeframe', '5m')
+<<<<<<< HEAD
         sync_mode = data.get('sync', False)
 
         if sync_mode:
@@ -351,6 +356,32 @@ def scalping_trigger_scan(request):
 
     except Exception as e:
         logger.error(f'[ScalpScan] Error en escaneo: {e}')
+=======
+
+        # Validación rápida de conexión para dar feedback inmediato
+        from dashboard.pair_scanner import _get_exchange
+        exchange = _get_exchange()
+        if not exchange:
+            return JsonResponse({'success': False, 'error': 'No se pudo inicializar CCXT. Revisa configuraciones.'}, status=400)
+
+        try:
+            # Una llamada ligera para validar las credenciales
+            exchange.fetch_balance()
+        except Exception as e:
+            err_str = str(e)
+            if "Invalid API-key" in err_str or "code\":-2015" in err_str:
+                return JsonResponse({
+                    'success': False, 
+                    'error': 'API Binance inválida o sin permisos (Error -2015). Revisa permisos de Spot y restricción de IP.'
+                }, status=401)
+            return JsonResponse({'success': False, 'error': f'Error de conexión: {err_str[:100]}'}, status=400)
+
+        # Ejecutar de forma asíncrona via Celery
+        scan_scalping_pairs_task.delay(timeframe=timeframe, top_n=15)
+        return JsonResponse({'success': True, 'message': f'Escaneo {timeframe} iniciado en background.'})
+    except Exception as e:
+        logger.error(f'[ScalpTrigger] Error: {e}')
+>>>>>>> 70d63538f910becf2dab6689a00b914b4bf380fd
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 

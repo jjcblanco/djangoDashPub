@@ -33,15 +33,22 @@ def _get_exchange():
     try:
         import ccxt
         from decouple import config
+        api_key = config('BINANCE_APIKEY', default='')
+        secret  = config('BINANCE_SECRET', default='')
+        
+        if not api_key or not secret:
+            logger.error("[PairScanner] BINANCE_APIKEY o BINANCE_SECRET no están configurados en .env")
+            return None
+
         exchange = ccxt.binance({
-            'apiKey':  config('BINANCE_APIKEY', default=''),
-            'secret':  config('BINANCE_SECRET', default=''),
+            'apiKey':  api_key,
+            'secret':  secret,
             'enableRateLimit': True,
             'options': {'defaultType': 'spot'},
         })
         return exchange
     except Exception as e:
-        logger.error(f'[PairScanner] Error iniciando CCXT: {e}')
+        logger.error(f'[PairScanner] Error crítico iniciando CCXT: {e}')
         return None
 
 
