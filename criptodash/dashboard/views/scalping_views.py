@@ -274,11 +274,15 @@ def scalping_bot_action(request, bot_id):
             return JsonResponse({'success': True, 'message': 'Bot eliminado.'})
 
         elif action == 'run_now':
-            # Ejecutar el bot sincrónicamente una vez (útil si no hay Celery Beat)
+            # Ejecutar el bot sincrónicamente una vez y bypass el chequeo de status=RUNNING
             from dashboard.tasks import run_scalping_bot_task
             try:
-                run_scalping_bot_task(bot.id)  # llamada directa, no .delay()
-                return JsonResponse({'success': True, 'message': 'Bot ejecutado. Revisá los trades para ver si hubo señal.'})
+                res = run_scalping_bot_task(bot.id, force_eval=True)  # llamada directa
+                if res and res.get('executed'):
+                    return JsonResponse({'success': True, 'message': f'✅ Bot ejecutado: {res.get("reason")}'})
+                else:
+                    err_msg = res.get('reason') if res else 'No se devolvió una respuesta de la tarea.'
+                    return JsonResponse({'success': True, 'message': f'ℹ️ Bot ejecutado pero evaluó NO operar: {err_msg}'})
             except Exception as run_err:
                 return JsonResponse({'success': False, 'error': str(run_err)}, status=500)
 
