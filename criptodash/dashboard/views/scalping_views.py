@@ -115,8 +115,13 @@ def scalping_api_scan_results(request):
     if not latest:
         return JsonResponse({'pairs': [], 'scanned_at': None})
 
+    from datetime import timedelta
+    # Como los resultados se guardan en un loop, pueden diferir por milisegundos.
+    # Restamos 10 segundos para asegurarnos de capturar toda la "tanda" del último scan.
+    batch_start = latest['scanned_at'] - timedelta(seconds=10)
+
     results = PairScanResult.objects.filter(
-        scanned_at__gte=latest['scanned_at']
+        scanned_at__gte=batch_start
     ).select_related('pair').order_by('-total_score')[:15]
 
     data = []
