@@ -289,3 +289,9 @@ sudo journalctl -u celery --since "5 minutes ago" | tail -50
 git pull origin main error: Pulling is not possible because you have unmerged files.hint: Fix them up in the work tree, and then use 'git add/rm <file>' hint: as appropriate to mark resolution and make a commit. fatal: Exiting because of an unresolved conflict.
 
 sudo journalctl -u celery --since '2 minutes ago' | grep -E "(batch|ethereum|rate limit|synced)" 
+
+
+Apr 19 13:21:28 s3rv3r.javierblanco.com.ar celery[193867]: [2026-04-19 16:21:28,927: INFO/MainProcess] Successfully synced 0 txs for wallet 113 (ethereum).
+Apr 19 13:21:28 s3rv3r.javierblanco.com.ar celery[193867]: [2026-04-19 16:21:28,928: INFO/MainProcess] Task dashboard.tasks.sync_wallet_task
+
+Apr 19 13:21:13 s3rv3r.javierblanco.com.ar celery[193844]: [2026-04-19 16:21:13,320: INFO/MainProcess] Scheduler: Sending due task sync-all-whales-every-15-min (dashboard.tasks.sync_all_whales

@@ -265,37 +265,59 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
 # Programación de tareas automáticas (Celery Beat)
+from celery.schedules import crontab
+
+# ======================================
+# CONFIGURACION CELERY Y REDIS CONTINUACION
+# ======================================
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
+
 CELERY_BEAT_SCHEDULE = {
+    # == WHALES ==
     'sync-all-whales-every-15-min': {
         'task': 'dashboard.tasks.sync_all_whales_task',
-        'schedule': 900.0,  # 15 minutos (900 segundos)
+        'schedule': 900.0,
     },
     'auto-hunt-whales-every-6-hours': {
         'task': 'dashboard.tasks.hunt_whales_by_pair_task',
-        'schedule': 21600.0,  # 6 horas (21600 segundos)
-        'kwargs': {'filter_high_volume': True, 'filter_min_tx_count': 2}  # Filtros por defecto: volumen alto y al menos 2 transacciones
+        'schedule': 21600.0,
+        'kwargs': {'filter_high_volume': True, 'filter_min_tx_count': 2}
+    },
+    
+    # == SCALPING ==
+    'scalping-check-positions-30s': {
+        'task': 'dashboard.tasks.check_scalping_positions_task',
+        'schedule': 30.0,
+    },
+    'scalping-run-all-bots-1m': {
+        'task': 'dashboard.tasks.run_all_scalping_bots_task',
+        'schedule': crontab(minute='*'),
+    },
+    'scalping-scan-5m': {
+        'task': 'dashboard.tasks.scan_scalping_pairs_task',
+        'schedule': crontab(minute='*/5'),
+        'kwargs': {'timeframe': '5m', 'top_n': 15}
+    },
+    'scalping-scan-15m': {
+        'task': 'dashboard.tasks.scan_scalping_pairs_task',
+        'schedule': crontab(minute='*/15'),
+        'kwargs': {'timeframe': '15m', 'top_n': 15}
     },
 }
 
-# Control de ejecución de tareas
-# Si es True, las tareas se ejecutan síncronamente (bloqueante). 
-# En el VPS debe ser False para que el botón "Cazar" no cuelgue la web.
 CELERY_TASK_ALWAYS_EAGER = config('CELERY_TASK_ALWAYS_EAGER', default=False, cast=bool)
 CELERY_TASK_EAGER_PROPAGATES = CELERY_TASK_ALWAYS_EAGER
 
 # ======================================
-# BINANCE API KEYS (Cargar desde .env)
+# BINANCE API KEYS
 # ======================================
-# Agrega esto a tu .env del VPS:
-#   BINANCE_APIKEY=tu_api_key_aqui
-#   BINANCE_SECRET=tu_secret_aqui
 BINANCE_APIKEY = config('BINANCE_APIKEY', default=None)
 BINANCE_SECRET = config('BINANCE_SECRET', default=None)
 
-# Alerta en logs si no están configuradas
 if not BINANCE_APIKEY or not BINANCE_SECRET:
     import logging
     logging.getLogger(__name__).warning(
-        "ADVERTENCIA: BINANCE_APIKEY o BINANCE_SECRET no están configurados en .env. "
-        "Los bots live no podrán conectarse a Binance."
+        'ADVERTENCIA: BINANCE_APIKEY o BINANCE_SECRET no están configurados en .env.'
     )
