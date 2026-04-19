@@ -967,11 +967,15 @@
     }
 
     // ── Crear bot ──
+    let isModalOpen = false;
+
     function openCreateModal() {
+        isModalOpen = true;
         document.getElementById('create-modal').classList.add('active');
         updateCommissionCalc();
     }
     function closeModal() {
+        isModalOpen = false;
         document.getElementById('create-modal').classList.remove('active');
     }
     document.getElementById('create-modal').addEventListener('click', function(e) {
@@ -1038,7 +1042,20 @@
                 alert('Error: ' + (d.error || 'Desconocido'));
             }
         });
+        });
     }
+
+    // ── Auto-Refresh Híbrido ──
+    function startAutoRefresh() {
+        setTimeout(() => {
+            if (!isModalOpen) {
+                location.reload();
+            } else {
+                startAutoRefresh(); // Reintentar cuando se cierre
+            }
+        }, 60000); 
+    }
+    startAutoRefresh();
 </script>
 </body>
 </html>
