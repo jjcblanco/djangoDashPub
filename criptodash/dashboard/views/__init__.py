@@ -84,6 +84,7 @@ from .scalping_views import (
     scalping_dismiss_alert,
     scalping_trigger_scan,
     scalping_close_trade,
+    toggle_autopilot,
 )
 
 # Importar vistas de datos
