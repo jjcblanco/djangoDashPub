@@ -499,8 +499,17 @@
         <div class="card">
             <div class="card-header">
                 <div class="card-title">🤖 Mis Bots de Scalping</div>
-                <button class="btn btn-primary" style="font-size:.72rem;padding:.3rem .8rem;"
-                    onclick="openCreateModal()">+ Nuevo</button>
+                <div style="display:flex; gap: 0.5rem; align-items: center;">
+                    <button id="autopilot-btn" 
+                            class="btn" 
+                            style="font-size:.72rem;padding:.3rem .8rem; background: {% if auto_pilot_enabled %}var(--green){% else %}var(--bg-hover){% endif %}; color: {% if auto_pilot_enabled %}#000{% else %}var(--text){% endif %}; transition: all 0.2s;"
+                            onclick="toggleAutopilot()"
+                            title="Creará bots SIMULADOS automáticamente cuando la alerta sea > {{ auto_pilot_conf }}%">
+                        🤖 Auto-Pilot: <span id="autopilot-txt">{% if auto_pilot_enabled %}ON{% else %}OFF{% endif %}</span>
+                    </button>
+                    <button class="btn btn-primary" style="font-size:.72rem;padding:.3rem .8rem;"
+                        onclick="openCreateModal()">+ Nuevo</button>
+                </div>
             </div>
             <div class="card-body">
                 <div class="bots-grid" id="bots-grid">
@@ -1058,6 +1067,35 @@
             } else {
                 alert('Error: ' + (d.error || 'Desconocido'));
             }
+        });
+    }
+
+    // ── Auto-Pilot Toggle ──
+    function toggleAutopilot() {
+        const btn = document.getElementById('autopilot-btn');
+        const txt = document.getElementById('autopilot-txt');
+        btn.style.opacity = '0.5';
+        
+        fetch('/scalping/api/toggle-autopilot/', {
+            method: 'POST',
+            headers: {'X-CSRFToken': CSRF},
+        }).then(r => r.json()).then(d => {
+            btn.style.opacity = '1';
+            if (d.success) {
+                if(d.enabled) {
+                    btn.style.background = 'var(--green)';
+                    btn.style.color = '#000';
+                    txt.innerText = 'ON';
+                } else {
+                    btn.style.background = 'var(--bg-hover)';
+                    btn.style.color = 'var(--text)';
+                    txt.innerText = 'OFF';
+                }
+                // alert(d.message);
+            }
+        }).catch(e => {
+            btn.style.opacity = '1';
+            console.error(e);
         });
     }
 

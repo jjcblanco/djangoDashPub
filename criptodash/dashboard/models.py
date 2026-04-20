@@ -202,6 +202,10 @@ class GlobalSettings(models.Model):
     
     updated_at = models.DateTimeField(auto_now=True)
     
+    # Auto-Pilot Scalping
+    auto_scalp_enabled = models.BooleanField(default=False, help_text="Habilita la creación y ejecución automática de bots SIMULADOS de scalping.")
+    auto_scalp_min_conf = models.DecimalField(max_digits=5, decimal_places=2, default=75.00, help_text="Porcentaje de confianza mínima requerida (>X) para detonar un nuevo bot.")
+    
     class Meta:
         verbose_name_plural = "Global Settings"
         

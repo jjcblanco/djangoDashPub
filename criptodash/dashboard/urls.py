@@ -73,6 +73,7 @@ urlpatterns = [
     path('scalping/alerts/<int:alert_id>/dismiss/', views.scalping_dismiss_alert, name='scalping_dismiss_alert'),
     path('scalping/scan/', views.scalping_trigger_scan, name='scalping_trigger_scan'),
     # API endpoints (polling)
+    path('scalping/api/toggle-autopilot/', views.toggle_autopilot, name='scalping_toggle_autopilot'),
     path('scalping/api/alerts/', views.scalping_api_alerts, name='scalping_api_alerts'),
     path('scalping/api/scan-results/', views.scalping_api_scan_results, name='scalping_api_scan_results'),
     path('scalping/api/bot-stats/', views.scalping_api_bot_stats, name='scalping_api_bot_stats'),

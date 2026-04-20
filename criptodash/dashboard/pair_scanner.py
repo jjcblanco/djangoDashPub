@@ -270,9 +270,15 @@ def save_scan_results(results: list, timeframe: str = '5m'):
     Persiste los resultados del scan en la BD.
     Crea o actualiza registros PairScanResult y ScalpAlert para señales encontradas.
     """
-    from .models import PairScanResult, Pair, ScalpAlert
+    from .models import PairScanResult, Pair, ScalpAlert, GlobalSettings, ScalpingBot
     from django.utils import timezone
     from datetime import timedelta
+    import logging
+    logger = logging.getLogger(__name__)
+
+    g_settings = GlobalSettings.objects.first()
+    auto_pilot = getattr(g_settings, 'auto_scalp_enabled', False) if g_settings else False
+    min_conf   = float(getattr(g_settings, 'auto_scalp_min_conf', 75.0)) if g_settings else 75.0
 
     for r in results:
         symbol = r['symbol']
@@ -332,5 +338,34 @@ def save_scan_results(results: list, timeframe: str = '5m'):
                 indicators_snapshot = sig,
                 expires_at       = timezone.now() + timedelta(minutes=15),
             )
+
+            # --- AUTO-PILOT ---
+            if auto_pilot and confidence >= (min_conf / 100):
+                # Evitar multi-bots clones para la misma moneda
+                exists = ScalpingBot.objects.filter(
+                    pair=pair_obj,
+                    is_live=False,
+                    status='RUNNING'
+                ).exists()
+
+                if not exists:
+                    # Crear Bot en SIM (100 USDT base al 50%)
+                    try:
+                        ScalpingBot.objects.create(
+                            name=f"Auto SIM {pair_obj.symbol}",
+                            pair=pair_obj,
+                            strategy_type=sig['strategy'],
+                            timeframe=timeframe,
+                            capital_usdt=100.0,
+                            max_position_pct=50.0,
+                            sl_atr_mult=1.5,
+                            tp_atr_mult=2.5,
+                            is_live=False,
+                            status='RUNNING'
+                        )
+                        logger.info(f'[AutoPilot] Bot creado automáticamente para {pair_obj.symbol} con conf={confidence:.2f}')
+                    except Exception as e:
+                        logger.error(f'[AutoPilot] Error creando bot SIM para {pair_obj.symbol}: {e}')
+
 
     logger.info(f'[PairScanner] {len(results)} resultados guardados en BD.')

@@ -13,7 +13,7 @@ from django.utils import timezone
 from django.db.models import Avg, Sum, Count
 
 from dashboard.models import (
-    ScalpingBot, ScalpingTrade, ScalpAlert, PairScanResult, Pair,
+    ScalpingBot, ScalpingTrade, ScalpAlert, PairScanResult, Pair, GlobalSettings
 )
 from dashboard.tasks import (
     scan_scalping_pairs_task,
@@ -61,6 +61,11 @@ def scalping_dashboard(request):
         entry_time__gte=timezone.now() - timezone.timedelta(hours=24)
     ).select_related('bot', 'bot__pair').order_by('-entry_time')[:20]
 
+    # Global Settings
+    g_settings = GlobalSettings.objects.first()
+    if not g_settings:
+        g_settings = GlobalSettings.objects.create()
+
     context = {
         'top_pairs':     top_pairs,
         'active_alerts': active_alerts,
@@ -71,6 +76,8 @@ def scalping_dashboard(request):
         'strategy_choices': ScalpingBot.STRATEGY_CHOICES,
         'timeframe_choices': ScalpingBot.TIMEFRAME_CHOICES,
         'pairs_available': Pair.objects.filter(exchange='binance').order_by('symbol'),
+        'auto_pilot_enabled': g_settings.auto_scalp_enabled,
+        'auto_pilot_conf': float(g_settings.auto_scalp_min_conf),
     }
     return render(request, 'dashboard/scalping_dashboard.html', context)
 
@@ -78,6 +85,24 @@ def scalping_dashboard(request):
 # ──────────────────────────────────────────────────────────────
 # API ENDPOINTS (polling del frontend)
 # ──────────────────────────────────────────────────────────────
+
+@login_required
+@require_POST
+def toggle_autopilot(request):
+    """Activa o desactiva la creación automática de bots."""
+    from dashboard.models import GlobalSettings
+    settings = GlobalSettings.objects.first()
+    if not settings:
+        settings = GlobalSettings.objects.create()
+    
+    settings.auto_scalp_enabled = not settings.auto_scalp_enabled
+    settings.save()
+    
+    return JsonResponse({
+        'success': True, 
+        'enabled': settings.auto_scalp_enabled,
+        'message': f"🤖 Auto-Pilot {'ACTIVADO' if settings.auto_scalp_enabled else 'DESACTIVADO'}."
+    })
 
 @login_required
 @require_GET
