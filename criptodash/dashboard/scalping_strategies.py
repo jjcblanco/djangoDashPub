@@ -153,7 +153,7 @@ def strategy_bb_squeeze(df: pd.DataFrame, sl_atr_mult=1.5, tp_atr_mult=2.5, para
         return _no_signal()
 
     width_threshold = bb_width_series.quantile(squeeze_pct / 100)
-    in_squeeze_prev = float(prev['bb_width']) < width_threshold if not pd.isna(prev['bb_width']) else False
+    in_squeeze_prev = bool(float(prev['bb_width']) < width_threshold if not pd.isna(prev['bb_width']) else False)
 
     # ¿El precio rompe la banda ahora DESPUÉS del squeeze?
     breakout_up   = in_squeeze_prev and (float(cur['close']) > float(cur['bb_upper']))
