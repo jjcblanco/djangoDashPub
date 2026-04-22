@@ -238,6 +238,7 @@ def scalping_create_bot(request):
             sl_atr_mult      = data.get('sl_atr_mult', 1.5),
             tp_atr_mult      = data.get('tp_atr_mult', 2.5),
             parameters       = data.get('parameters', {}),
+            status           = 'RUNNING',  # Auto-Start al crearlo
         )
 
         return JsonResponse({
