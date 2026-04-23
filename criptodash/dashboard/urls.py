@@ -54,6 +54,9 @@ urlpatterns = [
     path('whale-insights/chart/<int:wallet_id>/', views.whale_trade_chart_ajax, name='whale_trade_chart_ajax'),
     path('whale-insights/hunt/', views.trigger_whale_hunt, name='trigger_whale_hunt'),
     path('whale-insights/learn-patterns/', views.learn_patterns, name='learn_patterns'),
+    path('whale-insights/learn-patterns-extended/', views.trigger_extended_pattern_learning, name='learn_patterns_extended'),
+    path('whale-insights/retro-enrich/', views.trigger_retroactive_enrichment, name='retro_enrich_all'),
+    path('whale-insights/retro-enrich/<int:wallet_id>/', views.trigger_retroactive_enrichment, name='retro_enrich_wallet'),
     path('whale-insights/bulk-import/', views.bulk_import_whales, name='bulk_import_whales'),
     # CRUD Targets de Caza
     path('whale-insights/targets/', views.hunt_targets_list, name='hunt_targets_list'),
