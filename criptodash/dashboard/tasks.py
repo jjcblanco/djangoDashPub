@@ -614,3 +614,283 @@ def run_all_scalping_bots_task():
         count += 1
     logger.info(f"[ScalpBots] {count} bots encolados.")
     return {'bots_queued': count}
+
+
+# ================================================================
+# MEJORAS CRÍTICAS: ENRIQUECIMIENTO RETROACTIVO + APRENDIZAJE
+# ================================================================
+
+@shared_task(bind=True, max_retries=2)
+def retroactive_context_enrichment_task(self, wallet_id=None, timeframe='4h', limit_per_wallet=100):
+    """
+    Reconstruye el market_context histórico para transacciones que no lo tienen.
+
+    El problema raíz: fetch_market_context() captura el estado del mercado en el
+    momento del sync, NO en el momento real de la tx. Si una tx tiene 3 días de
+    antigüedad, el contexto guardado es incorrecto (o inexistente si el sync fue
+    posterior al trade).
+
+    Esta tarea busca todas las txs de tipo BUY/SWAP sin market_context en raw_data
+    y reconstruye los indicadores para el timestamp exacto de la transacción.
+
+    Args:
+        wallet_id: Si se especifica, procesa solo esa wallet. Si es None, procesa todas.
+        timeframe: Temporalidad para los indicadores ('1h', '4h', '1d')
+        limit_per_wallet: Máximo de txs a procesar por wallet (evita timeouts)
+
+    Returns:
+        dict con estadísticas del proceso
+    """
+    from dashboard.models import WhaleWallet, WhaleTransaction
+    from dashboard.whale_intelligence import fetch_market_context_at
+    import time as time_module
+
+    logger.info(f"[RetroContext] Iniciando enriquecimiento retroactivo (wallet_id={wallet_id or 'TODAS'})")
+
+    if wallet_id:
+        wallets = WhaleWallet.objects.filter(id=wallet_id, is_active=True)
+    else:
+        wallets = WhaleWallet.objects.filter(is_active=True)
+
+    total_enriched = 0
+    total_skipped = 0
+    total_failed = 0
+    wallets_processed = 0
+
+    for wallet in wallets:
+        wallets_processed += 1
+
+        txs_need_context = WhaleTransaction.objects.filter(
+            wallet=wallet,
+            tx_type__in=['BUY', 'SWAP', 'UNKNOWN'],
+            to_asset__isnull=False,
+        ).exclude(
+            raw_data__market_context__isnull=False
+        ).order_by('-timestamp')[:limit_per_wallet]
+
+        if not txs_need_context.exists():
+            logger.debug(f"[RetroContext] Wallet {wallet.address[:10]}: todas las txs ya tienen contexto.")
+            continue
+
+        tx_count = txs_need_context.count()
+        logger.info(f"[RetroContext] Wallet {wallet.address[:10]}: {tx_count} txs sin contexto")
+
+        enriched_this_wallet = 0
+        for tx in txs_need_context:
+            symbol = tx.to_asset
+            if not symbol or symbol.upper() in ('USDC', 'USDT', 'DAI', 'BUSD', 'FDUSD'):
+                total_skipped += 1
+                continue
+
+            try:
+                timestamp_ms = int(tx.timestamp.timestamp() * 1000)
+                ctx = fetch_market_context_at(symbol, timestamp_ms, timeframe=timeframe)
+
+                if ctx:
+                    raw = tx.raw_data or {}
+                    raw['market_context'] = ctx
+                    tx.raw_data = raw
+                    tx.save(update_fields=['raw_data'])
+                    enriched_this_wallet += 1
+                    total_enriched += 1
+                else:
+                    total_skipped += 1
+
+                time_module.sleep(0.3)
+
+            except Exception as e:
+                logger.warning(f"[RetroContext] Error enriqueciendo tx {tx.tx_hash[:16]} ({symbol}): {e}")
+                total_failed += 1
+                continue
+
+        if enriched_this_wallet > 0:
+            logger.info(f"[RetroContext] Wallet {wallet.address[:10]}: {enriched_this_wallet} txs enriquecidas.")
+
+    _backfill_shadow_trade_context(timeframe=timeframe)
+
+    summary = {
+        'wallets_processed': wallets_processed,
+        'txs_enriched': total_enriched,
+        'txs_skipped_no_binance_pair': total_skipped,
+        'txs_failed': total_failed,
+    }
+    logger.info(f"[RetroContext] Completado: {summary}")
+    return summary
+
+
+def _backfill_shadow_trade_context(timeframe='4h'):
+    """
+    Llena el market_context de ShadowTrades que no lo tienen,
+    usando el timestamp de creacion del trade para reconstruir el contexto historico.
+    """
+    from dashboard.models import ShadowTrade
+    from dashboard.whale_intelligence import fetch_market_context_at
+    import time as time_module
+
+    trades_no_ctx = ShadowTrade.objects.filter(market_context__isnull=True)[:200]
+    filled = 0
+
+    for trade in trades_no_ctx:
+        try:
+            symbol = trade.token_symbol
+            if not symbol or symbol.upper() in ('USDC', 'USDT', 'DAI'):
+                continue
+
+            timestamp_ms = int(trade.created_at.timestamp() * 1000)
+            ctx = fetch_market_context_at(symbol, timestamp_ms, timeframe=timeframe)
+            if ctx:
+                trade.market_context = ctx
+                trade.save(update_fields=['market_context'])
+                filled += 1
+
+            time_module.sleep(0.3)
+        except Exception:
+            continue
+
+    if filled > 0:
+        logger.info(f"[RetroContext] ShadowTrades: {filled} contextos rellenados.")
+
+
+@shared_task
+def learn_whale_patterns_task(min_trades=3, min_win_rate=0.55):
+    """
+    Ejecuta el aprendizaje de patrones de ballenas con fuentes de datos ampliadas.
+
+    Mejora critica #2: El WhalePatternLearner original solo usaba ShadowTrades
+    cerrados con market_context. Esta tarea:
+      1. Ejecuta el aprendizaje estandar (ShadowTrades cerrados)
+      2. Anade aprendizaje directo desde WhaleTransactions enriquecidas
+      3. Usa umbral reducido (min_trades=3 vs 5 anterior, min_win_rate=55% vs 60%)
+
+    Returns:
+        dict con resumen del aprendizaje
+    """
+    from dashboard.whale_pattern_learner import WhalePatternLearner
+    from dashboard.models import WhaleTransaction, WhalePattern, ShadowTrade
+
+    logger.info(f"[PatternLearner] Iniciando aprendizaje (min_trades={min_trades}, min_win_rate={min_win_rate})")
+
+    standard_patterns = []
+    try:
+        standard_patterns = WhalePatternLearner.analyze_trades(
+            min_trades=min_trades,
+            min_win_rate=min_win_rate
+        )
+        logger.info(f"[PatternLearner] Paso 1: {len(standard_patterns)} patrones desde ShadowTrades cerrados.")
+    except Exception as e:
+        logger.warning(f"[PatternLearner] Error en aprendizaje estandar: {e}")
+
+    extended_count = _learn_from_transactions(min_trades=min_trades, min_win_rate=min_win_rate)
+    logger.info(f"[PatternLearner] Paso 2: {extended_count} patrones adicionales desde WhaleTransactions.")
+
+    total_active = WhalePattern.objects.filter(is_active=True).count()
+    shadow_closed = ShadowTrade.objects.filter(status='CLOSED', market_context__isnull=False).count()
+    txs_with_ctx = WhaleTransaction.objects.filter(
+        tx_type__in=['BUY', 'SWAP'],
+        raw_data__market_context__isnull=False
+    ).count()
+
+    summary = {
+        'patterns_from_shadow_trades': len(standard_patterns),
+        'patterns_from_transactions': extended_count,
+        'total_active_patterns': total_active,
+        'dataset_shadow_trades_closed': shadow_closed,
+        'dataset_txs_with_context': txs_with_ctx,
+        'dataset_total': shadow_closed + txs_with_ctx,
+    }
+    logger.info(f"[PatternLearner] Completado: {summary}")
+    return summary
+
+
+def _learn_from_transactions(min_trades=3, min_win_rate=0.55):
+    """
+    Aprende patrones directamente de WhaleTransactions enriquecidas.
+    Calcula PnL estimado usando precio de entrada en raw_data vs precio actual en Binance.
+    Returns: numero de patrones nuevos o actualizados guardados.
+    """
+    from dashboard.models import WhaleTransaction
+    from dashboard.whale_intelligence import fetch_market_context
+    from dashboard.whale_pattern_learner import WhalePatternLearner
+    import pandas as pd
+
+    STABLES = {'USDC', 'USDT', 'DAI', 'BUSD', 'FDUSD'}
+    txs = WhaleTransaction.objects.filter(
+        tx_type__in=['BUY', 'SWAP'],
+    ).exclude(to_asset__in=STABLES).filter(
+        raw_data__market_context__isnull=False
+    ).select_related('wallet').order_by('-timestamp')[:500]
+
+    if not txs.exists():
+        logger.info("[PatternLearner] Sin transacciones con contexto para aprendizaje extendido.")
+        return 0
+
+    data = []
+    price_cache = {}
+
+    for tx in txs:
+        rd = tx.raw_data or {}
+        ctx = rd.get('market_context', {})
+        if not ctx:
+            continue
+
+        symbol = tx.to_asset
+        if not symbol:
+            continue
+
+        entry_price = None
+        try:
+            if 'priceUsd' in rd:
+                entry_price = float(rd['priceUsd'])
+            elif 'px' in rd:
+                entry_price = float(rd['px'])
+        except Exception:
+            pass
+
+        if not entry_price or entry_price <= 0:
+            continue
+
+        if symbol not in price_cache:
+            try:
+                current_ctx = fetch_market_context(symbol)
+                price_cache[symbol] = current_ctx.get('price') if current_ctx else None
+            except Exception:
+                price_cache[symbol] = None
+
+        current_price = price_cache[symbol]
+        if not current_price or current_price <= 0:
+            continue
+
+        pnl = ((current_price - entry_price) / entry_price) * 100
+
+        row = {
+            'trade_id': f"tx_{tx.id}",
+            'symbol': symbol,
+            'pnl': pnl,
+            'win': 1 if pnl > 0 else 0,
+            'wallet_id': tx.wallet_id,
+        }
+        for key, val in ctx.items():
+            row[key] = val
+        data.append(row)
+
+    if len(data) < min_trades:
+        logger.info(f"[PatternLearner] Dataset extendido insuficiente: {len(data)} filas (minimo {min_trades}).")
+        return 0
+
+    try:
+        df = pd.DataFrame(data)
+
+        for indicator, ranges in WhalePatternLearner.INDICATOR_RANGES.items():
+            if indicator not in df.columns:
+                continue
+            df[f'{indicator}_range'] = df[indicator].apply(
+                lambda x: WhalePatternLearner._get_range_label(x, ranges)
+            )
+
+        patterns = WhalePatternLearner._find_patterns(df, min_trades=min_trades, min_win_rate=min_win_rate)
+        saved = WhalePatternLearner._save_patterns(patterns)
+        return len(saved)
+
+    except Exception as e:
+        logger.error(f"[PatternLearner] Error en aprendizaje extendido: {e}")
+        return 0
