@@ -409,7 +409,7 @@ def run_scalping_bot_task(bot_id, force_eval=False):
             raise Exception("No se pudo conectar a Binance.")
 
         symbol = bot.pair.symbol
-        df = fetch_ohlcv_df(exchange, symbol, bot.timeframe, limit=120)
+        df = fetch_ohlcv_df(exchange, symbol, bot.timeframe, limit=250)
         if df is None or len(df) < 50:
             raise Exception(f"Datos insuficientes para {symbol}.")
 
