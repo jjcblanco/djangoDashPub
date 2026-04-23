@@ -29,7 +29,14 @@ def _get_binance():
 # Cache simple en memoria para evitar llamadas redundantes en el mismo ciclo de sync
 # {symbol: (timestamp, data)}
 _CONTEXT_CACHE = {}
-_CACHE_TTL = 300 # 5 minutos
+_CACHE_TTL = 300  # 5 minutos
+
+# Duración en ms por timeframe (para calcular cuántas velas pedir)
+_TIMEFRAME_MS = {
+    '1h':  3_600_000,
+    '4h': 14_400_000,
+    '1d': 86_400_000,
+}
 
 
 def fetch_market_context(symbol, timeframe='4h', limit=100):
@@ -83,6 +90,9 @@ def fetch_market_context(symbol, timeframe='4h', limit=100):
         
     except ccxt.BadSymbol:
         # Par no existe en Binance (token nuevo o de nicho)
+        return None
+    except ccxt.NetworkError as e:
+        print(f"[Whale Intelligence] Network error for {symbol}: {e}")
         return None
     except Exception as e:
         print(f"[Whale Intelligence] Error fetching context for {symbol}: {e}")
@@ -175,3 +185,68 @@ def _calculate_indicators(df):
         'atr_pct': atr_pct,
         'consecutive_red_candles': consecutive_red,
     }
+
+
+def fetch_market_context_at(symbol, timestamp_ms, timeframe='4h'):
+    """
+    Reconstruye el snapshot de indicadores técnicos tal como estaban
+    en el momento *histórico* indicado por `timestamp_ms` (Unix ms).
+
+    Esto es esencial para enriquecer transacciones antiguas con el contexto
+    correcto del mercado en el momento en que la ballena realmente operó,
+    en lugar del momento en que la sincronizamos.
+
+    Args:
+        symbol: Símbolo del token (ej: 'SOL', 'WIF')
+        timestamp_ms: Timestamp Unix en milisegundos del momento de la tx
+        timeframe: Temporalidad de las velas ('1h', '4h', '1d')
+
+    Returns:
+        dict con indicadores, igual que fetch_market_context(), o None si falla.
+    """
+    symbol_upper = symbol.upper().strip()
+
+    if symbol_upper in ('USDC', 'USDT', 'DAI', 'BUSD', 'FDUSD'):
+        return None
+
+    pair = f"{symbol_upper}/USDT"
+    bar_ms = _TIMEFRAME_MS.get(timeframe, _TIMEFRAME_MS['4h'])
+
+    # Pedir 120 velas que terminen ANTES del timestamp de la tx.
+    # La última vela cerrada antes de ese instante es la que la ballena vio.
+    limit = 120
+    # `since` = inicio de la ventana de 120 velas anterior al timestamp
+    since = timestamp_ms - (limit * bar_ms)
+
+    try:
+        exchange = _get_binance()
+        ohlcv = exchange.fetch_ohlcv(pair, timeframe=timeframe, since=since, limit=limit)
+
+        if not ohlcv or len(ohlcv) < 30:
+            return None
+
+        import pandas as pd
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+
+        # Filtrar solo las velas cuyo CIERRE ya ocurrió antes del timestamp de la tx.
+        # Así evitamos usar información futura que la ballena no podía conocer.
+        tx_dt = pd.to_datetime(timestamp_ms, unit='ms', utc=True)
+        df_hist = df[df['timestamp'] <= tx_dt]
+
+        if len(df_hist) < 30:
+            return None
+
+        context = _calculate_indicators(df_hist)
+        context['pair'] = pair
+        context['timeframe'] = timeframe
+        context['candles_used'] = len(df_hist)
+        context['reconstructed_at'] = timestamp_ms  # Marca que es dato histórico
+
+        return context
+
+    except ccxt.BadSymbol:
+        return None
+    except Exception as e:
+        print(f"[Whale Intelligence] Error fetching historical context for {symbol} @ {timestamp_ms}: {e}")
+        return None
