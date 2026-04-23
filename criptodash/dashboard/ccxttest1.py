@@ -276,10 +276,11 @@ def historical_fetch_ohlcv(pair, date_from=None, timeframe='1h', since=None, lim
     else:
         # Asumir string para parse8601
         try:
-            from_ts = binance.parse8601(str(actual_since))
+            parsed = binance.parse8601(str(actual_since))
+            from_ts = int(parsed) if parsed is not None else None
         except Exception:
             # Si ya es un timestamp
-            from_ts = int(actual_since)
+            from_ts = int(float(actual_since))
 
     ohlcv_list = []
     ohlcv = binance.fetch_ohlcv(pair, timeframe, since=from_ts, limit=1000)
