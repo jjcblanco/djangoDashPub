@@ -1044,3 +1044,139 @@ def learn_patterns(request):
             'message': f'Error interno: {str(e)}',
             'patterns_count': 0,
         }, status=500)
+
+
+@login_required
+def trigger_retroactive_enrichment(request, wallet_id=None):
+    """
+    Dispara el enriquecimiento retroactivo de contexto de mercado para transacciones existentes.
+
+    Mejora Crítica #1: Reconstruye los indicadores técnicos (RSI, MACD, BB, etc.)
+    en el momento exacto en que la ballena realmente operó, no en el momento del sync.
+
+    GET params:
+        wallet_id (optional): Si se pasa en la URL, solo procesa esa wallet.
+                               Si es None (ruta /api/retro-enrich/all/), procesa todas.
+    """
+    from dashboard.tasks import retroactive_context_enrichment_task
+    from dashboard.models import WhaleTransaction
+
+    try:
+        if wallet_id:
+            # Modo: solo wallet específica
+            total_pending = WhaleTransaction.objects.filter(
+                wallet_id=wallet_id,
+                tx_type__in=['BUY', 'SWAP', 'UNKNOWN'],
+                to_asset__isnull=False,
+            ).exclude(raw_data__market_context__isnull=False).count()
+
+            retroactive_context_enrichment_task.delay(wallet_id=wallet_id)
+            return JsonResponse({
+                'status': 'success',
+                'message': (
+                    f'Enriquecimiento histórico iniciado en background para esta ballena. '
+                    f'{total_pending} transacciones sin contexto serán procesadas.'
+                ),
+                'pending_txs': total_pending,
+                'mode': 'single_wallet',
+            })
+        else:
+            # Modo: todas las wallets
+            total_pending = WhaleTransaction.objects.filter(
+                tx_type__in=['BUY', 'SWAP', 'UNKNOWN'],
+                to_asset__isnull=False,
+            ).exclude(raw_data__market_context__isnull=False).count()
+
+            retroactive_context_enrichment_task.delay()
+            return JsonResponse({
+                'status': 'success',
+                'message': (
+                    f'Enriquecimiento histórico masivo iniciado en background. '
+                    f'{total_pending} transacciones en total serán procesadas. '
+                    f'Este proceso puede tardar varios minutos dependiendo del número de wallets.'
+                ),
+                'pending_txs': total_pending,
+                'mode': 'all_wallets',
+            })
+
+    except Exception as e:
+        import traceback
+        logger.error(f"[RetroEnrich] Error disparando tarea: {e}\n{traceback.format_exc()}")
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error al iniciar el enriquecimiento: {str(e)}. ¿Está corriendo Redis/Celery?',
+        }, status=500)
+
+
+@login_required
+def trigger_extended_pattern_learning(request):
+    """
+    Dispara el aprendizaje de patrones ampliado (Mejora Crítica #2).
+
+    A diferencia del endpoint /learn-patterns/ anterior que solo usaba ShadowTrades,
+    este usa también las WhaleTransactions directamente (dataset mucho mayor)
+    y un umbral reducido (min_trades=3, min_win_rate=55%).
+
+    Devuelve inmediatamente con el resultado del aprendizaje sincrónico básico
+    y estadísticas del dataset disponible.
+    """
+    from dashboard.tasks import learn_whale_patterns_task
+    from dashboard.models import WhaleTransaction, ShadowTrade, WhalePattern
+
+    try:
+        # Estadísticas del dataset antes de aprender
+        txs_with_ctx = WhaleTransaction.objects.filter(
+            tx_type__in=['BUY', 'SWAP'],
+            raw_data__market_context__isnull=False
+        ).count()
+        shadow_closed = ShadowTrade.objects.filter(
+            status='CLOSED', market_context__isnull=False
+        ).count()
+        txs_no_ctx = WhaleTransaction.objects.filter(
+            tx_type__in=['BUY', 'SWAP', 'UNKNOWN'],
+            to_asset__isnull=False,
+        ).exclude(raw_data__market_context__isnull=False).count()
+
+        if txs_with_ctx + shadow_closed < 3:
+            return JsonResponse({
+                'status': 'warning',
+                'message': (
+                    f'Dataset insuficiente para aprender. '
+                    f'{txs_with_ctx} txs con contexto y {shadow_closed} shadow trades cerrados disponibles. '
+                    f'Primero ejecuta "Enriquecer Historial" para añadir contexto a las {txs_no_ctx} '
+                    f'transacciones que aún no lo tienen.'
+                ),
+                'dataset': {
+                    'txs_with_context': txs_with_ctx,
+                    'shadow_trades_closed': shadow_closed,
+                    'txs_without_context': txs_no_ctx,
+                },
+                'patterns_count': WhalePattern.objects.filter(is_active=True).count(),
+            })
+
+        # Disparar en background (es una tarea pesada con llamadas a Binance)
+        learn_whale_patterns_task.delay(min_trades=3, min_win_rate=0.55)
+
+        return JsonResponse({
+            'status': 'success',
+            'message': (
+                f'Aprendizaje iniciado en background con dataset ampliado. '
+                f'Fuentes: {txs_with_ctx} transacciones enriquecidas + {shadow_closed} shadow trades. '
+                f'Los patrones se actualizarán en unos minutos.'
+            ),
+            'dataset': {
+                'txs_with_context': txs_with_ctx,
+                'shadow_trades_closed': shadow_closed,
+                'txs_without_context': txs_no_ctx,
+                'total': txs_with_ctx + shadow_closed,
+            },
+            'patterns_before': WhalePattern.objects.filter(is_active=True).count(),
+        })
+
+    except Exception as e:
+        import traceback
+        logger.error(f"[ExtendedLearning] Error disparando tarea: {e}\n{traceback.format_exc()}")
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error al iniciar aprendizaje: {str(e)}. ¿Está corriendo Redis/Celery?',
+        }, status=500)
