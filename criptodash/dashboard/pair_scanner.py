@@ -326,7 +326,7 @@ def save_scan_results(results: list, timeframe: str = '5m'):
             if recent:
                 continue
 
-            ScalpAlert.objects.create(
+            alert = ScalpAlert.objects.create(
                 pair             = pair_obj,
                 timeframe        = timeframe,
                 strategy         = sig['strategy'],
@@ -340,6 +340,9 @@ def save_scan_results(results: list, timeframe: str = '5m'):
             )
 
             # --- AUTO-PILOT ---
+            bot_reason = ""
+            bot_created = False
+            
             if auto_pilot and confidence >= (min_conf / 100):
                 # Evitar multi-bots clones para la misma moneda
                 exists = ScalpingBot.objects.filter(
@@ -364,8 +367,22 @@ def save_scan_results(results: list, timeframe: str = '5m'):
                             status='RUNNING'
                         )
                         logger.info(f'[AutoPilot] Bot creado automáticamente para {pair_obj.symbol} con conf={confidence:.2f}')
+                        bot_created = True
+                        bot_reason = "Bot simulado creado exitosamente."
                     except Exception as e:
                         logger.error(f'[AutoPilot] Error creando bot SIM para {pair_obj.symbol}: {e}')
+                        bot_reason = f"Error al crear: {str(e)[:100]}"
+                else:
+                    bot_reason = "Ya existe un bot en RUNNING para este par."
+            else:
+                if not auto_pilot:
+                    bot_reason = "Auto-pilot general desactivado."
+                else:
+                    bot_reason = f"Confianza insuficiente: {confidence:.0%} < min {min_conf/100:.0%}."
+
+            alert.bot_created = bot_created
+            alert.bot_creation_reason = bot_reason
+            alert.save(update_fields=['bot_created', 'bot_creation_reason'])
 
 
     logger.info(f'[PairScanner] {len(results)} resultados guardados en BD.')
