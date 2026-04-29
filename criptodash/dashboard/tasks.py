@@ -411,7 +411,8 @@ def run_scalping_bot_task(bot_id, force_eval=False):
         symbol = bot.pair.symbol
         df = fetch_ohlcv_df(exchange, symbol, bot.timeframe, limit=250)
         if df is None or len(df) < 50:
-            raise Exception(f"Datos insuficientes para {symbol}.")
+            logger.warning(f"[ScalpBot] Datos insuficientes o error API temporal para {symbol}.")
+            return {'executed': False, 'reason': f"Datos insuficientes o error API temporal para {symbol}."}
 
         result = run_strategy(
             bot.strategy_type, df,
