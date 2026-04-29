@@ -283,6 +283,7 @@ def historical_fetch_ohlcv(pair, date_from=None, timeframe='1h', since=None, lim
             from_ts = int(float(actual_since))
 
     ohlcv_list = []
+    print(f"DEBUG: calling fetch_ohlcv with from_ts={from_ts} type={type(from_ts)}")
     ohlcv = binance.fetch_ohlcv(pair, timeframe, since=from_ts, limit=1000)
     if not ohlcv:
         return []
@@ -295,6 +296,7 @@ def historical_fetch_ohlcv(pair, date_from=None, timeframe='1h', since=None, lim
         
     while True:
         from_ts = ohlcv_list[-1][0] + 1 # +1 para no repetir la última vela
+        print(f"DEBUG: calling fetch_ohlcv in loop with from_ts={from_ts} type={type(from_ts)}")
         new_ohlcv = binance.fetch_ohlcv(pair, timeframe, since=from_ts, limit=1000)
         if not new_ohlcv:
             break

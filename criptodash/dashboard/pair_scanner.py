@@ -154,7 +154,7 @@ def scan_pair(exchange, symbol: str, timeframe: str, run_signals: bool = True) -
         from .scalping_strategies import run_strategy
 
         # Obtener OHLCV
-        df = fetch_ohlcv_df(exchange, symbol, timeframe, limit=120)
+        df = fetch_ohlcv_df(exchange, symbol, timeframe, limit=250)
         if df is None or len(df) < 50:
             return None
 
