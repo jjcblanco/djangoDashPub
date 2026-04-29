@@ -579,6 +579,10 @@ class ScalpAlert(models.Model):
     is_active           = models.BooleanField(default=True)
     created_at          = models.DateTimeField(auto_now_add=True)
     expires_at          = models.DateTimeField(null=True, blank=True)
+    
+    # Logs del generador de bots automático
+    bot_created         = models.BooleanField(default=False)
+    bot_creation_reason = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         ordering = ['-created_at']
