@@ -66,6 +66,8 @@ from .whale_views import (
     bulk_import_whales,
     trigger_retroactive_enrichment,
     trigger_extended_pattern_learning,
+    whale_token_stats_ajax,
+    whale_behavior_ajax,
 )
 
 # Importar vistas de simulaciones / shadow trading (NUEVO)
@@ -168,6 +170,8 @@ __all__ = [
     'trigger_retroactive_enrichment',
     'simulate_whale_trade',
     'close_shadow_trade',
+    'whale_token_stats_ajax',
+    'whale_behavior_ajax',
 
     # Scalping views
     'scalping_dashboard',

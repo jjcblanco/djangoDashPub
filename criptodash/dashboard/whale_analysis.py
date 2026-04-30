@@ -153,6 +153,224 @@ class WhaleAnalysisEngine:
         return final_score
 
     @staticmethod
+    def analyze_token_performance(wallet_id):
+        """
+        Calcula win rate y PnL por token para una ballena.
+        NO requiere market_context — usa directamente ShadowTrade + WhaleTransaction.
+        
+        Returns:
+            list of dicts: [{token, trades, wins, win_rate, avg_pnl, last_trade}]
+        """
+        from .models import ShadowTrade, WhaleTransaction
+        from django.utils import timezone
+        from django.db.models import Avg, Count, Q
+        
+        results = {}
+
+        # 1. Datos desde ShadowTrades cerrados (más confiables, tienen PnL real)
+        shadow_trades = ShadowTrade.objects.filter(wallet_id=wallet_id, status='CLOSED')
+        for st in shadow_trades:
+            token = (st.token_symbol or '').upper().strip()
+            if not token:
+                continue
+            if token not in results:
+                results[token] = {'token': token, 'trades': 0, 'wins': 0, 'pnls': [], 'last_trade': None}
+            results[token]['trades'] += 1
+            pnl = float(st.pnl_percent or 0)
+            results[token]['pnls'].append(pnl)
+            if pnl > 0:
+                results[token]['wins'] += 1
+            if results[token]['last_trade'] is None or (st.closed_at and st.closed_at > results[token]['last_trade']):
+                results[token]['last_trade'] = st.closed_at
+
+        # 2. Si hay pocos shadow trades, enriquecer con WhaleTransactions (proxy)
+        if sum(v['trades'] for v in results.values()) < 5:
+            txs = WhaleTransaction.objects.filter(
+                wallet_id=wallet_id,
+                tx_type__in=['BUY', 'SWAP', 'UNKNOWN']
+            ).order_by('-timestamp')[:100]
+            
+            for tx in txs:
+                token = (tx.to_asset or '').upper().strip()
+                if not token or token in ('USDT', 'USDC', 'DAI', 'BUSD'):
+                    continue
+                if token not in results:
+                    results[token] = {'token': token, 'trades': 0, 'wins': 0, 'pnls': [], 'last_trade': None}
+                # Solo contamos como trade, sin PnL (no disponible desde TX directamente)
+                results[token]['trades'] += 1
+                if results[token]['last_trade'] is None or (tx.timestamp and tx.timestamp > results[token]['last_trade']):
+                    results[token]['last_trade'] = tx.timestamp
+
+        # Calcular métricas finales
+        output = []
+        for token, data in results.items():
+            win_rate = round((data['wins'] / data['trades']) * 100, 1) if data['trades'] > 0 else 0
+            avg_pnl = round(sum(data['pnls']) / len(data['pnls']), 2) if data['pnls'] else None
+            output.append({
+                'token': token,
+                'trades': data['trades'],
+                'wins': data['wins'],
+                'win_rate': win_rate,
+                'avg_pnl': avg_pnl,
+                'last_trade': data['last_trade'].strftime('%d/%m %H:%M') if data['last_trade'] else None,
+            })
+        
+        # Ordenar por número de trades descendente
+        output.sort(key=lambda x: x['trades'], reverse=True)
+        return output[:15]  # Top 15 tokens
+
+    @staticmethod
+    def classify_behavior(wallet_id):
+        """
+        Clasifica el comportamiento de la ballena:
+        - ACUMULADOR: mayormente compras, pocas ventas
+        - TRADER: alta rotación buy/sell balanceada
+        - DISTRIBUIDOR: más ventas que compras
+        - OBSERVACION: pocos datos
+        
+        También calcula holding time promedio, RSI promedio de compra, 
+        y horario de mayor actividad.
+        
+        Returns dict con: mode, buy_ratio, avg_holding_hours, 
+                          preferred_rsi, active_hours, tx_count
+        """
+        from .models import WhaleTransaction, ShadowTrade
+        from django.utils import timezone
+        from collections import Counter
+        import math
+        
+        txs = WhaleTransaction.objects.filter(wallet_id=wallet_id).order_by('timestamp')
+        tx_count = txs.count()
+        
+        if tx_count < 3:
+            return {
+                'mode': 'OBSERVACION',
+                'mode_label': 'En Observación',
+                'mode_icon': '👁️',
+                'mode_color': '#6c757d',
+                'buy_ratio': None,
+                'avg_holding_hours': None,
+                'preferred_rsi': None,
+                'active_hours': [],
+                'tx_count': tx_count,
+                'description': 'Pocas transacciones para clasificar.',
+                'top_indicators': []
+            }
+        
+        # Contar BUY vs SELL
+        buy_types = ['BUY', 'SWAP']
+        sell_types = ['SELL', 'TRANSFER']
+        
+        buys = txs.filter(tx_type__in=buy_types).count()
+        sells = txs.filter(tx_type__in=sell_types).count()
+        
+        # También inferir por from_asset/to_asset para SWAP/UNKNOWN
+        unknown_txs = txs.filter(tx_type='UNKNOWN')
+        for tx in unknown_txs:
+            if tx.to_asset and tx.to_asset.upper() not in ('USDT', 'USDC', 'SOL', 'ETH'):
+                buys += 1  # Comprando un token
+            elif tx.from_asset and tx.from_asset.upper() not in ('USDT', 'USDC', 'SOL', 'ETH'):
+                sells += 1  # Vendiendo un token
+        
+        total_classified = buys + sells
+        buy_ratio = buys / total_classified if total_classified > 0 else 0.5
+        
+        # Clasificar modo
+        if tx_count < 5:
+            mode = 'OBSERVACION'
+            mode_label = 'En Observación'
+            mode_icon = '👁️'
+            mode_color = '#6c757d'
+        elif buy_ratio >= 0.75:
+            mode = 'ACUMULADOR'
+            mode_label = 'Acumulador DCA'
+            mode_icon = '🏦'
+            mode_color = '#0dcaf0'
+        elif buy_ratio <= 0.35:
+            mode = 'DISTRIBUIDOR'
+            mode_label = 'Distribución'
+            mode_icon = '📤'
+            mode_color = '#dc3545'
+        elif tx_count >= 15:
+            mode = 'TRADER'
+            mode_label = 'Trader Activo'
+            mode_icon = '⚡'
+            mode_color = '#ffc107'
+        else:
+            mode = 'SWING'
+            mode_label = 'Swing Trader'
+            mode_icon = '🌊'
+            mode_color = '#6f42c1'
+        
+        # Holding time desde shadow trades cerrados
+        closed_trades = ShadowTrade.objects.filter(wallet_id=wallet_id, status='CLOSED')
+        holding_hours_list = []
+        for st in closed_trades:
+            if st.closed_at and st.created_at:
+                delta = (st.closed_at - st.created_at).total_seconds() / 3600
+                if 0 < delta < 720:
+                    holding_hours_list.append(delta)
+        avg_holding = round(sum(holding_hours_list) / len(holding_hours_list), 1) if holding_hours_list else None
+        
+        # RSI promedio de compra (desde market_context si existe)
+        rsi_values = []
+        for tx in txs.filter(tx_type__in=['BUY', 'SWAP'])[:50]:
+            rd = tx.raw_data or {}
+            ctx = rd.get('market_context', {})
+            if ctx.get('rsi_14'):
+                try:
+                    rsi_values.append(float(ctx['rsi_14']))
+                except Exception:
+                    pass
+        preferred_rsi = round(sum(rsi_values) / len(rsi_values), 1) if rsi_values else None
+        
+        # Horas de mayor actividad
+        hour_counts = Counter()
+        for tx in txs:
+            if tx.timestamp:
+                hour_counts[tx.timestamp.hour] += 1
+        active_hours = [h for h, _ in hour_counts.most_common(3)]
+        
+        # Top indicadores (desde market_context)
+        indicator_hits = Counter()
+        for tx in txs.filter(tx_type__in=['BUY', 'SWAP'])[:50]:
+            rd = tx.raw_data or {}
+            ctx = rd.get('market_context', {})
+            if ctx.get('rsi_14') and ctx['rsi_14'] < 40:
+                indicator_hits['RSI Bajo (<40)'] += 1
+            if ctx.get('volume_ratio') and ctx['volume_ratio'] > 1.5:
+                indicator_hits['Vol. Alto (>1.5x)'] += 1
+            if ctx.get('macd_cross') == 'bullish':
+                indicator_hits['MACD Bullish'] += 1
+            if ctx.get('in_uptrend') is True:
+                indicator_hits['Tendencia Alcista'] += 1
+            if ctx.get('bb_position') and ctx['bb_position'] < 0.3:
+                indicator_hits['BB Bajo (<0.3)'] += 1
+        top_indicators = [ind for ind, _ in indicator_hits.most_common(3)]
+        
+        description_map = {
+            'ACUMULADOR': f'Compra de forma progresiva ({round(buy_ratio*100)}% compras). Estrategia DCA.',
+            'TRADER': f'Alta rotación buy/sell. {tx_count} txs totales.',
+            'DISTRIBUIDOR': f'En fase de venta ({round((1-buy_ratio)*100)}% ventas).',
+            'SWING': f'Posiciones de mediano plazo. Hold promedio: {avg_holding}h.' if avg_holding else 'Swing trader con pocas operaciones.',
+            'OBSERVACION': 'Pocos datos disponibles.',
+        }
+        
+        return {
+            'mode': mode,
+            'mode_label': mode_label,
+            'mode_icon': mode_icon,
+            'mode_color': mode_color,
+            'buy_ratio': round(buy_ratio * 100, 1),
+            'avg_holding_hours': avg_holding,
+            'preferred_rsi': preferred_rsi,
+            'active_hours': active_hours,
+            'tx_count': tx_count,
+            'description': description_map.get(mode, ''),
+            'top_indicators': top_indicators,
+        }
+
+    @staticmethod
     def suggest_bot_params(wallet_id, token_symbol=None):
         """
         Analiza el historial de una ballena y sugiere parámetros para crear un bot.

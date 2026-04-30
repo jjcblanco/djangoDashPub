@@ -998,6 +998,46 @@ def whale_trade_chart_ajax(request, wallet_id):
 
 
 @login_required
+@ajax_rate_limit(max_calls=30, period_seconds=60)
+def whale_token_stats_ajax(request, wallet_id):
+    """
+    Calcula win rate y PnL por token para una ballena específica.
+    No requiere market_context — funciona con los datos disponibles.
+    """
+    try:
+        wallet = get_object_or_404(WhaleWallet, id=wallet_id)
+        cache_key = f"whale_token_stats_{wallet_id}"
+        cached = cache.get(cache_key)
+        if not cached:
+            from dashboard.whale_analysis import WhaleAnalysisEngine
+            cached = WhaleAnalysisEngine.analyze_token_performance(wallet_id)
+            cache.set(cache_key, cached, 60 * 10)  # 10 min cache
+        return JsonResponse({'status': 'ok', 'tokens': cached})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+@ajax_rate_limit(max_calls=30, period_seconds=60)
+def whale_behavior_ajax(request, wallet_id):
+    """
+    Clasifica el comportamiento de la ballena: ACUMULADOR, TRADER, DISTRIBUIDOR, etc.
+    Devuelve también indicadores preferidos y horarios de actividad.
+    """
+    try:
+        wallet = get_object_or_404(WhaleWallet, id=wallet_id)
+        cache_key = f"whale_behavior_{wallet_id}"
+        cached = cache.get(cache_key)
+        if not cached:
+            from dashboard.whale_analysis import WhaleAnalysisEngine
+            cached = WhaleAnalysisEngine.classify_behavior(wallet_id)
+            cache.set(cache_key, cached, 60 * 15)  # 15 min cache
+        return JsonResponse({'status': 'ok', 'behavior': cached})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
 def whale_live_metrics(request):
     """Devuelve métricas agregadas en tiempo real para actualización del dashboard."""
     from ..models import WhaleWallet, ConsensusSignal, ShadowTrade
