@@ -618,6 +618,26 @@ def run_all_scalping_bots_task():
 
 
 # ================================================================
+# MAINTENANCE: CLEANUP STALE SCAN RESULTS
+# ================================================================
+
+@shared_task
+def cleanup_old_scan_results_task():
+    """
+    Deletes PairScanResult entries older than 7 days to prevent
+    unbounded table growth (~5,500 rows/day → 38,500/week).
+    """
+    from dashboard.models import PairScanResult
+    from datetime import timedelta
+
+    cutoff = timezone.now() - timedelta(days=7)
+    deleted, _ = PairScanResult.objects.filter(scanned_at__lt=cutoff).delete()
+    if deleted:
+        logger.info(f"[Cleanup] {deleted} PairScanResults older than 7 days deleted.")
+    return {'deleted': deleted}
+
+
+# ================================================================
 # MEJORAS CRÍTICAS: ENRIQUECIMIENTO RETROACTIVO + APRENDIZAJE
 # ================================================================
 

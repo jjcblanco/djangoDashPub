@@ -1,0 +1,26 @@
+All Changes Applied
+VPS (Production Server)
+#	Fix	Before	After
+1	DEBUG	True (leaked stack traces)	False
+2	Celery workers	14 processes ~6 GB RAM	4 processes (beat + 2 prefork workers) ~320 MB
+3	DB indexes	0 performance indexes	8 indexes across 6 tables
+4	Redis cache	Missing (LocMemCache, per-process)	Redis-backed shared cache
+5	DB pooling	New connection per request	CONN_MAX_AGE=300 (5 min reuse)
+6	MySQL security	0.0.0.0:3306 exposed	127.0.0.1:3306 only
+7	N+1 queries	1 + 2*N queries per dashboard load	prefetch_related, 1-2 queries total
+8	Auto-scalping	214 bots (212 in ERROR)	Disabled + all 212 stopped
+9	ScanResult cleanup	165k rows, ~5,500/day unbounded growth	Daily TTL cleanup (7 days)
+10	Logging	None (console-only defaults)	Rotating file-based logging (10MB × 5 files)
+Additional Fixes Applied
+SSL/HSTS security settings wired from .env to settings.py (SECURE_SSL_REDIRECT, SESSION_COOKIE_SECURE, CSRF_COOKIE_SECURE, SECURE_HSTS_SECONDS)
+Channel layer upgraded from InMemoryChannelLayer to Redis-based layer
+Whale insights N+1 — select_related('wallet') on PatternInsight queries
+Bot detail view — prefetch_related('trades') instead of separate query
+Server Health Improvement
+Metric	Before	After
+RAM used	10.4 GB	2.8 GB
+RAM available	2.4 GB	10.1 GB
+Celery processes	14	4
+Website status	Unknown	HTTP/2 200 (Cloudflare)
+Database Indexes Created
+LiveTrade(bot, status), LiveTrade(status), WhaleTransaction(wallet, tx_type), WhaleTransaction(wallet, timestamp), ConsensusSignal(token_symbol, status, detected_at), PatternInsight(wallet, pattern_type), ShadowTrade(wallet, token_symbol, status), ScalpingTrade(status, bot)

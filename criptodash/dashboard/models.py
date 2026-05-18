@@ -155,7 +155,7 @@ class LiveTrade(models.Model):
         ('BUY', 'Buy'),
         ('SELL', 'Sell'),
     ]
-    
+
     STATUS_CHOICES = [
         ('WAITING', 'Waiting (Limit Buy)'),
         ('OPEN', 'Open (Position)'),
@@ -179,6 +179,12 @@ class LiveTrade(models.Model):
     take_profit = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
     order_id = models.CharField(max_length=100, blank=True, null=True, help_text="ID de orden de entrada (Buy)")
     exit_order_id = models.CharField(max_length=100, blank=True, null=True, help_text="ID de orden de salida (Sell/TP)")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['bot', 'status']),
+            models.Index(fields=['status']),
+        ]
 
     def __str__(self):
         return f"{self.side} {self.amount} {self.bot.pair.symbol} at {self.entry_price}"
@@ -289,6 +295,12 @@ class WhaleTransaction(models.Model):
     amount_out = models.DecimalField(max_digits=30, decimal_places=10, null=True, blank=True)
     raw_data = models.JSONField(null=True, blank=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['wallet', 'tx_type']),
+            models.Index(fields=['wallet', 'timestamp']),
+        ]
+
     def __str__(self):
         return f"{self.tx_type} {self.wallet.name or self.wallet.address[:8]}"
 
@@ -299,6 +311,11 @@ class PatternInsight(models.Model):
     description = models.TextField()
     detected_at = models.DateTimeField(auto_now_add=True)
     meta_data = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['wallet', 'pattern_type']),
+        ]
 
     def __str__(self):
         return f"{self.pattern_type} for {self.wallet.name or self.wallet.address[:8]}"
@@ -320,6 +337,11 @@ class ShadowTrade(models.Model):
     market_context = models.JSONField(null=True, blank=True) # RSI, MACD at entry
     created_at = models.DateTimeField(auto_now_add=True)
     closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['wallet', 'token_symbol', 'status']),
+        ]
 
     def __str__(self):
         return f"Shadow {self.token_symbol} - {self.wallet.name or self.wallet.address[:8]}"
@@ -382,6 +404,9 @@ class ConsensusSignal(models.Model):
 
     class Meta:
         ordering = ['-detected_at']
+        indexes = [
+            models.Index(fields=['token_symbol', 'status', 'detected_at']),
+        ]
         verbose_name = "Consensus Signal"
         verbose_name_plural = "Consensus Signals"
 
@@ -558,6 +583,9 @@ class ScalpingTrade(models.Model):
 
     class Meta:
         ordering = ['-entry_time']
+        indexes = [
+            models.Index(fields=['status', 'bot']),
+        ]
 
     def __str__(self):
         return f'{self.side} {self.bot.pair} @ {self.entry_price} ({self.status})'
