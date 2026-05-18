@@ -2,6 +2,7 @@ from celery import shared_task
 import logging
 import time
 from django.utils import timezone
+from django.core.cache import cache
 from dashboard.utils.notifications import send_telegram_message
 
 logger = logging.getLogger(__name__)
@@ -403,6 +404,17 @@ def run_scalping_bot_task(bot_id, force_eval=False):
         logger.debug(f"[ScalpBot] Bot {bot.name} tiene trade abierto, skip.")
         return {'executed': False, 'reason': 'Ya tiene un trade abierto activo.'}
 
+    # Cooldown tras SL: evitar re-entrada inmediata despues de perdida
+    last_trade = ScalpingTrade.objects.filter(
+        bot=bot, status='CLOSED_SL'
+    ).order_by('-exit_time').first()
+    if last_trade and last_trade.exit_time:
+        # 5 velas de cooldown
+        tf_minutes = {'1m': 1, '3m': 3, '5m': 5, '15m': 15}
+        cooldown_secs = tf_minutes.get(bot.timeframe, 5) * 5 * 60
+        if (timezone.now() - last_trade.exit_time).total_seconds() < cooldown_secs:
+            return {'executed': False, 'reason': 'En cooldown tras Stop Loss (5 velas).'}
+
     try:
         exchange = _get_exchange()
         if not exchange:
@@ -491,9 +503,18 @@ def run_scalping_bot_task(bot_id, force_eval=False):
     except Exception as e:
         logger.error(f"[ScalpBot] Bot {bot_id} error: {e}")
         try:
-            bot.last_error = str(e)
-            bot.status = 'ERROR'
-            bot.save(update_fields=['last_error', 'status'])
+            # Contar errores consecutivos: solo marcar ERROR tras 3 fallos seguidos
+            err_key = f"scalp_err:{bot_id}"
+            err_count = cache.get(err_key, 0) + 1
+            cache.set(err_key, err_count, timeout=900)  # 15 min TTL
+
+            bot.last_error = str(e)[:250]
+            if err_count >= 3:
+                bot.status = 'ERROR'
+                bot.save(update_fields=['last_error', 'status'])
+                cache.delete(err_key)
+            else:
+                bot.save(update_fields=['last_error'])  # solo registrar, sigue RUNNING
         except Exception:
             pass
         return {'executed': False, 'reason': f"Error interno: {str(e)}"}

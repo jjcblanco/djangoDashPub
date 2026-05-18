@@ -116,30 +116,52 @@ def score_signals(signals: list) -> float:
 
 
 def recommend_strategy(df: pd.DataFrame, signals: list) -> str:
-    """Elige la mejor estrategia basada en condiciones actuales."""
+    """Elige la mejor estrategia basada en condiciones actuales.
+
+    Mejoras v3:
+      - ADX > 25 fuerza EMA_CROSS (mercados con tendencia favorecen momentum)
+      - BB_SQUEEZE solo cuando ADX < 25 y ATR bajo (rangos comprimidos)
+      - VWAP_RSI como default en mercados sin direccion
+    """
+    # Calcular ADX para la decision
+    try:
+        from .indicadores import adx as calc_adx
+        adx_series = calc_adx(df, 14)
+        adx_val = float(adx_series.iloc[-1]) if not adx_series.empty else 0
+    except Exception:
+        adx_val = 0
+
+    # Votacion ponderada por confianza
     strategy_votes = {}
     for s in signals:
         strat = s.get('strategy', '')
-        strategy_votes[strat] = strategy_votes.get(strat, 0) + s.get('confidence', 0)
+        conf = s.get('confidence', 0)
+        # Mercado tendencial: dar mas peso a EMA_CROSS, menos a BB_SQUEEZE
+        if adx_val > 25 and strat == 'EMA_CROSS':
+            conf *= 1.4
+        elif adx_val > 25 and strat == 'BB_SQUEEZE':
+            conf *= 0.6
+        strategy_votes[strat] = strategy_votes.get(strat, 0) + conf
 
     if strategy_votes:
-        return max(strategy_votes, key=strategy_votes.get)
+        best = max(strategy_votes, key=strategy_votes.get)
+        # Si ADX > 25 y EMA_CROSS tiene senal valida, forzarla
+        if adx_val > 25 and 'EMA_CROSS' in strategy_votes and strategy_votes['EMA_CROSS'] > 0.5:
+            return 'EMA_CROSS'
+        return best
 
     # Fallback por condiciones de mercado
     try:
-        from .indicadores import adx as calc_adx, atr
-        adx_series = calc_adx(df, 14)
-        adx_val    = float(adx_series.iloc[-1]) if not adx_series.empty else 0
-
+        from .indicadores import atr
         atr_series = atr(df, 14)
         atr_val    = float(atr_series.iloc[-1]) if not atr_series.empty else 0
         atr_pct    = (atr_val / float(df['close'].iloc[-1])) * 100 if float(df['close'].iloc[-1]) > 0 else 0
 
-        if adx_val > 30:
-            return 'EMA_CROSS'     # Tendencia fuerte → cruce de medias
+        if adx_val > 25:
+            return 'EMA_CROSS'     # Tendencia > cruce de momentum
         if atr_pct < 0.5:
-            return 'BB_SQUEEZE'    # Baja vol → esperar squeeze
-        return 'VWAP_RSI'          # Default: rebote VWAP
+            return 'BB_SQUEEZE'    # Baja vol > squeeze pending
+        return 'VWAP_RSI'          # Default: rebote VWAP intradiario
     except Exception:
         return 'EMA_CROSS'
 
@@ -361,8 +383,8 @@ def save_scan_results(results: list, timeframe: str = '5m'):
                             timeframe=timeframe,
                             capital_usdt=100.0,
                             max_position_pct=50.0,
-                            sl_atr_mult=1.5,
-                            tp_atr_mult=2.5,
+                            sl_atr_mult=2.2,
+                            tp_atr_mult=1.6,
                             is_live=False,
                             status='RUNNING'
                         )

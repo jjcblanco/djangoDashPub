@@ -108,7 +108,7 @@ def _trend_filters(df: pd.DataFrame, adx_threshold: int = 20):
 # ESTRATEGIA 1: EMA CROSS (5/20) + VOLUMEN
 # ──────────────────────────────────────────────
 
-def strategy_ema_cross(df: pd.DataFrame, sl_atr_mult=1.5, tp_atr_mult=2.0, params=None) -> dict:
+def strategy_ema_cross(df: pd.DataFrame, sl_atr_mult=2.2, tp_atr_mult=1.6, params=None) -> dict:
     """
     EMA 5 cruza EMA 20 con confirmación de volumen elevado.
 
@@ -180,13 +180,13 @@ def strategy_ema_cross(df: pd.DataFrame, sl_atr_mult=1.5, tp_atr_mult=2.0, param
     cross_down = bool(float(prev['ema_fast']) >= float(prev['ema_slow'])) and bool(float(cur['ema_fast']) < float(cur['ema_slow']))
 
     if cross_up and vol_ok and 40 <= rsi_val <= 68 and trend_up and trend_strong:
-        confidence = 0.55 + (0.10 if vol_ok else 0) + (0.10 if rsi_val < 60 else 0) + (0.10 if adx_val > 25 else 0)
+        confidence = 0.65 + (0.10 if vol_ok else 0) + (0.10 if rsi_val < 60 else 0) + (0.10 if adx_val > 25 else 0)
         sl, tp = _calc_sl_tp(price, 'BUY', atr_val, sl_atr_mult, tp_atr_mult)
         return {'signal': 'BUY', 'entry': price, 'sl': sl, 'tp': tp,
                 'confidence': round(min(confidence, 0.95), 2), 'indicators': snapshot}
 
     if cross_down and vol_ok and 32 <= rsi_val <= 60 and trend_down and trend_strong:
-        confidence = 0.55 + (0.10 if vol_ok else 0) + (0.10 if rsi_val > 40 else 0) + (0.10 if adx_val > 25 else 0)
+        confidence = 0.65 + (0.10 if vol_ok else 0) + (0.10 if rsi_val > 40 else 0) + (0.10 if adx_val > 25 else 0)
         sl, tp = _calc_sl_tp(price, 'SELL', atr_val, sl_atr_mult, tp_atr_mult)
         return {'signal': 'SELL', 'entry': price, 'sl': sl, 'tp': tp,
                 'confidence': round(min(confidence, 0.95), 2), 'indicators': snapshot}
@@ -198,7 +198,7 @@ def strategy_ema_cross(df: pd.DataFrame, sl_atr_mult=1.5, tp_atr_mult=2.0, param
 # ESTRATEGIA 2: BOLLINGER SQUEEZE + MOMENTUM
 # ──────────────────────────────────────────────
 
-def strategy_bb_squeeze(df: pd.DataFrame, sl_atr_mult=1.5, tp_atr_mult=2.0, params=None) -> dict:
+def strategy_bb_squeeze(df: pd.DataFrame, sl_atr_mult=2.2, tp_atr_mult=1.6, params=None) -> dict:
     """
     Detecta compresión de Bollinger Bands (squeeze) y opera el breakout.
 
@@ -242,11 +242,13 @@ def strategy_bb_squeeze(df: pd.DataFrame, sl_atr_mult=1.5, tp_atr_mult=2.0, para
     width_threshold = float(bb_width_series.quantile(squeeze_pct / 100))
     in_squeeze_prev = bool(float(prev['bb_width']) < width_threshold) if not pd.isna(prev['bb_width']) else False
 
-    # ¿El precio rompe la banda ahora DESPUÉS del squeeze?
-    breakout_up   = bool(in_squeeze_prev and (float(cur['close']) > float(cur['bb_upper'])))
-    breakout_down = bool(in_squeeze_prev and (float(cur['close']) < float(cur['bb_lower'])))
+    # Confirmacion de volumen (evita falsos breakouts)
+    df['vol_ma'] = df['volume'].rolling(20).mean()
+    vol_cur = float(cur['volume'])
+    vol_avg = float(cur['vol_ma']) if not pd.isna(cur['vol_ma']) else vol_cur
+    vol_surge = vol_cur > vol_avg * 1.3   # volumen 30%+ por encima de la media
 
-    # Confirmación MACD
+    # Confirmacion MACD
     macd_bull = bool(float(cur['macd_hist']) > 0 and float(cur['macd_hist']) > float(prev['macd_hist']))
     macd_bear = bool(float(cur['macd_hist']) < 0 and float(cur['macd_hist']) < float(prev['macd_hist']))
 
@@ -265,19 +267,20 @@ def strategy_bb_squeeze(df: pd.DataFrame, sl_atr_mult=1.5, tp_atr_mult=2.0, para
         'ema200':          ema200_val,
         'trend_up':        trend_up,
         'trend_strong':    trend_strong,
+        'vol_surge':       vol_surge,
     }
 
-    if breakout_up and macd_bull and trend_up and trend_strong:
-        confidence = 0.60 + (0.15 if macd_bull else 0) + (0.10 if adx_val > 25 else 0)
+    if breakout_up and macd_bull and vol_surge and trend_up and trend_strong:
+        confidence = 0.60 + (0.10 if macd_bull else 0) + (0.05 if adx_val > 25 else 0)
         sl, tp = _calc_sl_tp(price, 'BUY', atr_val, sl_atr_mult, tp_atr_mult)
         return {'signal': 'BUY', 'entry': price, 'sl': sl, 'tp': tp,
-                'confidence': round(min(confidence, 0.95), 2), 'indicators': snapshot}
+                'confidence': round(min(confidence, 0.75), 2), 'indicators': snapshot}
 
-    if breakout_down and macd_bear and trend_down and trend_strong:
-        confidence = 0.60 + (0.15 if macd_bear else 0) + (0.10 if adx_val > 25 else 0)
+    if breakout_down and macd_bear and vol_surge and trend_down and trend_strong:
+        confidence = 0.60 + (0.10 if macd_bear else 0) + (0.05 if adx_val > 25 else 0)
         sl, tp = _calc_sl_tp(price, 'SELL', atr_val, sl_atr_mult, tp_atr_mult)
         return {'signal': 'SELL', 'entry': price, 'sl': sl, 'tp': tp,
-                'confidence': round(min(confidence, 0.95), 2), 'indicators': snapshot}
+                'confidence': round(min(confidence, 0.75), 2), 'indicators': snapshot}
 
     return _no_signal()
 
@@ -286,7 +289,7 @@ def strategy_bb_squeeze(df: pd.DataFrame, sl_atr_mult=1.5, tp_atr_mult=2.0, para
 # ESTRATEGIA 3: VWAP + RSI BOUNCE
 # ──────────────────────────────────────────────
 
-def strategy_vwap_rsi(df: pd.DataFrame, sl_atr_mult=1.2, tp_atr_mult=1.8, params=None) -> dict:
+def strategy_vwap_rsi(df: pd.DataFrame, sl_atr_mult=2.2, tp_atr_mult=1.6, params=None) -> dict:
     """
     Rebote en VWAP con confirmación de RSI en zona extrema.
 
@@ -364,13 +367,13 @@ def strategy_vwap_rsi(df: pd.DataFrame, sl_atr_mult=1.2, tp_atr_mult=1.8, params
     }
 
     if cross_above and rsi_cur < rsi_oversold and rsi_rising and bullish_candle and trend_up and trend_strong:
-        confidence = 0.50 + (0.15 if rsi_cur < 32 else 0.08) + (0.10 if bullish_candle else 0) + (0.10 if adx_val > 25 else 0)
+        confidence = 0.60 + (0.10 if rsi_cur < 32 else 0.05) + (0.05 if bullish_candle else 0) + (0.05 if adx_val > 25 else 0)
         sl, tp = _calc_sl_tp(price, 'BUY', atr_val, sl_atr_mult, tp_atr_mult)
         return {'signal': 'BUY', 'entry': price, 'sl': sl, 'tp': tp,
-                'confidence': round(min(confidence, 0.95), 2), 'indicators': snapshot}
+                'confidence': round(min(confidence, 0.80), 2), 'indicators': snapshot}
 
     if cross_below and rsi_cur > rsi_overbought and rsi_falling and bearish_candle and trend_down and trend_strong:
-        confidence = 0.50 + (0.15 if rsi_cur > 68 else 0.08) + (0.10 if bearish_candle else 0) + (0.10 if adx_val > 25 else 0)
+        confidence = 0.60 + (0.10 if rsi_cur > 68 else 0.05) + (0.05 if bearish_candle else 0) + (0.05 if adx_val > 25 else 0)
         sl, tp = _calc_sl_tp(price, 'SELL', atr_val, sl_atr_mult, tp_atr_mult)
         return {'signal': 'SELL', 'entry': price, 'sl': sl, 'tp': tp,
                 'confidence': round(min(confidence, 0.95), 2), 'indicators': snapshot}
@@ -390,7 +393,7 @@ STRATEGIES = {
 
 
 def run_strategy(strategy_name: str, df: pd.DataFrame,
-                 sl_atr_mult: float = 1.5, tp_atr_mult: float = 2.0,
+                 sl_atr_mult: float = 2.2, tp_atr_mult: float = 1.6,
                  params: dict = None) -> dict:
     """Ejecuta la estrategia indicada y devuelve el resultado."""
     fn = STRATEGIES.get(strategy_name)
