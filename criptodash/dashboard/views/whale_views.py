@@ -68,7 +68,7 @@ def whale_insights(request):
             return redirect('whale_insights')
 
         # ── Insights ────────────────────────────────────────────────────
-        insights_qs = PatternInsight.objects.all().order_by('-detected_at')
+        insights_qs = PatternInsight.objects.select_related('wallet').all().order_by('-detected_at')
         if active_pair:
             insights_qs = insights_qs.filter(
                 meta_data__hot_token_symbol__iexact=active_pair

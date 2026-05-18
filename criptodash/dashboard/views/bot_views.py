@@ -1,10 +1,12 @@
 from decimal import Decimal
+from datetime import datetime
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db import models
 from django.db.models import Sum
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 import json
 import requests
@@ -21,22 +23,23 @@ def bot_dashboard(request):
     """Vista principal para gestionar bots con diagnóstico."""
     try:
         from ..ccxttest1 import binance as exchange
-        
-        bots = LiveBot.objects.all().order_by('-created_at')
+
+        bots = LiveBot.objects.prefetch_related('trades').all().order_by('-created_at')
         available_pairs = TradingPair.objects.filter(is_active=True)
         global_settings, _ = GlobalSettings.objects.get_or_create(id=1)
-        
+
         bots_data = []
         for bot in bots:
-            trades = LiveTrade.objects.filter(bot=bot)
+            # Prefetched — no extra DB queries per bot
+            trades = bot.trades.all()
             total_pnl = sum(t.pnl for t in trades)
-            active_trades_query = trades.filter(status='OPEN')
-            active_trades_count = active_trades_query.count()
-            
+            active_trades_query = [t for t in trades if t.status == 'OPEN']
+            active_trades_count = len(active_trades_query)
+
             total_qty = sum(t.amount for t in active_trades_query)
             total_cost = sum(t.amount * t.entry_price for t in active_trades_query)
             break_even = float(total_cost / total_qty) if total_qty > 0 else None
-            
+
             bots_data.append({
                 'bot': bot,
                 'total_pnl': total_pnl,
@@ -603,8 +606,10 @@ def bot_detail(request, bot_id):
     import plotly.offline as pyo
     from collections import defaultdict
 
-    bot = get_object_or_404(LiveBot, id=bot_id)
-    all_trades = list(LiveTrade.objects.filter(bot=bot).order_by("entry_time"))
+    bot = get_object_or_404(
+        LiveBot.objects.prefetch_related('trades'), id=bot_id
+    )
+    all_trades = sorted(bot.trades.all(), key=lambda t: t.entry_time or timezone.make_aware(datetime.min))
     closed_trades = [t for t in all_trades if t.status in ("CLOSED", "CLOSED_EMERGENCY") and t.pnl is not None]
     open_trades = [t for t in all_trades if t.status == "OPEN"]
 
