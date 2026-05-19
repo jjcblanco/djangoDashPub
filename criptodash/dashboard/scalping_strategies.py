@@ -227,6 +227,7 @@ def strategy_bb_squeeze(df: pd.DataFrame, sl_atr_mult=2.2, tp_atr_mult=1.6, para
     df = bollinger_bands(df, window=bb_period, num_std=bb_std, generate_signals=False)
     df = macd(df)
     df['atr_val'] = atr(df, 14)
+    df['vol_ma'] = df['volume'].rolling(20).mean()
 
     cur  = df.iloc[-1]
     prev = df.iloc[-2]
@@ -242,11 +243,14 @@ def strategy_bb_squeeze(df: pd.DataFrame, sl_atr_mult=2.2, tp_atr_mult=1.6, para
     width_threshold = float(bb_width_series.quantile(squeeze_pct / 100))
     in_squeeze_prev = bool(float(prev['bb_width']) < width_threshold) if not pd.isna(prev['bb_width']) else False
 
+    # Breakout detection
+    breakout_up = price > float(cur['bb_upper'])
+    breakout_down = price < float(cur['bb_lower'])
+
     # Confirmacion de volumen (evita falsos breakouts)
-    df['vol_ma'] = df['volume'].rolling(20).mean()
     vol_cur = float(cur['volume'])
     vol_avg = float(cur['vol_ma']) if not pd.isna(cur['vol_ma']) else vol_cur
-    vol_surge = vol_cur > vol_avg * 1.3   # volumen 30%+ por encima de la media
+    vol_surge = vol_cur > vol_avg * 1.3
 
     # Confirmacion MACD
     macd_bull = bool(float(cur['macd_hist']) > 0 and float(cur['macd_hist']) > float(prev['macd_hist']))
@@ -268,6 +272,8 @@ def strategy_bb_squeeze(df: pd.DataFrame, sl_atr_mult=2.2, tp_atr_mult=1.6, para
         'trend_up':        trend_up,
         'trend_strong':    trend_strong,
         'vol_surge':       vol_surge,
+        'breakout_up':     breakout_up,
+        'breakout_down':   breakout_down,
     }
 
     if breakout_up and macd_bull and vol_surge and trend_up and trend_strong:
