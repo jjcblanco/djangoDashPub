@@ -33,12 +33,14 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'criptodash.settings')
 django.setup()
 
 from dashboard.models import WhaleWallet
-from dashboard.services import SolanaWhaleTracker, PatternEngine
+from dashboard.services import SolanaWhaleTracker, EVMWhaleTracker, HyperliquidWhaleTracker, PatternEngine
+
 
 def run_full_sync():
     print(f"\n[{datetime.now()}] --- Iniciando Sincronización Completa ---")
     wallets = WhaleWallet.objects.filter(is_active=True)
-    from dashboard.services import SolanaWhaleTracker, EVMWhaleTracker, PatternEngine
+    from dashboard.services import SolanaWhaleTracker, EVMWhaleTracker, HyperliquidWhaleTracker, PatternEngine
+
     
     total_new = 0
     for wallet in wallets:
