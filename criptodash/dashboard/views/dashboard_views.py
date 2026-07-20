@@ -17,9 +17,9 @@ import pandas as pd
 
 
 def index(request):
-    """Vista de la página de inicio"""
+    """Vista de la página de inicio — landing para visitantes, dashboard para usuarios."""
     if not request.user.is_authenticated:
-        return render(request, 'dashboard/index.html')
+        return render(request, 'landing.html')
     return render(request, 'dashboard/index.html', {'user': request.user})
 
 

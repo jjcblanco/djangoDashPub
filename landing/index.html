@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CriptoDash — Trading Intelligence</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0e17;
+            color: #e2e8f0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+        }
+        canvas { position: fixed; top: 0; left: 0; z-index: 0; }
+        main {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            padding: 2rem;
+            max-width: 720px;
+        }
+        .logo {
+            font-size: 3.5rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #6366f1, #06b6d4, #6366f1);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 4s linear infinite;
+            margin-bottom: 0.5rem;
+        }
+        @keyframes shimmer {
+            to { background-position: 200% center; }
+        }
+        .tagline {
+            font-size: 1.15rem;
+            color: #94a3b8;
+            margin-bottom: 2.5rem;
+            line-height: 1.6;
+        }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2.5rem;
+        }
+        .card {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(99, 102, 241, 0.15);
+            border-radius: 14px;
+            padding: 1.5rem 1rem;
+            backdrop-filter: blur(12px);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(99, 102, 241, 0.4);
+        }
+        .card .icon { font-size: 1.8rem; margin-bottom: 0.5rem; }
+        .card h3 { font-size: 0.9rem; color: #cbd5e1; margin-bottom: 0.3rem; }
+        .card p  { font-size: 0.78rem; color: #64748b; }
+        .btn {
+            display: inline-block;
+            padding: 1rem 2.5rem;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #fff;
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform 0.15s, box-shadow 0.2s;
+            box-shadow: 0 0 30px rgba(99, 102, 241, 0.25);
+        }
+        .btn:hover {
+            transform: scale(1.04);
+            box-shadow: 0 0 45px rgba(99, 102, 241, 0.4);
+        }
+        .btn-secondary {
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            margin-left: 1rem;
+            box-shadow: none;
+        }
+        .footer {
+            margin-top: 3rem;
+            font-size: 0.75rem;
+            color: #475569;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="bg"></canvas>
+    <main>
+        <div class="logo">CriptoDash</div>
+        <p class="tagline">
+            Automated trading bots &middot; Whale tracking &middot; Scalping signals<br>
+            Real-time crypto intelligence platform
+        </p>
+        <div class="cards">
+            <div class="card">
+                <div class="icon">&#129518;</div>
+                <h3>Trading Bots</h3>
+                <p>Grid & Day Trading automatizados con gestión de riesgo integrada</p>
+            </div>
+            <div class="card">
+                <div class="icon">&#128011;</div>
+                <h3>Whale Tracking</h3>
+                <p>Seguimiento de ballenas en Solana, Ethereum, Base y Hyperliquid</p>
+            </div>
+            <div class="card">
+                <div class="icon">&#9889;</div>
+                <h3>Scalping</h3>
+                <p>Señales de alta frecuencia con escaneo de pares en tiempo real</p>
+            </div>
+        </div>
+        <a href="/accounts/login/" class="btn">Acceder al Sistema</a>
+        <a href="/" class="btn btn-secondary" style="display:none;">Ver Dashboard</a>
+        <p class="footer">
+            CriptoDash &copy; 2026 &middot; Trading inteligente basado en datos
+        </p>
+    </main>
+    <script>
+        const c = document.getElementById('bg');
+        const ctx = c.getContext('2d');
+        let w, h, particles = [];
+        function resize() {
+            w = c.width = window.innerWidth;
+            h = c.height = window.innerHeight;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        for (let i = 0; i < 70; i++) {
+            particles.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                r: Math.random() * 1.5 + 0.5,
+                vx: (Math.random() - 0.5) * 0.4,
+                vy: (Math.random() - 0.5) * 0.4,
+                alpha: Math.random() * 0.4 + 0.1
+            });
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, w, h);
+            particles.forEach((p, i) => {
+                p.x += p.vx;
+                p.y += p.vy;
+                if (p.x < 0 || p.x > w) p.vx *= -1;
+                if (p.y < 0 || p.y > h) p.vy *= -1;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(99,102,241,${p.alpha})`;
+                ctx.fill();
+
+                particles.slice(i + 1).forEach(q => {
+                    const d = Math.hypot(p.x - q.x, p.y - q.y);
+                    if (d < 100) {
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(q.x, q.y);
+                        ctx.strokeStyle = `rgba(99,102,241,${0.06 * (1 - d / 100)})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.stroke();
+                    }
+                });
+            });
+            requestAnimationFrame(draw);
+        }
+        draw();
+    </script>
+</body>
+</html>
