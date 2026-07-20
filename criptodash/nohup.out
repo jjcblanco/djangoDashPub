@@ -1,0 +1,40 @@
+System check identified some issues:
+
+WARNINGS:
+?: settings.ACCOUNT_AUTHENTICATION_METHOD is deprecated, use: settings.ACCOUNT_LOGIN_METHODS = {'email', 'username'}
+?: settings.ACCOUNT_EMAIL_REQUIRED is deprecated, use: settings.ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
+?: settings.ACCOUNT_USERNAME_REQUIRED is deprecated, use: settings.ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
+
+System check identified 3 issues (0 silenced).
+System check identified some issues:
+
+WARNINGS:
+?: settings.ACCOUNT_AUTHENTICATION_METHOD is deprecated, use: settings.ACCOUNT_LOGIN_METHODS = {'username', 'email'}
+?: settings.ACCOUNT_EMAIL_REQUIRED is deprecated, use: settings.ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
+?: settings.ACCOUNT_USERNAME_REQUIRED is deprecated, use: settings.ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
+
+System check identified 3 issues (0 silenced).
+Error: That port is already in use.
+[WARNING] 2026-07-20 01:54:31,989: "GET /favicon.ico HTTP/1.1" 404 179
+[WARNING] 2026-07-20 01:54:46,339: Forbidden (Origin checking failed - https://javierblanco.com.ar does not match any trusted origins.): /accounts/login/
+[WARNING] 2026-07-20 01:54:46,339: "POST /accounts/login/ HTTP/1.1" 403 1004
+[WARNING] 2026-07-20 01:54:50,006: Forbidden (Origin checking failed - https://javierblanco.com.ar does not match any trusted origins.): /accounts/login/
+[WARNING] 2026-07-20 01:54:50,007: "POST /accounts/login/ HTTP/1.1" 403 1004
+[WARNING] 2026-07-20 01:57:13,177: "GET /.env HTTP/1.1" 404 179
+Performing system checks...
+
+July 20, 2026 - 01:53:44
+Django version 6.0.3, using settings 'criptodash.settings'
+Starting development server at http://127.0.0.1:8001/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+System check identified some issues:
+
+WARNINGS:
+?: settings.ACCOUNT_AUTHENTICATION_METHOD is deprecated, use: settings.ACCOUNT_LOGIN_METHODS = {'email', 'username'}
+?: settings.ACCOUNT_EMAIL_REQUIRED is deprecated, use: settings.ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
+?: settings.ACCOUNT_USERNAME_REQUIRED is deprecated, use: settings.ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
+
+System check identified 3 issues (0 silenced).
