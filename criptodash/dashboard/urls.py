@@ -1,8 +1,9 @@
 from django.urls import path, include
+from django.views.generic import TemplateView
 from rest_framework.routers import DefaultRouter
 from . import views
 from . import auth_views
-from .views import api_views, bot_views # Para asegurar acceso a follow_whale si es necesario
+from .views import api_views, bot_views
 
 router = DefaultRouter()
 router.register(r'bots', api_views.LiveBotViewSet, basename='api_bots')
@@ -10,6 +11,7 @@ router.register(r'trades', api_views.LiveTradeViewSet, basename='api_trades')
 router.register(r'trading-pairs', api_views.TradingPairViewSet, basename='api_trading_pairs')
 
 urlpatterns = [
+    path('landing/', TemplateView.as_view(template_name='landing.html'), name='landing'),
     path('', views.index, name='dashboard_index'),
     path('login/', auth_views.custom_login, name='custom_login'),
     path('register/', auth_views.custom_register, name='custom_register'),

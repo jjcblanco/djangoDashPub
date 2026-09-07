@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(dir /s /b \"c:\\\\Users\\\\Javier\\\\Desktop\\\\programacion\\\\djangoDashPub\\\\criptodash\\\\*.py\")",
-      "Bash(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@147.93.13.210 \"echo 'connected'\")"
+      "Bash(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@147.93.13.210 \"echo 'connected'\")",
+      "Bash(plink -ssh -pw Tinson2912! starpete@200.115.226.199 \"echo '=== TEST 1: Root with Host header ===' && curl -sI -H 'Host: javierblanco.com.ar' http://127.0.0.1/ 2>&1 | head -6 && echo '=== TEST 2: Landing with Host header ===' && curl -s -H 'Host: javierblanco.com.ar' http://127.0.0.1/landing/ 2>&1 | head -8 && echo '=== TEST 3: Django login with Host header ===' && curl -sI -H 'Host: javierblanco.com.ar' http://127.0.0.1/accounts/login/ 2>&1 | head -6\")",
+      "Bash(plink -ssh -pw Tinson2912! starpete@200.115.226.199 \"grep 'RedirectMatch\\\\|Redirect 302' /etc/apache2/sites-enabled/100-javierblanco.com.ar.vhost\")"
     ]
   }
 }
