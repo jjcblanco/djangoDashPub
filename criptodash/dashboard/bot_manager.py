@@ -8,7 +8,7 @@ from .backtester import GridStrategy, DayTradingStrategy
 from .optimized_strategies import OptimizedDayTradingStrategy
 from .ccxttest1 import historical_fetch_ohlcv, binance as exchange
 from .utils.notifications import send_telegram_message
-
+ 
 logger = logging.getLogger(__name__)
 
 class BotManager:
