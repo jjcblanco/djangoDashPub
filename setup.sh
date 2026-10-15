@@ -26,10 +26,17 @@ echo ""
 echo -e "${YELLOW}[2/5] Configurando MySQL...${NC}"
 echo "Ingresa contraseña de root MySQL (se usará para crear la BD):"
 read -s MYSQL_PASSWORD
+echo ""
+
+# Password del usuario de la app: aleatoria o desde variable de entorno
+# (nunca hardcodear credenciales en un repo público)
+if [ -z "$DB_PASSWORD" ]; then
+    DB_PASSWORD=$(openssl rand -base64 18 2>/dev/null || echo "genera-una-password-segura")
+fi
 
 mysql -u root -p$MYSQL_PASSWORD <<EOF
 CREATE DATABASE IF NOT EXISTS trading_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS 'trading_user'@'localhost' IDENTIFIED BY '***REDACTED***';
+CREATE USER IF NOT EXISTS 'trading_user'@'localhost' IDENTIFIED BY '${DB_PASSWORD}';
 GRANT ALL PRIVILEGES ON trading_db.* TO 'trading_user'@'localhost';
 FLUSH PRIVILEGES;
 SELECT 'Base de datos creada exitosamente' as 'Resultado:';
@@ -70,7 +77,7 @@ echo ""
 echo -e "${YELLOW}Base de datos:${NC}"
 echo "  - BD: trading_db"
 echo "  - Usuario: trading_user"
-echo "  - Contraseña: ***REDACTED***"
+echo "  - Contraseña: la generada en este script (variable DB_PASSWORD)"
 echo "  - Host: localhost"
 echo "  - Puerto: 3306"
 echo ""

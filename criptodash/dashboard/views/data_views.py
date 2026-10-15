@@ -5,6 +5,7 @@ Este módulo contiene vistas para importar datos desde exchanges externos.
 """
 
 from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
 from django.utils.safestring import mark_safe
@@ -12,6 +13,7 @@ from .. import ccxttest1
 import pandas as pd
 
 
+@login_required
 @require_http_methods(["GET", "POST"])
 def import_data(request):
     """Vista para importar datos desde exchanges"""

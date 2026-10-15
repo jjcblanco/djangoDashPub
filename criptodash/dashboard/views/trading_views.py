@@ -5,6 +5,7 @@ Este módulo contiene vistas para ejecutar análisis de trading y bots.
 """
 
 from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
 from django.utils.safestring import mark_safe
@@ -13,6 +14,7 @@ from .. import ccxttest1
 import pandas as pd
 
 
+@login_required
 def ejecutar_analisis_trading(request):
     """Ejecuta el análisis completo y muestra resultados en el dashboard"""
     print("Ejecuta el análisis completo y muestra resultados en el dashboard")
@@ -37,6 +39,7 @@ def ejecutar_analisis_trading(request):
         return render(request, 'trading_bot/error.html', {'error': str(e)})
 
 
+@login_required
 @require_http_methods(["GET", "POST"])
 def run_bot_view(request):
     """Vista para ejecutar el bot de trading manualmente"""

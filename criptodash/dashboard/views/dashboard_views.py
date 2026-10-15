@@ -23,6 +23,7 @@ def index(request):
     return render(request, 'dashboard/index.html', {'user': request.user})
 
 
+@login_required
 def technical_analysis(request):
     """Vista de análisis técnico"""
     context = {
