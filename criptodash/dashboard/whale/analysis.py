@@ -1,5 +1,5 @@
 from django.db.models import Avg, Count, Q
-from .models import WhaleWallet, WhaleTransaction, ShadowTrade
+from ..models import WhaleWallet, WhaleTransaction, ShadowTrade
 import json
 
 class WhaleAnalysisEngine:
@@ -161,7 +161,7 @@ class WhaleAnalysisEngine:
         Returns:
             list of dicts: [{token, trades, wins, win_rate, avg_pnl, last_trade}]
         """
-        from .models import ShadowTrade, WhaleTransaction
+        from ..models import ShadowTrade, WhaleTransaction
         from django.utils import timezone
         from django.db.models import Avg, Count, Q
         
@@ -234,7 +234,7 @@ class WhaleAnalysisEngine:
         Returns dict con: mode, buy_ratio, avg_holding_hours, 
                           preferred_rsi, active_hours, tx_count
         """
-        from .models import WhaleTransaction, ShadowTrade
+        from ..models import WhaleTransaction, ShadowTrade
         from django.utils import timezone
         from collections import Counter
         import math
@@ -376,7 +376,7 @@ class WhaleAnalysisEngine:
         Analiza el historial de una ballena y sugiere parámetros para crear un bot.
         Devuelve parámetros para GRID y DayTrading basados en datos reales.
         """
-        from .models import WhaleTransaction
+        from ..models import WhaleTransaction
 
         txs = WhaleTransaction.objects.filter(
             wallet_id=wallet_id
@@ -492,7 +492,7 @@ class WhaleAnalysisEngine:
             top_token = max(tokens_freq, key=tokens_freq.get)
 
         if top_token:
-            from .whale_intelligence import fetch_market_context
+            from .context import fetch_market_context
             context = fetch_market_context(top_token)
             alpha_score = WhaleAnalysisEngine.get_predictive_score(wallet_id, top_token, context)
 

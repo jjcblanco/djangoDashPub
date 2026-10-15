@@ -8,7 +8,7 @@ from datetime import timedelta
 import math
 from decimal import Decimal
 
-from .models import WhaleWallet, WhaleTransaction, PatternInsight, ShadowTrade
+from ..models import WhaleWallet, WhaleTransaction, PatternInsight, ShadowTrade
 
 
 class WhaleScoringEngine:

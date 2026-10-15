@@ -6,7 +6,7 @@ import pandas as pd
 from django.db.models import Count, Avg, Q
 from datetime import datetime, timedelta
 import logging
-from .models import ShadowTrade, WhalePattern
+from ..models import ShadowTrade, WhalePattern
 
 logger = logging.getLogger(__name__)
 

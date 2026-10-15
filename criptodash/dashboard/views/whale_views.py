@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 
 from ..models import WhaleWallet, WhaleTransaction, ShadowTrade, WhalePattern, ConsensusSignal
 from ..services import SolanaWhaleTracker, PatternEngine
-from ..whale_pattern_learner import WhalePatternLearner
-from dashboard.whale_scoring import WhaleScoringEngine
-from dashboard.whale_analysis import WhaleAnalysisEngine
+from ..whale.learner import WhalePatternLearner
+from dashboard.whale.scoring import WhaleScoringEngine
+from dashboard.whale.analysis import WhaleAnalysisEngine
 from dashboard.data_service import generar_grafico_desde_señales, DataManager
 from dashboard.indicadores import calculate_rsi, macd
 from ..ccxttest1 import _ensure_binance_initialized, binance
@@ -932,7 +932,7 @@ def whale_token_stats_ajax(request, wallet_id):
         cache_key = f"whale_token_stats_{wallet_id}"
         cached = cache.get(cache_key)
         if not cached:
-            from dashboard.whale_analysis import WhaleAnalysisEngine
+            from dashboard.whale.analysis import WhaleAnalysisEngine
             cached = WhaleAnalysisEngine.analyze_token_performance(wallet_id)
             cache.set(cache_key, cached, 60 * 10)  # 10 min cache
         return JsonResponse({'status': 'ok', 'tokens': cached})
@@ -952,7 +952,7 @@ def whale_behavior_ajax(request, wallet_id):
         cache_key = f"whale_behavior_{wallet_id}"
         cached = cache.get(cache_key)
         if not cached:
-            from dashboard.whale_analysis import WhaleAnalysisEngine
+            from dashboard.whale.analysis import WhaleAnalysisEngine
             cached = WhaleAnalysisEngine.classify_behavior(wallet_id)
             cache.set(cache_key, cached, 60 * 15)  # 15 min cache
         return JsonResponse({'status': 'ok', 'behavior': cached})

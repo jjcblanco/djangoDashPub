@@ -680,7 +680,7 @@ def retroactive_context_enrichment_task(self, wallet_id=None, timeframe='4h', li
         dict con estadísticas del proceso
     """
     from dashboard.models import WhaleWallet, WhaleTransaction
-    from dashboard.whale_intelligence import fetch_market_context_at
+    from dashboard.whale.context import fetch_market_context_at
     import time as time_module
 
     logger.info(f"[RetroContext] Iniciando enriquecimiento retroactivo (wallet_id={wallet_id or 'TODAS'})")
@@ -762,7 +762,7 @@ def _backfill_shadow_trade_context(timeframe='4h'):
     usando el timestamp de creacion del trade para reconstruir el contexto historico.
     """
     from dashboard.models import ShadowTrade
-    from dashboard.whale_intelligence import fetch_market_context_at
+    from dashboard.whale.context import fetch_market_context_at
     import time as time_module
 
     trades_no_ctx = ShadowTrade.objects.filter(market_context__isnull=True)[:200]
@@ -803,7 +803,7 @@ def learn_whale_patterns_task(min_trades=3, min_win_rate=0.55):
     Returns:
         dict con resumen del aprendizaje
     """
-    from dashboard.whale_pattern_learner import WhalePatternLearner
+    from dashboard.whale.learner import WhalePatternLearner
     from dashboard.models import WhaleTransaction, WhalePattern, ShadowTrade
 
     logger.info(f"[PatternLearner] Iniciando aprendizaje (min_trades={min_trades}, min_win_rate={min_win_rate})")
@@ -847,8 +847,8 @@ def _learn_from_transactions(min_trades=3, min_win_rate=0.55):
     Returns: numero de patrones nuevos o actualizados guardados.
     """
     from dashboard.models import WhaleTransaction
-    from dashboard.whale_intelligence import fetch_market_context
-    from dashboard.whale_pattern_learner import WhalePatternLearner
+    from dashboard.whale.context import fetch_market_context
+    from dashboard.whale.learner import WhalePatternLearner
     import pandas as pd
 
     STABLES = {'USDC', 'USDT', 'DAI', 'BUSD', 'FDUSD'}
