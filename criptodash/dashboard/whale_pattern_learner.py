@@ -56,7 +56,51 @@ class WhalePatternLearner:
             ('high_vol', lambda x: x is not None and x >= 3.0),
         ],
     }
-    
+
+    # Conversión de etiquetas de rango a condiciones con operador.
+    # match_context compara valores numéricos; guardar etiquetas ('oversold')
+    # hacía que los patrones nunca matchearan (32.5 != 'oversold').
+    RANGE_LABEL_CONDITIONS = {
+        'rsi_14': {
+            'oversold': {'rsi_14__lt': 30},
+            'low': {'rsi_14__gte': 30, 'rsi_14__lt': 45},
+            'mid': {'rsi_14__gte': 45, 'rsi_14__lt': 60},
+            'high': {'rsi_14__gte': 60, 'rsi_14__lt': 75},
+            'overbought': {'rsi_14__gte': 75},
+        },
+        'volume_ratio': {
+            'very_low': {'volume_ratio__lt': 0.5},
+            'low': {'volume_ratio__gte': 0.5, 'volume_ratio__lt': 0.8},
+            'normal': {'volume_ratio__gte': 0.8, 'volume_ratio__lt': 1.2},
+            'high': {'volume_ratio__gte': 1.2, 'volume_ratio__lt': 2.0},
+            'very_high': {'volume_ratio__gte': 2.0},
+        },
+        'bb_position': {
+            'lower_band': {'bb_position__lt': 0.2},
+            'lower_mid': {'bb_position__gte': 0.2, 'bb_position__lt': 0.4},
+            'middle': {'bb_position__gte': 0.4, 'bb_position__lt': 0.6},
+            'upper_mid': {'bb_position__gte': 0.6, 'bb_position__lt': 0.8},
+            'upper_band': {'bb_position__gte': 0.8},
+        },
+        'in_uptrend': {
+            'uptrend': {'in_uptrend__eq': True},
+            'downtrend': {'in_uptrend__eq': False},
+        },
+        'macd_cross': {
+            'bullish': {'macd_cross': 'bullish'},
+            'bearish': {'macd_cross': 'bearish'},
+        },
+        'price_vs_sma50': {
+            'below': {'price_vs_sma50__lt': 0},
+            'above': {'price_vs_sma50__gte': 0},
+        },
+        'atr_pct': {
+            'low_vol': {'atr_pct__lt': 1.0},
+            'medium_vol': {'atr_pct__gte': 1.0, 'atr_pct__lt': 3.0},
+            'high_vol': {'atr_pct__gte': 3.0},
+        },
+    }
+
     @classmethod
     def analyze_trades(cls, min_trades=5, min_win_rate=0.6):
         """
@@ -233,31 +277,46 @@ class WhalePatternLearner:
     @classmethod
     def _save_patterns(cls, patterns):
         """Guarda patrones en la base de datos."""
+        # Limpiar patrones guardados con el formato antiguo de etiquetas
+        # (ej: {'rsi_14': 'oversold'}) que nunca matcheaban contra valores numéricos.
+        stale_ids = []
+        for p in WhalePattern.objects.all():
+            conds = p.conditions or {}
+            if any(k in cls.INDICATOR_RANGES and isinstance(v, str) for k, v in conds.items()):
+                stale_ids.append(p.id)
+        if stale_ids:
+            WhalePattern.objects.filter(id__in=stale_ids).delete()
+            logger.info(f"Eliminados {len(stale_ids)} patrones con formato antiguo de condiciones.")
+
         saved = []
         for pattern_data in patterns:
-            # Convertir condiciones a formato de comparación
-            # Actualmente condiciones son valores discretos, los convertimos a igualdad
+            # Convertir condiciones de etiquetas de rango a operadores numéricos
+            # (ej: {'rsi_14': 'oversold'} -> {'rsi_14__lt': 30}) para que
+            # WhalePattern.match_context pueda comparar valores reales.
             conditions = {}
             for key, value in pattern_data['conditions'].items():
-                if isinstance(value, (int, float)):
-                    # Para valores numéricos, usar rango aproximado
-                    # Por simplicidad, usamos igualdad
+                label_map = cls.RANGE_LABEL_CONDITIONS.get(key, {})
+                if value in label_map:
+                    conditions.update(label_map[value])
+                elif isinstance(value, (int, float)):
+                    # Para valores numéricos sueltos, usar igualdad
                     conditions[f"{key}__eq"] = value
                 else:
                     conditions[key] = value
-            
+
             # Verificar si ya existe un patrón similar
             existing = WhalePattern.objects.filter(
                 conditions=conditions,
                 timeframe='4h'  # Por defecto
             ).first()
-            
+
             if existing:
                 # Actualizar estadísticas
                 existing.sample_size = pattern_data['sample_size']
                 existing.win_rate = pattern_data['win_rate']
                 existing.avg_pnl = pattern_data['avg_pnl']
                 existing.total_trades = pattern_data['sample_size']
+                existing.is_active = True
                 existing.save()
                 saved.append(existing)
             else:
@@ -273,7 +332,7 @@ class WhalePatternLearner:
                 )
                 saved.append(pattern)
                 logger.info(f"Patrón guardado: {pattern.pattern_name} (Win: {pattern.win_rate:.1%})")
-        
+
         return saved
     
     @classmethod

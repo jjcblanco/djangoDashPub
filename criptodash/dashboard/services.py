@@ -161,9 +161,9 @@ class EVMWhaleTracker:
                     wallet=wallet_obj,
                     tx_hash=unique_hash,
                     timestamp=timestamp,
-                    tx_type="SWAP" if tx.get('to').lower() == wallet_obj.address.lower() else "TRANSFER",
-                    from_asset=tx.get('tokenSymbol'), # No lo sabemos aún con certeza, pero tokentx nos da el asset que se movió
-                    to_asset=tx.get('tokenSymbol'),
+                    tx_type="BUY" if tx.get('to', '').lower() == wallet_obj.address.lower() else "SELL",
+                    from_asset=None if tx.get('to', '').lower() == wallet_obj.address.lower() else tx.get('tokenSymbol'),
+                    to_asset=tx.get('tokenSymbol') if tx.get('to', '').lower() == wallet_obj.address.lower() else None,
                     amount_in=float(tx.get('value', 0)) / (10 ** int(tx.get('tokenDecimal', 18))),
                     raw_data=raw_with_context
                 )
@@ -291,31 +291,29 @@ class PatternEngine:
 
     @staticmethod
     def get_wallet_pnl(wallet_obj):
-        """Calcula el P&L aproximado de los últimos movimientos."""
-        txs = wallet_obj.transactions.order_by('-timestamp')[:100]
-        if not txs.exists():
+        """Calcula el P&L real de la ballena a partir de sus shadow trades cerrados.
+
+        Usa el PnL porcentual de cada ShadowTrade CLOSED y el nocional simulado
+        (amount * entry_price) para estimar el PnL en USDT.
+        """
+        trades = list(wallet_obj.shadow_trades.filter(status='CLOSED').order_by('-closed_at')[:100])
+        if not trades:
             return {'roi': 0, 'pnl_usdt': 0, 'status': 'neutral'}
-            
-        # Simplificación: Seguimiento de SOL como base de "coste" si es Solana
-        # En una versión avanzada, rastrearíamos cada token contra USDC
-        pnl_data = {'roi': 0, 'pnl_usdt': 0, 'status': 'neutral'}
-        
-        # Simulación de cálculo basado en balances (Placeholder para lógica compleja)
-        # Por ahora devolvemos un aleatorio basado en la confianza para la demo visual
-        # y preparamos la estructura para el cálculo real.
-        insights = wallet_obj.insights.all()
-        if not insights.exists():
-            return pnl_data
-            
-        conf = sum([i.confidence for i in insights]) / insights.count()
-        if conf > 0.8:
-            pnl_data = {'roi': round(conf * 15, 2), 'pnl_usdt': round(conf * 1200, 2), 'status': 'profit'}
-        elif conf > 0.5:
-            pnl_data = {'roi': round(conf * 5, 2), 'pnl_usdt': round(conf * 300, 2), 'status': 'profit'}
+
+        avg_pnl = sum(t.pnl_percent for t in trades) / len(trades)
+        pnl_usdt = sum(
+            (float(t.amount or 0) * float(t.entry_price or 0)) * (t.pnl_percent / 100.0)
+            for t in trades
+        )
+
+        if avg_pnl > 0:
+            status = 'profit'
+        elif avg_pnl < 0:
+            status = 'loss'
         else:
-            pnl_data = {'roi': round((conf - 0.5) * 10, 2), 'pnl_usdt': round((conf - 0.5) * 500, 2), 'status': 'loss'}
-            
-        return pnl_data
+            status = 'neutral'
+
+        return {'roi': round(avg_pnl, 2), 'pnl_usdt': round(pnl_usdt, 2), 'status': status}
 
     @staticmethod
     def analyze_wallet(wallet_obj):
@@ -433,19 +431,27 @@ class PatternEngine:
                     raw = tx.raw_data
                     mint = raw.get('contractAddress')
                     if mint:
+                        symbol = raw.get('tokenSymbol')
                         change = tx.amount_in or 0
-                        if change > 0 and tx.tx_type == 'SWAP':
-                            symbol = raw.get('tokenSymbol')
+                        # BUY = recibió el token; SWAP es el tipo legacy de filas antiguas (recibido)
+                        # SELL = envió el token; TRANSFER es el tipo legacy de filas antiguas (enviado)
+                        if tx.tx_type in ('BUY', 'SWAP') and change > 0:
                             if wallet_obj.filter_mode == 'STRICT':
                                 if mint not in ESTABLISHED_TOKENS:
                                     if not PatternEngine.is_token_reputable(symbol, mint, wallet_obj.blockchain):
                                         continue
-                            
+
                             if mint not in token_stats:
-                                token_stats[mint] = {'buys': 0, 'volume': 0, 'symbol': symbol}
+                                token_stats[mint] = {'buys': 0, 'sells': 0, 'volume': 0, 'symbol': symbol}
                             token_stats[mint]['buys'] += 1
                             token_stats[mint]['volume'] += float(change)
                             PatternEngine._automated_shadow_trade(wallet_obj, symbol, tx)
+                        elif tx.tx_type in ('SELL', 'TRANSFER') and symbol:
+                            # La ballena envió el token → cerrar el shadow trade abierto
+                            if mint not in token_stats:
+                                token_stats[mint] = {'buys': 0, 'sells': 0, 'volume': 0, 'symbol': symbol}
+                            token_stats[mint]['sells'] += 1
+                            PatternEngine._close_shadow_trade(wallet_obj, symbol, tx)
             except Exception as e:
                 logger.warning(f"[analyze_wallet] Error procesando tx {tx.tx_hash[:16]} de {wallet_obj.address[:8]}: {e}")
                 continue

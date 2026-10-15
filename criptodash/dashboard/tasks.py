@@ -11,69 +11,82 @@ logger = logging.getLogger(__name__)
 def sync_wallet_task(wallet_id, deep_sync=False):
     """
     Sincroniza una única ballena en segundo plano.
+    Usa un lock en caché para evitar syncs concurrentes de la misma wallet
+    (beat + systemd + triggers manuales podían encolar la misma wallet).
     """
     from dashboard.models import WhaleWallet
     from dashboard.services import SolanaWhaleTracker, EVMWhaleTracker, HyperliquidWhaleTracker, PatternEngine
-    
-    try:
-        wallet = WhaleWallet.objects.get(id=wallet_id)
-        wallet.refresh_from_db()
-        if not wallet.is_active:
-            return f"Wallet {wallet_id} is inactive."
-            
-        # Marcar como sincronizando
-        wallet.sync_status = 'SYNCING'
-        wallet.save()
-            
-        new_txs = 0
-        limit = 500 if deep_sync else 100
-        
-        if wallet.blockchain == 'solana':
-            tracker = SolanaWhaleTracker()
-            # Si es deep_sync, traemos más historial para analizar
-            signatures_limit = 200 if deep_sync else 50
-            new_txs = tracker.sync_wallet(wallet, max_new=limit, signatures_limit=signatures_limit)
-        elif wallet.blockchain in ['ethereum', 'base']:
-            tracker = EVMWhaleTracker(wallet.blockchain)
-            new_txs = tracker.sync_wallet(wallet, max_new=limit)
-        elif wallet.blockchain == 'hyperliquid':
-            tracker = HyperliquidWhaleTracker()
-            new_txs = tracker.sync_wallet(wallet, max_new=limit)
-            
-        # El análisis es costoso, por eso va en Celery
-        PatternEngine.analyze_wallet(wallet)
 
-        # --- FASE 2: Detección de Consenso ---
-        # Después de analizar, verificar si este token ya lo compraron 3+ ballenas (señal de consenso)
+    # Lock distribuido por wallet: si otra tarea ya está sincronizando, salir.
+    lock_key = f"whale_sync_lock:{wallet_id}"
+    if not cache.add(lock_key, '1', timeout=900):
+        logger.info(f"[Sync] Wallet {wallet_id} ya está sincronizándose (lock activo); se omite esta ejecución.")
+        return f"Wallet {wallet_id} already syncing (lock held)."
+
+    try:
         try:
-            top_pairs = wallet.target_pairs_list  # ['WIF', 'JUP', ...]
-            for token_symbol in top_pairs:
-                PatternEngine.check_and_fire_consensus_signal(
-                    symbol=token_symbol,
-                    blockchain=wallet.blockchain
-                )
+            wallet = WhaleWallet.objects.get(id=wallet_id)
+            wallet.refresh_from_db()
+            if not wallet.is_active:
+                return f"Wallet {wallet_id} is inactive."
+
+            # Marcar como sincronizando
+            wallet.sync_status = 'SYNCING'
+            wallet.sync_started_at = timezone.now()
+            wallet.save(update_fields=['sync_status', 'sync_started_at'])
+
+            new_txs = 0
+            limit = 500 if deep_sync else 100
+
+            if wallet.blockchain == 'solana':
+                tracker = SolanaWhaleTracker()
+                # Si es deep_sync, traemos más historial para analizar
+                signatures_limit = 200 if deep_sync else 50
+                new_txs = tracker.sync_wallet(wallet, max_new=limit, signatures_limit=signatures_limit)
+            elif wallet.blockchain in ['ethereum', 'base']:
+                tracker = EVMWhaleTracker(wallet.blockchain)
+                new_txs = tracker.sync_wallet(wallet, max_new=limit)
+            elif wallet.blockchain == 'hyperliquid':
+                tracker = HyperliquidWhaleTracker()
+                new_txs = tracker.sync_wallet(wallet, max_new=limit)
+
+            # El análisis es costoso, por eso va en Celery
+            PatternEngine.analyze_wallet(wallet)
+
+            # --- FASE 2: Detección de Consenso ---
+            # Después de analizar, verificar si este token ya lo compraron 3+ ballenas (señal de consenso)
+            try:
+                top_pairs = wallet.target_pairs_list  # ['WIF', 'JUP', ...]
+                for token_symbol in top_pairs:
+                    PatternEngine.check_and_fire_consensus_signal(
+                        symbol=token_symbol,
+                        blockchain=wallet.blockchain
+                    )
+            except Exception as e:
+                logger.warning(f"[Consensus] Error en detección post-sync para wallet {wallet_id}: {e}")
+
+            # Marcar como finalizado con éxito
+            wallet.sync_status = 'IDLE'
+            wallet.last_sync = timezone.now()
+            wallet.sync_started_at = None
+            wallet.save(update_fields=['sync_status', 'last_sync', 'sync_started_at'])
+
+            logger.info(f"Successfully synced {new_txs} txs for wallet {wallet_id} ({wallet.blockchain}).")
+            return new_txs
         except Exception as e:
-            logger.warning(f"[Consensus] Error en detección post-sync para wallet {wallet_id}: {e}")
-        
-        # Marcar como finalizado con éxito
-        wallet.sync_status = 'IDLE'
-        wallet.last_sync = timezone.now()
-        wallet.save()
-        
-        logger.info(f"Successfully synced {new_txs} txs for wallet {wallet_id} ({wallet.blockchain}).")
-        return new_txs
-    except Exception as e:
-        # Intentar marcar error si la wallet existe
-        try:
-            from dashboard.models import WhaleWallet
-            w = WhaleWallet.objects.get(id=wallet_id)
-            w.sync_status = 'ERROR'
-            w.save()
-        except:
-            pass
-            
-        logger.error(f"Error syncing wallet {wallet_id}: {str(e)}")
-        raise e
+            # Intentar marcar error si la wallet existe
+            try:
+                from dashboard.models import WhaleWallet
+                w = WhaleWallet.objects.get(id=wallet_id)
+                w.sync_status = 'ERROR'
+                w.save(update_fields=['sync_status'])
+            except:
+                pass
+
+            logger.error(f"Error syncing wallet {wallet_id}: {str(e)}")
+            raise e
+    finally:
+        cache.delete(lock_key)
 
 @shared_task
 def sync_all_whales_task():
@@ -83,31 +96,44 @@ def sync_all_whales_task():
     """
     from dashboard.models import WhaleWallet
     from datetime import timedelta
-    
+    from django.db.models import Q
+
     # --- Recuperación de wallets bloqueadas en SYNCING ---
-    # Si un wallet lleva más de 30 min en SYNCING, el worker probablemente murió.
-    # Lo reseteamos a IDLE para que pueda volver a sincronizarse en el próximo ciclo.
+    # Si una wallet lleva más de 30 min en SYNCING (según sync_started_at),
+    # el worker probablemente murió. La reseteamos para que pueda volver a sincronizarse.
     SYNCING_TIMEOUT_MINUTES = 30
     stale_threshold = timezone.now() - timedelta(minutes=SYNCING_TIMEOUT_MINUTES)
     stale_count = WhaleWallet.objects.filter(
         sync_status='SYNCING',
-        last_sync__lt=stale_threshold  # last_sync es la última vez que terminó con éxito
-    ).update(sync_status='IDLE')
-    
-    # También recuperar los que nunca se sincronizaron (last_sync=None) y llevan rato SYNCING
-    # Esto ocurre si el worker murió justo en la primera sync
+        sync_started_at__lt=stale_threshold
+    ).update(sync_status='IDLE', sync_started_at=None)
+
+    # Wallets SYNCING sin sync_started_at: son de antes de que existiera el campo
+    # (o se marcaron a mano). Las liberamos también.
     also_stale = WhaleWallet.objects.filter(
         sync_status='SYNCING',
-        last_sync__isnull=True
-    ).update(sync_status='IDLE')
-    
-    total_recovered = stale_count + also_stale
+        sync_started_at__isnull=True
+    ).update(sync_status='IDLE', sync_started_at=None)
+
+    # --- Recuperación de wallets en ERROR ---
+    # Antes quedaban en ERROR para siempre (nadie las reencolaba).
+    # Reintentamos pasados 60 min desde el último intento.
+    ERROR_RETRY_MINUTES = 60
+    error_threshold = timezone.now() - timedelta(minutes=ERROR_RETRY_MINUTES)
+    recovered_errors = WhaleWallet.objects.filter(
+        is_active=True,
+        sync_status='ERROR',
+    ).filter(
+        Q(last_sync__lt=error_threshold) | Q(last_sync__isnull=True)
+    ).update(sync_status='IDLE', sync_started_at=None)
+
+    total_recovered = stale_count + also_stale + recovered_errors
     if total_recovered > 0:
-        logger.warning(f"Recuperadas {total_recovered} wallets bloqueadas en SYNCING (timeout > {SYNCING_TIMEOUT_MINUTES} min).")
-    
+        logger.warning(f"Recuperadas {total_recovered} wallets bloqueadas (SYNCING timeout: {stale_count + also_stale}, ERROR reintento: {recovered_errors}).")
+
     # --- Encolar sincronización de todas las wallets activas ---
     active_wallets = WhaleWallet.objects.filter(is_active=True, sync_status='IDLE')
-    
+
     # Separar por blockchain para manejar rate limits específicos
     wallets_by_blockchain = {}
     for wallet in active_wallets:
@@ -115,58 +141,28 @@ def sync_all_whales_task():
         if chain not in wallets_by_blockchain:
             wallets_by_blockchain[chain] = []
         wallets_by_blockchain[chain].append(wallet)
-    
+
     total_count = 0
-    
-    # Procesar cada blockchain con estrategias de rate limiting diferentes
+
+    # Encolar con espaciado vía countdown (no time.sleep): el worker de beat
+    # no se bloquea y el rate limiting lo aplica el propio scheduling de Celery.
+    # - Etherscan (ethereum/base): ~4 calls/s (límite real 5/s)
+    # - Solana RPC: ~20 calls/s
+    # - Hyperliquid: sin límite estricto
     for blockchain, wallets in wallets_by_blockchain.items():
         logger.info(f"Procesando {len(wallets)} wallets de {blockchain}")
-        
+
         if blockchain in ['ethereum', 'base']:
-            # Ethereum y Base usan Etherscan API: rate limit estricto (5 calls/sec)
-            # Procesar en batches de 5 con 1 segundo entre batches
-            BATCH_SIZE = 5
-            DELAY_SECONDS = 1.0
-            
-            for i in range(0, len(wallets), BATCH_SIZE):
-                batch = wallets[i:i + BATCH_SIZE]
-                
-                # Encolar batch
-                for wallet in batch:
-                    sync_wallet_task.delay(wallet.id)
-                    total_count += 1
-                
-                # Esperar entre batches si no es el último
-                if i + BATCH_SIZE < len(wallets):
-                    time.sleep(DELAY_SECONDS)
-                    
+            spacing = 0.25
         elif blockchain == 'solana':
-            # Solana RPC puede tener rate limits
-            # Procesar en batches de 10 con 0.5 segundos entre batches
-            BATCH_SIZE = 10
-            DELAY_SECONDS = 0.5
-            
-            for i in range(0, len(wallets), BATCH_SIZE):
-                batch = wallets[i:i + BATCH_SIZE]
-                
-                for wallet in batch:
-                    sync_wallet_task.delay(wallet.id)
-                    total_count += 1
-                
-                if i + BATCH_SIZE < len(wallets):
-                    time.sleep(DELAY_SECONDS)
-                    
+            spacing = 0.05
         else:
-            # Hyperliquid y otros: menos restrictivos
-            # Procesar más rápido pero con pequeño delay
-            for i, wallet in enumerate(wallets):
-                sync_wallet_task.delay(wallet.id)
-                total_count += 1
-                
-                # Pequeño delay cada 5 wallets
-                if i % 5 == 0 and i > 0:
-                    time.sleep(0.2)
-    
+            spacing = 0.04
+
+        for i, wallet in enumerate(wallets):
+            sync_wallet_task.apply_async(args=[wallet.id], countdown=i * spacing)
+            total_count += 1
+
     logger.info(f"Encolada sincronización en background para {total_count} ballenas activas.")
     return total_count
 

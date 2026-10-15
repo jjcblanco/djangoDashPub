@@ -267,12 +267,16 @@ class WhaleWallet(models.Model):
     )
     sync_status = models.CharField(max_length=20, default='IDLE', help_text="Estado de la sincronización en background")
     last_sync = models.DateTimeField(null=True, blank=True)
+    sync_started_at = models.DateTimeField(null=True, blank=True, help_text="Momento en que comenzó la sync actual (para detectar syncs colgadas)")
     top_tokens = models.JSONField(default=dict, blank=True)  # {'SOL': 10, 'BONK': 5}
     trading_dna = models.JSONField(default=dict, blank=True)  # {'avg_holding': 4.5, 'rsi_pref': [30,45]}
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         unique_together = [['address', 'blockchain']]
+        indexes = [
+            models.Index(fields=['is_active', 'sync_status']),
+        ]
 
     def __str__(self):
         return f"{self.name or self.address[:8]} ({self.blockchain})"
@@ -299,6 +303,7 @@ class WhaleTransaction(models.Model):
         indexes = [
             models.Index(fields=['wallet', 'tx_type']),
             models.Index(fields=['wallet', 'timestamp']),
+            models.Index(fields=['to_asset', 'timestamp']),
         ]
 
     def __str__(self):
@@ -315,6 +320,7 @@ class PatternInsight(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=['wallet', 'pattern_type']),
+            models.Index(fields=['detected_at']),
         ]
 
     def __str__(self):

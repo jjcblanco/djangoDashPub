@@ -5,17 +5,16 @@ from django.db.models import Count, Q
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, HttpResponseServerError, JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils import timezone
 from django.core.cache import cache
 import logging
 logger = logging.getLogger(__name__)
 
-from ..models import WhaleWallet, WhaleTransaction, PatternInsight, TradingPair, ShadowTrade, WhalePattern, ConsensusSignal
+from ..models import WhaleWallet, WhaleTransaction, ShadowTrade, WhalePattern, ConsensusSignal
 from ..services import SolanaWhaleTracker, PatternEngine
 from ..whale_pattern_learner import WhalePatternLearner
-from dashboard.services import get_top_scored_whales
 from dashboard.whale_scoring import WhaleScoringEngine
 from dashboard.whale_analysis import WhaleAnalysisEngine
 from dashboard.data_service import generar_grafico_desde_señales, DataManager
@@ -28,8 +27,6 @@ from dashboard.utils.notifications import send_telegram_message
 def whale_insights(request):
     """Vista para seguimiento de ballenas y análisis de patrones."""
     try:
-        top_whales = []
-
         # ── Filtro por par ──────────────────────────────────────────────
         active_pair = request.GET.get('pair', '').strip().upper()
 
@@ -54,7 +51,7 @@ def whale_insights(request):
 
         if active_pair:
             wallets_qs = wallets_qs.filter(target_pairs__icontains=active_pair)
-        
+
         wallets = wallets_qs[:50]
 
         # ── Sincronización masiva ───────────────────────────────────────
@@ -66,24 +63,6 @@ def whale_insights(request):
             except Exception as e:
                 messages.error(request, f"Error al encolar tarea de sincronización: {e}. ¿Está corriendo Redis/Celery?")
             return redirect('whale_insights')
-
-        # ── Insights ────────────────────────────────────────────────────
-        insights_qs = PatternInsight.objects.select_related('wallet').all().order_by('-detected_at')
-        if active_pair:
-            insights_qs = insights_qs.filter(
-                meta_data__hot_token_symbol__iexact=active_pair
-            )
-        insights = insights_qs[:20]
-
-        # ── Whale Patterns (Learned) ────────────────────────────────────
-        patterns_qs = WhalePattern.objects.filter(is_active=True).order_by('-avg_pnl')
-        if active_pair:
-            # Filter patterns that mention this pair in conditions or name
-            patterns_qs = patterns_qs.filter(
-                Q(conditions__contains=active_pair) |
-                Q(pattern_name__icontains=active_pair)
-            )
-        patterns = patterns_qs[:20]
 
         # ── PnL por wallet (desde caché) ────────────────────────────────
         for wallet in wallets:
@@ -119,35 +98,26 @@ def whale_insights(request):
             trade.current_price = None
             trade.live_pnl = None
 
-        hot_tokens = []
-
         context = {
             'wallets': wallets,
-            'insights': insights,
-            'patterns': patterns,
             'shadow_trades': shadow_trades,
-            'hot_tokens': hot_tokens,
             'page_title': 'Whale Insights & Alpha',
-            'top_scored_whales': top_whales,
             'total_wallets': total_wallets,
             'avg_win_rate': avg_win_rate,
             'total_pnl': total_pnl,
             'active_signals': active_signals,
-            'pairs': TradingPair.objects.all(),
             # filtro por par
             'available_pairs': available_pairs,
             'active_pair': active_pair,
         }
         return render(request, 'dashboard/whale_insights.html', context)
-    except Exception as e:
-        import traceback
-        error_msg = traceback.format_exc()
-        try:
-            with open('whale_debug.log', 'a') as f:
-                f.write(f"\n--- {timezone.now()} ---\n{error_msg}\n")
-        except:
-            pass
-        return HttpResponse(f"<h3>Error (Capturado) en Whale Insights</h3><pre>{error_msg}</pre>", status=200)
+    except Exception:
+        # Loguear sin exponer el traceback al navegador (antes devolvía 200 con traceback)
+        logger.exception("Error en whale_insights")
+        return HttpResponseServerError(
+            "<h3>Error interno al cargar Whale Insights</h3>"
+            "<p>Revisá los logs del servidor para más detalle.</p>"
+        )
 
 @login_required
 @require_POST
@@ -463,37 +433,35 @@ def discover_contract_whales_ajax(request):
 @ajax_rate_limit(max_calls=30, period_seconds=60)
 def whale_scores_ajax(request):
     """Retorna scores y PnL de todas las billeteras seguidas. Llamado vía AJAX post-pageload."""
-    wallets = WhaleWallet.objects.all().values('id', 'name', 'address')
+    wallets = WhaleWallet.objects.all()
     result = []
-    
-    for w in wallets:
-        cache_key = f"wallet_score_{w['id']}"
+
+    for wallet in wallets:
+        cache_key = f"wallet_score_{wallet.id}"
         cached = cache.get(cache_key)
-        
+
         if not cached:
-            wallet_obj = WhaleWallet.objects.get(id=w['id'])
             try:
-                pnl = PatternEngine.get_wallet_pnl(wallet_obj)
+                pnl = PatternEngine.get_wallet_pnl(wallet)
             except Exception:
                 pnl = {'roi': 0, 'status': 'neutral', 'pnl_usdt': 0}
             try:
-                score = WhaleScoringEngine.calculate_score(wallet_obj)
+                score = WhaleScoringEngine.calculate_score(wallet)
             except Exception:
                 score = {'score': 0, 'category': {'name': 'Sin datos', 'color': 'gray'}}
             cached = {'pnl': pnl, 'score': score}
             cache.set(cache_key, cached, 60 * 15)
-        
-        wallet_obj = WhaleWallet.objects.get(id=w['id'])
+
         result.append({
-            'wallet_id': w['id'],
+            'wallet_id': wallet.id,
             'pnl': cached.get('pnl'),
             'score': cached.get('score'),
-            'sync_status': wallet_obj.sync_status,
-            'last_sync': wallet_obj.last_sync.strftime("%d/%m %H:%M") if wallet_obj.last_sync else "Nunca",
-            'top_tokens': wallet_obj.top_tokens or {},
-            'dna': wallet_obj.trading_dna or {},
+            'sync_status': wallet.sync_status,
+            'last_sync': wallet.last_sync.strftime("%d/%m %H:%M") if wallet.last_sync else "Nunca",
+            'top_tokens': wallet.top_tokens or {},
+            'dna': wallet.trading_dna or {},
         })
-    
+
     return JsonResponse({'status': 'ok', 'wallets': result})
 
 @login_required
@@ -542,7 +510,8 @@ def suggest_bot_from_whale(request, wallet_id):
 def trigger_whale_hunt(request):
     """
     Lanza la tarea de caza de ballenas por pares.
-    Siempre ejecuta de forma síncrona para dar feedback inmediato al usuario.
+    Se ejecuta en background vía Celery: antes corría síncronamente en la request
+    y bloqueaba el worker web decenas de segundos (N targets × APIs externas).
     """
     from dashboard.tasks import hunt_whales_by_pair_task
 
@@ -555,7 +524,6 @@ def trigger_whale_hunt(request):
             'message': '⚠️ No hay contratos activos en Hunt Targets. Agrega al menos uno en el panel de abajo.',
         })
 
-    # Ejecutar síncronamente para dar feedback real al usuario
     try:
         # Leer filtros avanzados desde POST JSON (si existen)
         filter_high_volume = False
@@ -574,76 +542,22 @@ def trigger_whale_hunt(request):
                 filter_min_tx_count = data.get('filterMinTxCount', 1)
             except Exception:
                 pass  # Si hay error, usar valores por defecto
-        
-        result = hunt_whales_by_pair_task(
+
+        # Encolar en background (no bloquear la request)
+        hunt_whales_by_pair_task.delay(
             filter_high_volume=filter_high_volume,
             filter_recent_activity=filter_recent_activity,
             filter_profitable=filter_profitable,
             filter_min_volume=filter_min_volume,
             filter_min_tx_count=filter_min_tx_count,
         )
-        new_count = result.get('new', 0) if isinstance(result, dict) else 0
-        updated_count = result.get('updated', 0) if isinstance(result, dict) else 0
-        buyers_found = result.get('total_buyers_found', 0) if isinstance(result, dict) else 0
-        already_existed = result.get('already_existed', 0) if isinstance(result, dict) else 0
-        filtered_by_vol = result.get('filtered_by_vol', 0) if isinstance(result, dict) else 0
-        errors = result.get('errors', []) if isinstance(result, dict) else []
-        scanned = result.get('scanned', 0) if isinstance(result, dict) else 0
-
-        # Construir mensaje de feedback detallado
-        if new_count > 0:
-            msg = f'✅ Caza completada: {new_count} ballenas nuevas añadidas'
-            if updated_count > 0:
-                msg += f', {updated_count} actualizadas'
-            msg += f'. ({buyers_found} compradores analizados en {scanned} tokens)'
-            return JsonResponse({
-                'status': 'success',
-                'message': msg,
-                'new_wallets': new_count,
-                'updated_wallets': updated_count,
-            })
-
-        # No se encontraron wallets nuevas — dar feedback útil
-        if buyers_found == 0:
-            # La API no devolvió compradores
-            error_detail = ' | '.join(errors[:3]) if errors else 'Las APIs no devolvieron datos de trades.'
-            msg = (
-                f'⚠️ Escaneo completo en {scanned} tokens, pero no se encontraron compradores. '
-                f'Detalle: {error_detail}'
-            )
-        elif filtered_by_vol > 0 and already_existed == 0:
-            # Hay compradores pero todos fueron filtrados por volumen
-            msg = (
-                f'⚠️ Se encontraron {buyers_found} compradores en {scanned} tokens, '
-                f'pero todos fueron filtrados por volumen mínimo. '
-                f'💡 Tip: Baja el "Vol. mín. USD" en tus targets para capturar más traders.'
-            )
-        elif already_existed > 0:
-            # Todos los compradores ya estaban guardados
-            msg = (
-                f'🔍 Escaneo completo: {buyers_found} compradores en {scanned} tokens. '
-                f'{already_existed} ya estaban en seguimiento'
-            )
-            if filtered_by_vol > 0:
-                msg += f', {filtered_by_vol} filtrados por volumen mín'
-            if updated_count > 0:
-                msg += f', {updated_count} actualizados con nuevo par'
-            msg += '. No hay ballenas de estreno.'
-        else:
-            msg = (
-                f'🔍 Escaneo completo en {scanned} tokens. '
-                f'No se encontraron ballenas nuevas.'
-            )
-            if errors:
-                msg += f' Errores: {" | ".join(errors[:2])}'
 
         return JsonResponse({
-            'status': 'warning',
-            'message': msg,
+            'status': 'success',
+            'message': f'🎯 Caza iniciada en segundo plano sobre {target_count} tokens. Las nuevas ballenas aparecerán al completarse.',
         })
     except Exception as e:
-        import traceback
-        return JsonResponse({'status': 'error', 'message': f'Error ejecutando caza: {str(e)}'}, status=500)
+        return JsonResponse({'status': 'error', 'message': f'Error encolando caza: {str(e)}'}, status=500)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -789,6 +703,7 @@ def whale_consensus_ajax(request):
 
 
 @login_required
+@ajax_rate_limit(max_calls=10, period_seconds=60)
 def whale_trade_chart_ajax(request, wallet_id):
     """
     Devuelve datos para el gráfico de operaciones de una ballena en un token:
@@ -802,22 +717,28 @@ def whale_trade_chart_ajax(request, wallet_id):
     from django.db.models import Q
     from dashboard.models import WhaleWallet, WhaleTransaction
 
-    token = request.GET.get('token', '').upper().strip()
+    token = request.GET.get('token', '').upper().strip() or None
     wallet = get_object_or_404(WhaleWallet, id=wallet_id)
     blockchain = wallet.blockchain
 
-    try:
-        # 1. Determinar el Token a graficar
-        if not token:
-            token = wallet.target_pairs_list[0] if wallet.target_pairs_list else None
-        if not token:
-            any_tx = WhaleTransaction.objects.filter(wallet=wallet).first()
-            if any_tx:
-                token = any_tx.to_asset or any_tx.from_asset or 'TOKEN'
-            else:
-                return JsonResponse({'status': 'no_trades', 'message': 'Esta billetera no tiene transacciones todavía.'})
+    # Resolver el token por defecto si no vino en el request
+    if not token:
+        token = wallet.target_pairs_list[0] if wallet.target_pairs_list else None
+    if not token:
+        any_tx = WhaleTransaction.objects.filter(wallet=wallet).first()
+        if any_tx:
+            token = any_tx.to_asset or any_tx.from_asset or 'TOKEN'
+        else:
+            return JsonResponse({'status': 'no_trades', 'message': 'Esta billetera no tiene transacciones todavía.'})
 
-        # 2. Intentar obtener datos de Binance primero (para tokens comunes)
+    # El chart es costoso (varias APIs externas + Plotly): cachear por wallet+token.
+    cache_key = f"whale_chart_{wallet_id}_{token}"
+    cached_result = cache.get(cache_key)
+    if cached_result is not None:
+        return JsonResponse(cached_result)
+
+    try:
+        # 1. Intentar obtener datos de Binance primero (para tokens comunes)
         ohlcv_df = pd.DataFrame()
         pool_address = None
         source = 'DEX'
@@ -981,7 +902,7 @@ def whale_trade_chart_ajax(request, wallet_id):
         available_tokens += list(WhaleTransaction.objects.filter(wallet=wallet).values_list('from_asset', flat=True).distinct())
         available_tokens = sorted(list(set([t.upper() for t in available_tokens if t and t.lower() != 'sol'])))
 
-        return JsonResponse({
+        result = {
             'status': 'ok',
             'wallet_name': wallet.name or wallet.address[:12],
             'token': token,
@@ -989,7 +910,9 @@ def whale_trade_chart_ajax(request, wallet_id):
             'chart_html': chart_html,
             'trades': trades,
             'trade_count': len(trades),
-        })
+        }
+        cache.set(cache_key, result, 60 * 10)  # 10 min de caché
+        return JsonResponse(result)
 
     except Exception as e:
         import traceback
@@ -1041,19 +964,32 @@ def whale_behavior_ajax(request, wallet_id):
 def whale_live_metrics(request):
     """Devuelve métricas agregadas en tiempo real para actualización del dashboard."""
     from ..models import WhaleWallet, ConsensusSignal, ShadowTrade
-    from django.db.models import Count, Q, Sum, Avg
-    
+    from django.db.models import Count, Q, Sum, Avg, F
+
     total_whales = WhaleWallet.objects.filter(is_active=True).count()
-    avg_win_rate = ShadowTrade.objects.filter(status='CLOSED').aggregate(avg=Avg('pnl_pct'))['avg'] or 0
-    total_pnl = ShadowTrade.objects.filter(status='CLOSED').aggregate(total=Sum('pnl_usd'))['total'] or 0
+    closed = ShadowTrade.objects.filter(status='CLOSED')
+    stats = closed.aggregate(
+        avg_pnl=Avg('pnl_percent'),
+        wins=Count('id', filter=Q(pnl_percent__gt=0)),
+        total_count=Count('id'),
+    )
+    avg_pnl = stats['avg_pnl'] or 0
+    total_count = stats['total_count'] or 0
+    win_rate = (stats['wins'] / total_count * 100) if total_count else 0
+    # PnL en USDT: nocional simulado (amount * entry_price) * pnl% / 100
+    total_pnl_agg = closed.aggregate(
+        total=Sum(F('amount') * F('entry_price') * F('pnl_percent'))
+    )['total'] or 0
+    total_pnl = round(float(total_pnl_agg) / 100.0, 2)
     active_signals = ConsensusSignal.objects.filter(status='ACTIVE').count()
-    
+
     return JsonResponse({
         'status': 'ok',
         'metrics': {
             'total_whales': total_whales,
-            'avg_win_rate': round(avg_win_rate, 2),
-            'total_pnl': round(total_pnl, 2),
+            'avg_win_rate': round(win_rate, 2),
+            'avg_pnl': round(avg_pnl, 2),
+            'total_pnl': total_pnl,
             'active_signals': active_signals,
         }
     })

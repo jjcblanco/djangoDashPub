@@ -20,13 +20,25 @@ def simulate_whale_trade(request):
         symbol = request.POST.get('symbol', 'SOL')
         mint = request.POST.get('mint', '')
         price_val = request.POST.get('price', '0')
-        entry_price = Decimal(price_val) if price_val else Decimal('0')
-        
+
+        # Si no llega precio válido, obtener el precio real del mercado
+        # (antes el frontend enviaba price=1.0 hardcodeado → PnL ficticio)
+        try:
+            entry_price = Decimal(price_val) if price_val else Decimal('0')
+        except Exception:
+            entry_price = Decimal('0')
+        if entry_price <= 0:
+            real_price = fetch_current_price(symbol)
+            entry_price = Decimal(str(real_price)) if real_price else Decimal('0')
+        if entry_price <= 0:
+            messages.error(request, f"No se pudo obtener el precio de {symbol}. Intentalo de nuevo.")
+            return redirect('whale_insights')
+
         amount_val = request.POST.get('amount', '1')
         amount = Decimal(amount_val) if amount_val else Decimal('1')
-        
+
         wallet = get_object_or_404(WhaleWallet, id=wallet_id)
-        
+
         ShadowTrade.objects.create(
             wallet=wallet,
             token_symbol=symbol,
@@ -35,10 +47,10 @@ def simulate_whale_trade(request):
             amount=amount,
             status='OPEN'
         )
-        messages.success(request, f"¡Simulación de copia en {symbol} abierta correctamente!")
+        messages.success(request, f"¡Simulación de copia en {symbol} abierta a ${entry_price:.6f}!")
     except Exception as e:
         messages.error(request, f"Error al abrir simulación: {e}")
-        
+
     return redirect('whale_insights')
 
 @login_required
@@ -61,8 +73,11 @@ def close_shadow_trade(request, trade_id):
         trade.exit_price = exit_price
         trade.status = 'CLOSED'
         trade.closed_at = timezone.now()
-        
-        trade.pnl_percent = float((trade.exit_price - trade.entry_price) / trade.entry_price * 100)
+
+        if float(trade.entry_price) > 0:
+            trade.pnl_percent = float((trade.exit_price - trade.entry_price) / trade.entry_price * 100)
+        else:
+            trade.pnl_percent = 0.0
         trade.save()
         
         messages.success(request, f"Simulación de {trade.token_symbol} cerrada con {trade.pnl_percent:.2f}% de P&L.")

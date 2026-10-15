@@ -535,8 +535,7 @@ function startCopyTrade() {
     form.action = '{% url "simulate_whale_trade" %}';
     form.innerHTML = '<input type="hidden" name="csrfmiddlewaretoken" value="'+CSRF+'">'
         +'<input type="hidden" name="wallet_id" value="'+SELECTED_WALLET+'">'
-        +'<input type="hidden" name="symbol" value="'+(SELECTED_PAIRS.split(',')[0]||'SOL')+'">'
-        +'<input type="hidden" name="price" value="1.0">';
+        +'<input type="hidden" name="symbol" value="'+(SELECTED_PAIRS.split(',')[0]||'SOL')+'">';
     document.body.appendChild(form);
     form.submit();
 }
