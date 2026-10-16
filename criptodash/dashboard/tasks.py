@@ -357,6 +357,13 @@ def scan_scalping_pairs_task(timeframe='5m', top_n=15):
     Ejecutar cada 5 minutos via Celery Beat.
     """
     from dashboard.pair_scanner import scan_all_pairs, save_scan_results
+    from dashboard.trading_safety import kill_switch_active
+
+    # FASE 2: si el kill-switch está activo, no escanear (ahorra cuota de API en emergencia)
+    if kill_switch_active():
+        logger.warning("[ScalpScanner] Kill-switch activo; escaneo omitido.")
+        return {'skipped': 'kill_switch_active'}
+
     try:
         logger.info(f"[ScalpScanner] Iniciando escaneo {timeframe}...")
         results = scan_all_pairs(timeframe=timeframe, top_n=top_n, run_signals=True)
@@ -379,10 +386,12 @@ def run_scalping_bot_task(bot_id, force_eval=False):
     En modo live: coloca orden real en Binance via CCXT.
     Ejecutar cada 1 minuto para cada bot activo.
     """
-    from dashboard.models import ScalpingBot, ScalpingTrade, Pair
-    from dashboard.pair_scanner import fetch_ohlcv_df, _get_exchange
-    from dashboard.scalping_strategies import run_strategy
-    from django.utils import timezone
+    from dashboard.models import ScalpingBot
+    from dashboard.trading_safety import kill_switch_active
+
+    # FASE 2: kill-switch antes de todo (cubre también force_eval/run_now)
+    if kill_switch_active():
+        return {'executed': False, 'reason': 'Kill-switch activo. No se ejecutan trades.'}
 
     try:
         bot = ScalpingBot.objects.get(id=bot_id)
@@ -392,6 +401,29 @@ def run_scalping_bot_task(bot_id, force_eval=False):
 
     if bot.status != 'RUNNING' and not force_eval:
         return {'executed': False, 'reason': 'El bot está PAUSADO o DETENIDO. Presiona Iniciar primero.'}
+
+    # FASE 2: lock por bot — evita evaluaciones concurrentes del mismo bot
+    # (check-then-create no atómico: dos workers podían crear dos trades OPEN).
+    lock_key = f"scalp:bot_lock:{bot_id}"
+    if not cache.add(lock_key, "1", timeout=120):
+        logger.info(f"[ScalpBot] Bot {bot_id} ya en evaluación (lock activo); se omite.")
+        return {'executed': False, 'reason': 'Bot ya en evaluación (lock activo).'}
+    try:
+        return _run_scalping_bot_locked(bot, force_eval)
+    finally:
+        cache.delete(lock_key)
+
+
+def _run_scalping_bot_locked(bot, force_eval=False):
+    """Cuerpo de run_scalping_bot_task protegido por el lock por bot."""
+    from dashboard.models import ScalpingTrade, ScalpingBot
+    from dashboard.pair_scanner import fetch_ohlcv_df, _get_exchange
+    from dashboard.scalping_strategies import run_strategy
+    from dashboard.trading_safety import kill_switch_active, new_client_order_id
+    from django.utils import timezone
+    from django.db.models import F
+
+    bot_id = bot.id
 
 
     # Verificar que no hay trade abierto ya
@@ -445,12 +477,21 @@ def run_scalping_bot_task(bot_id, force_eval=False):
         quantity  = round(capital / price, 6)
 
         entry_order_id = None
+        client_order_id = None
 
         if bot.is_live:
-            # ── MODO LIVE: colocar orden en Binance ──
+            # FASE 2: re-check TOCTOU del kill-switch inmediatamente antes de operar
+            if kill_switch_active():
+                return {'executed': False, 'reason': 'Kill-switch activo. No se ejecutan trades.'}
+
+            # ── MODO LIVE: colocar orden en Binance con clientOrderId idempotente ──
             try:
                 side_ccxt = 'buy' if signal == 'BUY' else 'sell'
-                order = exchange.create_market_order(symbol, side_ccxt, quantity)
+                client_order_id = new_client_order_id('cdash_sb', bot_id)
+                order = exchange.create_market_order(
+                    symbol, side_ccxt, quantity,
+                    params={'newClientOrderId': client_order_id},
+                )
                 entry_order_id = str(order.get('id', ''))
                 price = float(order.get('price') or order.get('average') or price)
                 logger.info(f"[ScalpBot LIVE] Orden {side_ccxt} {quantity} {symbol} @ {price} (ID: {entry_order_id})")
@@ -473,11 +514,12 @@ def run_scalping_bot_task(bot_id, force_eval=False):
             quantity            = quantity,
             status              = 'OPEN',
             entry_order_id      = entry_order_id,
+            client_order_id     = client_order_id,
             indicators_snapshot = indicators,
         )
 
-        bot.total_trades += 1
-        bot.save(update_fields=['total_trades', 'updated_at'])
+        # FASE 2: contador con F() — no pisar escrituras de otros workers
+        ScalpingBot.objects.filter(id=bot_id).update(total_trades=F('total_trades') + 1)
 
         # Alerta Telegram
         mode_txt = '🔴 LIVE' if bot.is_live else '🟡 SIM'
@@ -522,13 +564,22 @@ def check_scalping_positions_task():
     Verifica SL/TP de todos los trades de scalping abiertos.
     En modo simulado: evalúa precio actual vs SL/TP.
     En modo live: coloca órdenes de cierre si se toca el nivel.
+    FASE 2: si el kill-switch está activo, entra en MODO LIQUIDACIÓN
+    (cierra a mercado todos los OPEN de bots live sin esperar SL/TP).
     Ejecutar cada 30 segundos.
     """
     from dashboard.models import ScalpingTrade, ScalpingBot
     from dashboard.pair_scanner import _get_exchange
+    from dashboard.trading_safety import kill_switch_active, new_client_order_id, force_close_scalping_trade
     from django.utils import timezone
+    from django.db import transaction
+    from django.db.models import F
 
-    open_trades = ScalpingTrade.objects.filter(status='OPEN').select_related('bot', 'bot__pair')
+    kill_switch = kill_switch_active()
+
+    open_trades = ScalpingTrade.objects.filter(
+        status__in=['OPEN', 'CLOSE_FAILED']
+    ).select_related('bot', 'bot__pair')
     if not open_trades.exists():
         return {'checked': 0}
 
@@ -543,6 +594,20 @@ def check_scalping_positions_task():
     for trade in open_trades:
         try:
             symbol = trade.bot.pair.symbol
+
+            # FASE 2: MODO LIQUIDACIÓN si kill-switch activo — solo bots live
+            if kill_switch and trade.bot.is_live and trade.status == 'OPEN':
+                force_close_scalping_trade(trade, reason='CLOSED_EMERGENCY')
+                closed += 1
+                continue
+
+            # FASE 2: reintentar cierre de CLOSE_FAILED con el mismo clientOrderId
+            if trade.status == 'CLOSE_FAILED':
+                logger.info(f"[ScalpPositions] Reintentando cierre de trade {trade.id} (CLOSE_FAILED).")
+                force_close_scalping_trade(trade, reason=trade.close_reason or 'RETRY_CLOSE')
+                closed += 1
+                continue
+
             ticker = exchange.fetch_ticker(symbol)
             price  = float(ticker.get('last') or ticker.get('close', 0))
             if price <= 0:
@@ -562,54 +627,84 @@ def check_scalping_positions_task():
 
             close_reason = 'CLOSED_TP' if hit_tp else 'CLOSED_SL'
 
-            # Calcular PnL
-            if trade.side == 'BUY':
-                pnl_pct  = (price - ep) / ep * 100
-                pnl_usdt = (price - ep) * qty
-            else:
-                pnl_pct  = (ep - price) / ep * 100
-                pnl_usdt = (ep - price) * qty
+            # FASE 2: lock de fila — si otro worker ya lo cerró, saltar
+            with transaction.atomic():
+                trade = (ScalpingTrade.objects.select_for_update()
+                         .filter(id=trade.id, status__in=['OPEN', 'CLOSE_FAILED']).first())
+                if not trade:
+                    continue
 
-            exit_order_id = None
-            if trade.bot.is_live:
-                try:
-                    side_close = 'sell' if trade.side == 'BUY' else 'buy'
-                    order = exchange.create_market_order(symbol, side_close, qty)
-                    exit_order_id = str(order.get('id', ''))
-                    price = float(order.get('price') or order.get('average') or price)
-                except Exception as e:
-                    logger.error(f"[ScalpPositions LIVE] Error cerrando {symbol}: {e}")
+                # Calcular PnL
+                if trade.side == 'BUY':
+                    pnl_pct  = (price - ep) / ep * 100
+                    pnl_usdt = (price - ep) * qty
+                else:
+                    pnl_pct  = (ep - price) / ep * 100
+                    pnl_usdt = (ep - price) * qty
 
-            # Actualizar trade
-            trade.exit_price    = price
-            trade.exit_time     = timezone.now()
-            trade.status        = close_reason
-            trade.pnl_usdt      = round(pnl_usdt, 4)
-            trade.pnl_pct       = round(pnl_pct, 4)
-            trade.exit_order_id = exit_order_id
-            trade.save()
+                exit_order_id = None
+                if trade.bot.is_live:
+                    try:
+                        side_close = 'sell' if trade.side == 'BUY' else 'buy'
+                        cid = trade.exit_client_order_id or new_client_order_id('cdash_sbx', trade.bot.id)
+                        order = exchange.create_market_order(
+                            symbol, side_close, qty,
+                            params={'newClientOrderId': cid},
+                        )
+                        exit_order_id = str(order.get('id', ''))
+                        price = float(order.get('price') or order.get('average') or price)
+                        trade.exit_client_order_id = cid
+                    except Exception as e:
+                        # FASE 2: NO cerrar local si la venta real falla
+                        logger.error(f"[ScalpPositions LIVE] Error cerrando {symbol}: {e}")
+                        trade.exit_client_order_id = trade.exit_client_order_id or cid
+                        trade.status = 'CLOSE_FAILED'
+                        trade.close_reason = close_reason
+                        trade.save(update_fields=['exit_client_order_id', 'status', 'close_reason'])
+                        bot_err = trade.bot
+                        bot_err.last_error = f"CLOSE_FAILED trade {trade.id}: {e}"[:250]
+                        bot_err.save(update_fields=['last_error'])
+                        try:
+                            send_telegram_message(
+                                f"⚠️ <b>CLOSE_FAILED</b> (scalping)\n"
+                                f"Trade {trade.id} ({symbol}) no se pudo cerrar: {str(e)[:100]}\n"
+                                f"Reintento automático en el próximo ciclo."
+                            )
+                        except Exception:
+                            pass
+                        continue
 
-            # Actualizar estadísticas del bot
-            bot = trade.bot
-            bot.total_pnl_usdt += pnl_usdt
-            if pnl_usdt > 0:
-                bot.winning_trades += 1
-            bot.save(update_fields=['total_pnl_usdt', 'winning_trades'])
+                # Actualizar trade
+                trade.exit_price    = price
+                trade.exit_time     = timezone.now()
+                trade.status        = close_reason
+                trade.pnl_usdt      = round(pnl_usdt, 4)
+                trade.pnl_pct       = round(pnl_pct, 4)
+                trade.exit_order_id = exit_order_id
+                trade.close_reason  = close_reason
+                trade.save()
 
-            # Notificación Telegram
-            emoji = '✅' if hit_tp else '❌'
-            mode_txt = '🔴 LIVE' if bot.is_live else '🟡 SIM'
-            msg = (
-                f"{emoji} <b>Scalping CERRADO</b> {mode_txt}\n\n"
-                f"🤖 <b>Bot:</b> {bot.name}\n"
-                f"📊 <b>Par:</b> {symbol}\n"
-                f"{'🎯 Take Profit alcanzado' if hit_tp else '🛑 Stop Loss tocado'}\n"
-                f"💵 <b>Entrada:</b> <code>{ep}</code>\n"
-                f"💵 <b>Salida:</b> <code>{price}</code>\n"
-                f"{'📈' if pnl_usdt > 0 else '📉'} <b>PnL:</b> <code>{pnl_usdt:+.2f} USDT ({pnl_pct:+.2f}%)</code>"
-            )
-            send_telegram_message(msg)
-            closed += 1
+                # FASE 2: estadísticas del bot con F() — no pisar escrituras
+                bot = trade.bot
+                ScalpingBot.objects.filter(id=bot.id).update(
+                    total_pnl_usdt=F('total_pnl_usdt') + round(pnl_usdt, 4),
+                    winning_trades=F('winning_trades') + (1 if pnl_usdt > 0 else 0),
+                )
+
+                # Notificación Telegram
+                emoji = '✅' if hit_tp else '❌'
+                mode_txt = '🔴 LIVE' if bot.is_live else '🟡 SIM'
+                msg = (
+                    f"{emoji} <b>Scalping CERRADO</b> {mode_txt}\n\n"
+                    f"🤖 <b>Bot:</b> {bot.name}\n"
+                    f"📊 <b>Par:</b> {symbol}\n"
+                    f"{'🎯 Take Profit alcanzado' if hit_tp else '🛑 Stop Loss tocado'}\n"
+                    f"💵 <b>Entrada:</b> <code>{ep}</code>\n"
+                    f"💵 <b>Salida:</b> <code>{price}</code>\n"
+                    f"{'📈' if pnl_usdt > 0 else '📉'} <b>PnL:</b> <code>{pnl_usdt:+.2f} USDT ({pnl_pct:+.2f}%)</code>"
+                )
+                send_telegram_message(msg)
+                closed += 1
 
         except Exception as e:
             logger.error(f"[ScalpPositions] Error procesando trade {trade.id}: {e}")
@@ -625,6 +720,13 @@ def run_all_scalping_bots_task():
     Ejecutar cada 1 minuto via Celery Beat.
     """
     from dashboard.models import ScalpingBot
+    from dashboard.trading_safety import kill_switch_active
+
+    # FASE 2: kill-switch — no encolar evaluaciones durante una emergencia
+    if kill_switch_active():
+        logger.warning("[ScalpAll] Kill-switch activo; no se encolan evaluaciones.")
+        return {'bots_queued': 0, 'reason': 'kill_switch_active'}
+
     bots = ScalpingBot.objects.filter(status='RUNNING')
     count = 0
     for bot in bots:

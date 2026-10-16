@@ -635,13 +635,18 @@
                                 <span style="font-size:.7rem;
                                     {% if t.status == 'CLOSED_TP' %}color:var(--green)
                                     {% elif t.status == 'CLOSED_SL' %}color:var(--red)
+                                    {% elif t.status == 'CLOSE_FAILED' %}color:var(--red);font-weight:700
+                                    {% elif t.status == 'CLOSED_EMERGENCY' %}color:var(--red);font-weight:700
                                     {% elif t.status == 'OPEN' %}color:var(--yellow)
                                     {% else %}color:var(--text-muted){% endif %}">
                                     {{ t.status }}
                                 </span>
+                                {% if t.status == 'CLOSE_FAILED' %}
+                                <i class="fas fa-exclamation-triangle" style="color:var(--red);font-size:.7rem;" title="La venta real falló. Se reintenta automáticamente; puede requerir intervención manual en Binance."></i>
+                                {% endif %}
                             </td>
                             <td>
-                                {% if t.status == 'OPEN' %}
+                                {% if t.status == 'OPEN' or t.status == 'CLOSE_FAILED' %}
                                 <button class="btn btn-stop" style="font-size:.68rem;padding:.2rem .5rem;"
                                     onclick="closeTrade({{ t.id }})">Cerrar</button>
                                 {% endif %}

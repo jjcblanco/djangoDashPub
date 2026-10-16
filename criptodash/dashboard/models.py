@@ -162,6 +162,7 @@ class LiveTrade(models.Model):
         ('CLOSED', 'Closed'),
         ('CANCELED', 'Canceled'),
         ('CLOSED_EMERGENCY', 'Closed by Emergency'),
+        ('CLOSE_FAILED', 'Close Failed'),
     ]
 
     bot = models.ForeignKey(LiveBot, on_delete=models.CASCADE, related_name='trades')
@@ -179,6 +180,9 @@ class LiveTrade(models.Model):
     take_profit = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
     order_id = models.CharField(max_length=100, blank=True, null=True, help_text="ID de orden de entrada (Buy)")
     exit_order_id = models.CharField(max_length=100, blank=True, null=True, help_text="ID de orden de salida (Sell/TP)")
+    client_order_id = models.CharField(max_length=36, blank=True, null=True, help_text="clientOrderId idempotente de la orden de entrada")
+    exit_client_order_id = models.CharField(max_length=36, blank=True, null=True, help_text="clientOrderId idempotente de la orden de salida")
+    close_reason = models.CharField(max_length=50, blank=True, null=True, help_text="Razón del cierre (preservada para reintentos y notificaciones)")
 
     class Meta:
         indexes = [
@@ -569,6 +573,8 @@ class ScalpingTrade(models.Model):
         ('CLOSED_TP',     'Cerrada (Take Profit)'),
         ('CLOSED_SL',     'Cerrada (Stop Loss)'),
         ('CLOSED_MANUAL', 'Cerrada (Manual)'),
+        ('CLOSED_EMERGENCY', 'Cerrada (Emergencia)'),
+        ('CLOSE_FAILED',  'Cierre Fallido'),
     ]
 
     bot                 = models.ForeignKey(ScalpingBot, on_delete=models.CASCADE, related_name='trades')
@@ -583,6 +589,9 @@ class ScalpingTrade(models.Model):
     status              = models.CharField(max_length=20, choices=STATUS_CHOICES, default='OPEN')
     entry_order_id      = models.CharField(max_length=100, null=True, blank=True)
     exit_order_id       = models.CharField(max_length=100, null=True, blank=True)
+    client_order_id     = models.CharField(max_length=36, null=True, blank=True, help_text="clientOrderId idempotente de la orden de entrada")
+    exit_client_order_id = models.CharField(max_length=36, null=True, blank=True, help_text="clientOrderId idempotente de la orden de salida")
+    close_reason        = models.CharField(max_length=50, null=True, blank=True, help_text="Razón del cierre (preservada para reintentos)")
     indicators_snapshot = models.JSONField(null=True, blank=True)
     entry_time          = models.DateTimeField(auto_now_add=True)
     exit_time           = models.DateTimeField(null=True, blank=True)

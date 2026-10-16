@@ -241,7 +241,16 @@ def create_bot(request):
 
         pair = TradingPair.objects.get(id=pair_id)
         is_live = request.POST.get('is_live') == 'on'
-        
+
+        # FASE 2: DAYTRADING no soporta modo LIVE (la compra real aún no está implementada)
+        if strategy_type == 'DAYTRADING' and is_live:
+            messages.error(
+                request,
+                "DAYTRADING no soporta modo LIVE en esta versión "
+                "(la compra real de entrada aún no está implementada). El bot se creará en SIMULADO."
+            )
+            is_live = False
+
         bot = LiveBot.objects.create(
             name=name,
             pair=pair,
@@ -321,14 +330,44 @@ def edit_bot(request, bot_id):
         
         bot.name = name
         bot.parameters = params
-        
+
         if needs_grid_reset:
+            # FASE 2: cancelar las órdenes limit REALES en Binance antes de cancelar en DB.
+            # Si la cancelación real falla, el trade sigue WAITING (la fuente de verdad es Binance).
             zombie_trades = LiveTrade.objects.filter(bot=bot, status='WAITING')
-            zombie_count = zombie_trades.count()
-            zombie_trades.update(status='CANCELED')
-            messages.info(request, f"Se han cancelado {zombie_count} órdenes pendientes.")
-        
-        bot.is_live = request.POST.get('is_live') == 'on'
+            canceled = 0
+            for trade in zombie_trades:
+                if bot.is_live and trade.order_id:
+                    try:
+                        from ..ccxttest1 import binance as exchange
+                        exchange.cancel_order(trade.order_id, bot.pair.symbol)
+                    except Exception as e:
+                        logger.error(f"No se pudo cancelar orden {trade.order_id} de trade {trade.id}: {e}")
+                        bot.last_error = f"CANCEL_FAILED trade {trade.id}: {e}"[:250]
+                        send_telegram_message(
+                            f"⚠️ No se pudo cancelar la orden limit {trade.order_id} "
+                            f"({bot.pair.symbol}). Verificar en Binance."
+                        )
+                        continue
+                # Cancelación OK (o bot SIM / sin order_id): devolver el capital retenido
+                # (criterio de _repose_limit_buy — el balance se descuenta en SIM y LIVE)
+                cost = trade.amount * trade.entry_price
+                bot.current_balance += cost + cost * Decimal("0.001")
+                trade.status = 'CANCELED'
+                trade.save(update_fields=['status'])
+                canceled += 1
+            if canceled:
+                messages.info(request, f"Se han cancelado {canceled} órdenes pendientes.")
+
+        # FASE 2: DAYTRADING no soporta modo LIVE
+        if strategy_type == 'DAYTRADING' and request.POST.get('is_live') == 'on':
+            messages.error(
+                request,
+                "DAYTRADING no soporta modo LIVE en esta versión. El bot quedó en SIMULADO."
+            )
+            bot.is_live = False
+        else:
+            bot.is_live = request.POST.get('is_live') == 'on'
         bot.save()
         messages.success(request, f"Parámetros de '{name}' actualizados correctamente.")
         
@@ -353,9 +392,40 @@ def bot_action(request, bot_id):
             send_telegram_message(f"▶️ <b>Bot Iniciado</b>\nEl bot <code>{bot.name}</code> ({bot.pair.symbol}) ha comenzado a operar.")
             
         elif action == 'stop':
+            # FASE 2: cancelar órdenes limit REALES pendientes antes de detener.
+            # Si la cancelación real falla, la orden queda WAITING en DB (verdad = Binance).
+            cancel_issues = []
+            from ..ccxttest1 import binance as exchange
+            for trade in LiveTrade.objects.filter(bot=bot, status='WAITING'):
+                if bot.is_live and trade.order_id:
+                    try:
+                        exchange.cancel_order(trade.order_id, bot.pair.symbol)
+                    except Exception as e:
+                        logger.error(f"No se pudo cancelar orden {trade.order_id} al detener bot {bot.id}: {e}")
+                        cancel_issues.append(str(trade.order_id))
+                        bot.last_error = f"STOP_CANCEL_FAILED {trade.order_id}: {e}"[:250]
+                        continue  # la orden sigue WAITING: la verdad es Binance
+                # Cancelación OK (o bot SIM / sin order_id): devolver capital retenido
+                # (el balance se descuenta en SIM y LIVE)
+                cost = trade.amount * trade.entry_price
+                bot.current_balance += cost + cost * Decimal("0.001")
+                trade.status = 'CANCELED'
+                trade.save(update_fields=['status'])
+            open_remaining = LiveTrade.objects.filter(bot=bot, status='OPEN').exists()
+            if open_remaining and bot.is_live:
+                send_telegram_message(
+                    f"⚠️ Bot <code>{bot.name}</code> detenido con posiciones ABIERTAS en Binance. "
+                    f"Usar 'Close Only' o cerrar manualmente."
+                )
             bot.status = 'STOPPED'
             bot.save()
-            messages.success(request, f"Bot '{bot.name}' detenido.")
+            if cancel_issues:
+                messages.warning(
+                    request,
+                    f"Bot '{bot.name}' detenido, pero {len(cancel_issues)} órdenes no se pudieron cancelar en Binance. Verificar manualmente."
+                )
+            else:
+                messages.success(request, f"Bot '{bot.name}' detenido.")
             send_telegram_message(f"⏹️ <b>Bot Detenido</b>\nEl bot <code>{bot.name}</code> ({bot.pair.symbol}) se ha detenido.")
             
         elif action == 'close_only':
@@ -396,50 +466,61 @@ def trigger_bot_update(request):
 
 @login_required
 def trigger_balance_sync(request):
-    """Sincroniza y recalibra los balances de los bots con el saldo real y parámetros."""
+    """
+    FASE 2: reconciliación NO destructiva.
+    - NUNCA reescribe initial_balance (historia contable).
+    - Recomputa current_balance de forma honesta: initial + realized - open_cost.
+      Sin floor artificial: los negativos se reportan, no se falsean.
+    - El balance real de Binance solo se INFORMA como diferencia; no re-escala bots.
+    """
     if not request.user.is_staff:
         messages.error(request, "Acceso denegado.")
         return redirect('bot_dashboard')
-        
-    from ..ccxttest1 import binance as exchange
-    try:
-        # 1. Recalibración Contable (Lógica de recalibrate_bots.py)
-        bots = LiveBot.objects.all()
-        for bot in bots:
-            # Sincronizar Capital Inicial si es GRID
-            if bot.strategy_type == 'GRID':
-                try:
-                    levels = int(bot.parameters.get('grid_levels', 0))
-                    amount = float(bot.parameters.get('amount_per_level', 0))
-                    ideal = Decimal(str(levels * amount))
-                    if bot.initial_balance < ideal:
-                        bot.initial_balance = ideal
-                except: pass
-            
-            # Recalcular saldo disponible (Initial + PnL - OpenCost)
-            realized_pnl = LiveTrade.objects.filter(bot=bot).exclude(status__in=['OPEN', 'WAITING']).aggregate(total=Sum('pnl'))['total'] or Decimal("0")
-            open_trades = LiveTrade.objects.filter(bot=bot, status__in=['OPEN', 'WAITING'])
-            invested = sum(t.entry_price * t.amount for t in open_trades)
-            
-            new_current = bot.initial_balance + realized_pnl - invested
-            bot.current_balance = max(new_current, Decimal("1.0")) # Evitar negativos
-            bot.save()
 
-        # 2. Sincronización Proporcional con Binance (Opcional - solo si hay fondos)
+    try:
+        bots = LiveBot.objects.all()
+        adjusted = 0
+        negatives = []
+        for bot in bots:
+            # Recalcular saldo contable (Initial + PnL realizado - costo de abiertos)
+            realized_pnl = (LiveTrade.objects.filter(bot=bot)
+                            .exclude(status__in=['OPEN', 'WAITING', 'CLOSE_FAILED'])
+                            .aggregate(total=Sum('pnl'))['total'] or Decimal("0"))
+            open_trades = LiveTrade.objects.filter(
+                bot=bot, status__in=['OPEN', 'WAITING', 'CLOSE_FAILED']
+            )
+            invested = sum(t.entry_price * t.amount for t in open_trades)
+
+            contable = bot.initial_balance + realized_pnl - invested
+            if (contable - bot.current_balance) != 0:
+                bot.current_balance = contable
+                bot.save(update_fields=['current_balance'])
+                adjusted += 1
+            if contable < 0:
+                negatives.append(bot.name)
+
+        msg = f"Reconciliación contable: {adjusted} bot(es) ajustados. initial_balance NO fue tocado."
+        if negatives:
+            msg += f" ⚠️ Saldo contable negativo en: {', '.join(negatives)} — revisar pérdidas reales."
+
+        # Informe del balance real de Binance (solo lectura, sin re-escalar)
         try:
+            from ..ccxttest1 import binance as exchange
             bal = exchange.fetch_balance()
             real_total = Decimal(str(bal['total'].get('USDT', 0)))
-            if real_total > 0:
-                total_local = sum(b.current_balance for b in bots)
-                if total_local > 0:
-                    ratio = real_total / total_local
-                    for b in bots:
-                        b.current_balance = (b.current_balance * ratio).quantize(Decimal("1.00000000"))
-                        b.save()
-            messages.success(request, f"¡Sincronización y Recalibración completa! (${real_total:.2f} USDT detectados).")
+            total_local = sum(b.current_balance for b in LiveBot.objects.all())
+            diff = real_total - total_local
+            if abs(diff) > Decimal("0.01"):
+                messages.warning(
+                    request,
+                    f"{msg} Diferencia vs Binance: ${diff:.2f} USDT "
+                    f"(real: ${real_total:.2f}, local: ${total_local:.2f}). Ajuste manual requerido."
+                )
+            else:
+                messages.success(request, f"{msg} Balance local coincide con Binance (${real_total:.2f} USDT).")
         except Exception as e:
-            messages.warning(request, f"Recalibración interna lista, pero falló la conexión con Binance: {e}")
-            
+            messages.warning(request, f"{msg} No se pudo consultar Binance: {e}")
+
     except Exception as e:
         messages.error(request, f"Error durante la sincronización: {e}")
     return redirect('bot_dashboard')

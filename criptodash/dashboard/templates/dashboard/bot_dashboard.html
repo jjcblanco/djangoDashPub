@@ -572,6 +572,12 @@
                                     <span class="badge bg-dark">CLOSED</span>
                                     {% elif trade.status == 'CANCELED' %}
                                     <span class="badge bg-danger">CANCELED</span>
+                                    {% elif trade.status == 'CLOSE_FAILED' %}
+                                    <span class="badge bg-danger" title="La venta real falló. Se reintenta automáticamente; puede requerir intervención manual en Binance.">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>CLOSE FAILED
+                                    </span>
+                                    {% elif trade.status == 'CLOSED_EMERGENCY' %}
+                                    <span class="badge bg-danger">EMERGENCY</span>
                                     {% else %}
                                     <span class="badge bg-light text-dark">{{ trade.status }}</span>
                                     {% endif %}

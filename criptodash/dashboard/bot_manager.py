@@ -19,6 +19,21 @@ class BotManager:
     @staticmethod
     def update_all_active_bots():
         """Ciclo principal de actualización para todos los bots activos."""
+        # FASE 2: lock global del ciclo para evitar ciclos concurrentes
+        # (run_bots systemd + trigger_bot_update web + scripts manuales).
+        from django.core.cache import cache
+        LOCK_KEY = "trading:live_cycle_lock"
+        if not cache.add(LOCK_KEY, "1", timeout=300):
+            logger.info("Ciclo LiveBot ya en ejecución (lock activo); se omite esta llamada.")
+            return []
+        try:
+            return BotManager._update_all_active_bots_locked()
+        finally:
+            cache.delete(LOCK_KEY)
+
+    @staticmethod
+    def _update_all_active_bots_locked():
+        """Ciclo principal protegido por el lock global."""
         # 0. Verificar Kill-Switch y Riesgo Global
         if not BotManager.check_global_risk():
             logger.warning("Ciclo de trading cancelado: Kill-Switch activo o riesgo excedido.")
@@ -32,7 +47,7 @@ class BotManager:
                 if bot.last_error:
                     bot.last_error = None
                     bot.save()
-                
+
                 result = BotManager.update_bot(bot)
                 results.append(result)
             except Exception as e:
@@ -43,17 +58,17 @@ class BotManager:
                 # Guardamos el error y una pista del traceback para depuración
                 bot.last_error = f"{str(e)} | Trace: {error_trace.splitlines()[-2] if len(error_trace.splitlines()) > 1 else 'no-trace'}"
                 bot.save()
-                
+
                 # Notificar Error Crítico
                 send_telegram_message(f"⚠️ <b>Error en Bot {bot.id} ({bot.name})</b>\nEstado: ERROR\nMensaje: {str(e)[:100]}...")
-        
+
         # Registrar métrica diaria de performance ( Equity Curve )
         try:
             from .utils.performance import snapshot_daily_metrics
             snapshot_daily_metrics()
         except Exception as e:
             logger.error(f"Error registrando snapshot diario en manager: {e}")
-            
+
         return results
 
     @staticmethod
@@ -106,48 +121,64 @@ class BotManager:
             return {'bot_id': bot.id, 'status': 'error', 'message': str(e)}
 
         # 0. Verificar Inicialización (Bootstrap)
-        # Solo inicializamos si no hay operaciones ACTIVAS (OPEN o WAITING)
-        active_trades_exist = LiveTrade.objects.filter(bot=bot, status__in=['OPEN', 'WAITING']).exists()
-        
+        # Solo inicializamos si no hay operaciones ACTIVAS (OPEN, WAITING o CLOSE_FAILED).
+        # FASE 2: incluir CLOSE_FAILED — si el único trade está CLOSE_FAILED y
+        # bootstrapeamos, duplicaríamos la malla.
+        active_trades_exist = LiveTrade.objects.filter(
+            bot=bot, status__in=['OPEN', 'WAITING', 'CLOSE_FAILED']
+        ).exists()
+
         if not active_trades_exist and bot.status == 'RUNNING':
             logger.info(f"Bot {bot.id} ({bot.name}) no tiene operaciones activas. Iniciando Bootstrap...")
             return BotManager._grid_bootstrap(bot, current_price, grid_levels)
 
         # Obtener posiciones abiertas del bot
         open_trades = LiveTrade.objects.filter(bot=bot).exclude(status__in=['CLOSED', 'CANCELED'])
-        
+
         # 1. Sincronizar estados con el Exchange
         for trade in open_trades:
+            # FASE 2: reintentar cierre de trades CLOSE_FAILED antes que nada
+            if trade.status == 'CLOSE_FAILED':
+                logger.info(f"Reintentando cierre de trade {trade.id} (CLOSE_FAILED).")
+                BotManager._close_trade(trade, current_price, trade.close_reason or "RETRY_CLOSE")
+                continue
+
             if bot.is_live and trade.order_id:
                 try:
                     # Determinar qué orden queremos monitorear: Si está OPEN esperando venta, miramos el exit_order_id.
                     order_to_track = trade.exit_order_id if (trade.status == 'OPEN' and trade.exit_order_id) else trade.order_id
-                    
+
                     # Verificar estado de la orden activa en Binance
                     order = exchange.fetch_order(order_to_track, bot.pair.symbol)
                     status = order.get('status') # 'open', 'closed', 'canceled'
-                    
+
                     if status == 'closed':
                         if trade.status == 'WAITING':
                             # ¡Compra ejecutada! Pasamos a OPEN y colocamos TP
                             trade.status = 'OPEN'
                             tp_price = float(trade.entry_price) + grid_step
-                            
+
                             exit_order_id = None
+                            exit_cid = None
                             try:
+                                from .trading_safety import new_client_order_id
+                                exit_cid = new_client_order_id('cdash_lbx', bot.id)
                                 tp_order = exchange.create_order(
                                     symbol=bot.pair.symbol,
                                     type='limit',
                                     side='sell',
                                     amount=float(trade.amount),
-                                    price=tp_price
+                                    price=tp_price,
+                                    params={'newClientOrderId': exit_cid},
                                 )
                                 exit_order_id = tp_order.get('id')
                             except Exception as e:
                                 logger.error(f"Error colocando TP para bot {bot.id}: {e}")
                                 # Si falla el TP, el trade queda OPEN pero sin exit_order_id (requiere intervención o reintento)
-                            
+
                             trade.exit_order_id = exit_order_id
+                            if exit_order_id:
+                                trade.exit_client_order_id = exit_cid
                             trade.save()
                             logger.info(f"Trade {trade.id} llenado (BUY). Colocado TP LIMIT en {tp_price}")
 
@@ -214,20 +245,26 @@ class BotManager:
         qty = safe_amount / float(price)
         order_id = None
         
+        client_order_id = None
         if bot.is_live:
             try:
                 # Ajustar a precisión de Binance
                 qty = float(exchange.amount_to_precision(bot.pair.symbol, qty))
                 price_adj = float(exchange.price_to_precision(bot.pair.symbol, float(price)))
-                
-                api_order = exchange.create_order(bot.pair.symbol, 'limit', 'buy', qty, price_adj)
+
+                from .trading_safety import new_client_order_id
+                client_order_id = new_client_order_id('cdash_lb', bot.id)
+                api_order = exchange.create_order(
+                    bot.pair.symbol, 'limit', 'buy', qty, price_adj,
+                    params={'newClientOrderId': client_order_id},
+                )
                 order_id = api_order.get('id')
             except Exception as e:
                 logger.error(f"Error reponiendo nivel {price} para bot {bot.id}: {e}")
-        
+
         LiveTrade.objects.create(
             bot=bot, side='BUY', entry_price=price, amount=Decimal(str(qty)),
-            status='WAITING', order_id=order_id
+            status='WAITING', order_id=order_id, client_order_id=client_order_id
         )
         # Descontar del balance
         cost = Decimal(str(amount_per_level))
@@ -373,18 +410,25 @@ class BotManager:
 
             # --- NIVEL INFERIOR: LIMIT BUY ---
             if level < current_price:
+                client_order_id = None
                 if bot.is_live:
                     try:
                         price_adj = float(exchange.price_to_precision(bot.pair.symbol, level))
-                        api_order = exchange.create_order(bot.pair.symbol, 'limit', 'buy', qty, price_adj)
+                        from .trading_safety import new_client_order_id
+                        client_order_id = new_client_order_id('cdash_lb', bot.id)
+                        api_order = exchange.create_order(
+                            bot.pair.symbol, 'limit', 'buy', qty, price_adj,
+                            params={'newClientOrderId': client_order_id},
+                        )
                         order_id = api_order.get('id')
                     except Exception as e:
                         logger.error(f"Error Bootstrap (Limit Buy) bot {bot.id} en {level}: {e}")
                         continue
-                
+
                 LiveTrade.objects.create(
                     bot=bot, side='BUY', entry_price=Decimal(str(level)),
-                    amount=Decimal(str(qty)), status='WAITING', order_id=order_id
+                    amount=Decimal(str(qty)), status='WAITING', order_id=order_id,
+                    client_order_id=client_order_id
                 )
                 buy_orders += 1
 
@@ -472,6 +516,15 @@ class BotManager:
     @staticmethod
     def _manage_daytrading_bot(bot, df):
         """Lógica para bots de Day Trading en tiempo real."""
+        # FASE 2 (seguridad): DAYTRADING live está prohibido hasta implementar la
+        # compra real de entrada. Fail-closed: ni compra ni vende.
+        if bot.is_live:
+            bot.status = 'ERROR'
+            bot.last_error = "DAYTRADING live no soportado (Fase 2). El bot no operará."
+            bot.save(update_fields=['status', 'last_error'])
+            logger.error(f"Bot {bot.id} DAYTRADING con is_live=True bloqueado por seguridad.")
+            return {'bot_id': bot.id, 'error': 'daytrading_live_blocked'}
+
         # Casting preventivo de parámetros para evitar TypeError
         clean_params = {}
         for k, v in bot.parameters.items():
@@ -499,7 +552,14 @@ class BotManager:
         current_price = float(last_row['close'])
         
         open_trade = LiveTrade.objects.filter(bot=bot, status='OPEN').first()
-        
+
+        # FASE 2: reintentar cierre de trades CLOSE_FAILED antes de evaluar señales
+        failed_trade = LiveTrade.objects.filter(bot=bot, status='CLOSE_FAILED').first()
+        if failed_trade:
+            logger.info(f"Bot {bot.id}: reintentando cierre de trade {failed_trade.id} (CLOSE_FAILED).")
+            BotManager._close_trade(failed_trade, current_price, failed_trade.close_reason or "RETRY_CLOSE")
+            return {'bot_id': bot.id, 'status': 'retry_close'}
+
         # 1. Monitoreo Activo de SL/TP (Gestión de Riesgo)
         if open_trade:
             sl = float(open_trade.stop_loss) if open_trade.stop_loss else None
@@ -573,49 +633,83 @@ class BotManager:
 
     @staticmethod
     def _close_trade(trade, exit_price, reason):
-        """Cierra una operación y actualiza el balance del bot."""
+        """
+        Cierra una operación y actualiza el balance del bot.
+        FASE 2: si la venta REAL falla → status='CLOSE_FAILED' y NO se toca
+        PnL ni balance local (la fuente de verdad es Binance).
+        """
+        from django.db import transaction
+        from .trading_safety import new_client_order_id
+
         bot = trade.bot
-        
-        # 1. Si el bot es live, cerrar en el exchange
+
+        # 1. Si el bot es live, cerrar en el exchange con clientOrderId idempotente
         if bot.is_live:
+            cid = trade.exit_client_order_id or new_client_order_id('cdash_lbx', bot.id)
             try:
                 # En GRID vendemos a mercado o limit segun el trigger
-                exchange.create_order(
+                order = exchange.create_order(
                     symbol=bot.pair.symbol,
-                    type='market', # Venta rápida al detectar el TP del grid
+                    type='market',  # Venta rápida al detectar el TP del grid
                     side='sell',
-                    amount=float(trade.amount)
+                    amount=float(trade.amount),
+                    params={'newClientOrderId': cid},
                 )
+                trade.exit_client_order_id = cid
+                trade.exit_order_id = str(order.get('id', ''))
+                trade.save(update_fields=['exit_client_order_id', 'exit_order_id'])
                 logger.info(f"Cierre REAL (Venta) para trade {trade.id} ({reason})")
             except Exception as e:
                 logger.error(f"Error cerrando orden REAL para bot {bot.id}: {e}")
-                # Podríamos querer abortar el cierre local, pero por ahora lo marcamos
-                # como error para que el usuario intervenga.
+                # FASE 2: NO cerrar localmente. Marcar CLOSE_FAILED para reintento.
+                trade.exit_client_order_id = cid
+                trade.status = 'CLOSE_FAILED'
+                trade.close_reason = reason
+                trade.save(update_fields=['exit_client_order_id', 'status', 'close_reason'])
+                bot.last_error = f"CLOSE_FAILED trade {trade.id}: {e}"[:250]
+                bot.save(update_fields=['last_error'])
+                try:
+                    send_telegram_message(
+                        f"⚠️ <b>CLOSE_FAILED</b>\n"
+                        f"Bot: {bot.name} ({bot.pair.symbol})\n"
+                        f"Trade {trade.id}: la venta REAL falló. NO se cerró localmente.\n"
+                        f"Razón: {reason}\n"
+                        f"Error: {str(e)[:100]}\n"
+                        f"Requiere intervención manual en Binance."
+                    )
+                except Exception:
+                    pass
+                return  # sin tocar PnL ni balance
 
-        # 2. Actualizar registro local
-        # Configuración de comisión (0.1% por operación)
-        commission_rate = Decimal("0.001")
-        
-        # Calcular comisiones (entrada + salida)
-        cost_entry = trade.entry_price * trade.amount * commission_rate
-        cost_exit = Decimal(str(exit_price)) * trade.amount * commission_rate
-        total_commission = cost_entry + cost_exit
-        
-        # Calcular PnL Neto (Ganancia bruta - Comisiones totales)
-        gross_pnl = (Decimal(str(exit_price)) - trade.entry_price) * trade.amount
-        net_pnl = gross_pnl - total_commission
-        
-        trade.exit_price = Decimal(str(exit_price))
-        trade.exit_time = timezone.now()
-        trade.status = 'CLOSED'
-        trade.commission = total_commission
-        trade.pnl = net_pnl
-        trade.save()
-        
-        # El balance se actualiza con el revenue neto (Venta - Comisión de salida)
-        revenue = (trade.amount * Decimal(str(exit_price))) - cost_exit
-        bot.current_balance = Decimal(str(float(bot.current_balance) + float(revenue)))
-        bot.save()
+        # 2. Actualizar registro local (solo si la venta real fue OK o es SIM)
+        with transaction.atomic():
+            # Configuración de comisión (0.1% por operación)
+            commission_rate = Decimal("0.001")
+
+            # Calcular comisiones (entrada + salida)
+            cost_entry = trade.entry_price * trade.amount * commission_rate
+            cost_exit = Decimal(str(exit_price)) * trade.amount * commission_rate
+            total_commission = cost_entry + cost_exit
+
+            # Calcular PnL Neto (Ganancia bruta - Comisiones totales)
+            gross_pnl = (Decimal(str(exit_price)) - trade.entry_price) * trade.amount
+            net_pnl = gross_pnl - total_commission
+
+            trade.exit_price = Decimal(str(exit_price))
+            trade.exit_time = timezone.now()
+            trade.status = 'CLOSED'
+            trade.commission = total_commission
+            trade.pnl = net_pnl
+            trade.close_reason = reason
+            trade.save()
+
+            # El balance se actualiza con el revenue neto (Venta - Comisión de salida).
+            # FASE 2: F() para no pisar escrituras de otros workers.
+            from django.db.models import F
+            revenue = (trade.amount * Decimal(str(exit_price))) - cost_exit
+            LiveBot.objects.filter(id=bot.id).update(
+                current_balance=F('current_balance') + revenue
+            )
 
         # Notificar Cierre de Trade
         emoji = "🟢" if net_pnl > 0 else "🔴"
@@ -693,89 +787,156 @@ class BotManager:
             return True
             
         except Exception as e:
+            # FASE 2: FAIL-CLOSED — si el check falla, NO operar.
+            # (El drawdown flotante queda con PnL realizado hasta Fase 2b.)
             logger.error(f"Error en check_global_risk: {e}")
-            return True # Por seguridad, si falla el check seguimos (o podrías elegir False)
+            try:
+                send_telegram_message(f"⚠️ check_global_risk FALLÓ: {str(e)[:100]}. Ciclo de trading detenido por seguridad.")
+            except Exception:
+                pass
+            return False
 
     @staticmethod
     def emergency_stop_all(reason="MANUAL"):
         """
         Activa el Kill-Switch Global.
         1. Marca kill_switch_active=True en GlobalSettings.
-        2. Frena todos los bots en RUNNING.
+        2. Frena todos los bots LiveBot en RUNNING y los ScalpingBot en RUNNING.
         3. Para los bots reales, cancela órdenes y vende posiciones a mercado.
         4. Actualiza los DB LiveTrades como CLOSED_EMERGENCY.
         """
+        from django.core.cache import cache
+        from django.db.models import F
+
         logger.warning(f"!!! EMERGENCY STOP DISPARADO: {reason} !!!")
-        
-        # 1. Activar Kill-Switch global
-        settings, _ = GlobalSettings.objects.get_or_create(id=1)
-        settings.kill_switch_active = True
-        settings.save()
-        
-        # 2. Obtener bots activos (incluyendo CLOSE_ONLY)
-        active_bots = LiveBot.objects.filter(status__in=['RUNNING', 'CLOSE_ONLY'])
-        
-        for bot in active_bots:
-            bot.status = 'STOPPED'
-            bot.last_error = f"Detenido por Emergency Stop Global. Razón: {reason}"
-            bot.save()
-            
-            # Buscar operaciones abiertas
-            open_trades = LiveTrade.objects.filter(bot=bot, status__in=['OPEN', 'WAITING'])
-            
-            # 3. Interacción con Binance si es LIVE
-            if bot.is_live:
-                try:
-                    symbol = bot.pair.symbol
-                    # Cancelar toda orden pendiente en este par
-                    exchange.cancel_all_orders(symbol)
-                    logger.info(f"EMERGENCY: Órdenes canceladas para {symbol}.")
-                    
-                    # Intentar cerrar las posiciones abiertas (Market Sell)
+
+        # FASE 2: tomar el lock del ciclo para no vender dos veces si un ciclo
+        # está a mitad de un create_order.
+        LOCK_KEY = "trading:live_cycle_lock"
+        lock_acquired = cache.add(LOCK_KEY, "1", timeout=600)
+        if not lock_acquired:
+            logger.warning("Emergency Stop: ciclo en curso; se espera lock. Reintentando brevemente...")
+            import time as _time
+            for _ in range(20):
+                _time.sleep(1)
+                if cache.add(LOCK_KEY, "1", timeout=600):
+                    lock_acquired = True
+                    break
+        if not lock_acquired:
+            logger.error("EMERGENCY: no se pudo adquirir el lock del ciclo tras 20s. Procediendo igualmente (prioridad seguridad).")
+
+        try:
+            # 1. Activar Kill-Switch global
+            settings, _ = GlobalSettings.objects.get_or_create(id=1)
+            settings.kill_switch_active = True
+            settings.save()
+
+            # 2. Obtener bots activos (incluyendo CLOSE_ONLY)
+            active_bots = LiveBot.objects.filter(status__in=['RUNNING', 'CLOSE_ONLY'])
+
+            for bot in active_bots:
+                bot.status = 'STOPPED'
+                bot.last_error = f"Detenido por Emergency Stop Global. Razón: {reason}"
+                bot.save()
+
+                # Buscar operaciones abiertas
+                open_trades = LiveTrade.objects.filter(bot=bot, status__in=['OPEN', 'WAITING'])
+
+                # 3. Interacción con Binance si es LIVE
+                if bot.is_live:
+                    try:
+                        symbol = bot.pair.symbol
+                        # Cancelar toda orden pendiente en este par
+                        exchange.cancel_all_orders(symbol)
+                        logger.info(f"EMERGENCY: Órdenes canceladas para {symbol}.")
+
+                        # Intentar cerrar las posiciones abiertas (Market Sell)
+                        for trade in open_trades:
+                            if trade.status == 'OPEN':
+                                # Vender a mercado con clientOrderId idempotente
+                                from .trading_safety import new_client_order_id
+                                current_price_info = exchange.fetch_ticker(symbol)
+                                exit_price = current_price_info['last']
+
+                                cid = trade.exit_client_order_id or new_client_order_id('cdash_lbx', bot.id)
+                                order = exchange.create_order(
+                                    symbol=symbol,
+                                    type='market',
+                                    side='sell',
+                                    amount=float(trade.amount),
+                                    params={'newClientOrderId': cid},
+                                )
+                                logger.info(f"EMERGENCY: Venta de Pánico ejecutada: {trade.amount} {symbol}")
+
+                                # Actualizar BD (usamos la logica de cierre pero forzada)
+                                trade.exit_price = Decimal(str(exit_price))
+                                trade.exit_time = timezone.now()
+                                trade.status = 'CLOSED_EMERGENCY'
+                                trade.exit_order_id = str(order.get('id', ''))
+                                trade.exit_client_order_id = cid
+                                trade.close_reason = f"EMERGENCY_{reason}"
+                                trade.save()
+                                # FASE 2: F() para balance
+                                revenue = trade.amount * trade.exit_price
+                                LiveBot.objects.filter(id=bot.id).update(
+                                    current_balance=F('current_balance') + revenue
+                                )
+                            elif trade.status == 'WAITING':
+                                # Si solo esperaba (compra limit) y la cancelamos arriba, la pasamos a CLOSED_EMERGENCY
+                                trade.status = 'CLOSED_EMERGENCY'
+                                trade.close_reason = f"EMERGENCY_{reason}"
+                                trade.save()
+                                # Devolver el dinero asignado a limit wait
+                                if trade.entry_price and trade.amount:
+                                    LiveBot.objects.filter(id=bot.id).update(
+                                        current_balance=F('current_balance') + trade.entry_price * trade.amount
+                                    )
+
+                    except Exception as e:
+                        logger.error(f"EMERGENCY ERROR interactuando con Binance para bot {bot.id}: {e}")
+                        # FASE 2: si la venta de pánico falla, los trades quedan CLOSE_FAILED
+                        try:
+                            for trade in LiveTrade.objects.filter(bot=bot, status='OPEN'):
+                                trade.status = 'CLOSE_FAILED'
+                                trade.close_reason = f"EMERGENCY_{reason}"
+                                trade.save(update_fields=['status', 'close_reason'])
+                            bot.last_error = f"EMERGENCY CLOSE_FAILED: {e}"[:250]
+                            bot.save(update_fields=['last_error'])
+                        except Exception:
+                            pass
+                else:
+                    # Simulación (Paper trading)
                     for trade in open_trades:
-                        if trade.status == 'OPEN':
-                            # Vender a mercado
-                            current_price_info = exchange.fetch_ticker(symbol)
-                            exit_price = current_price_info['last']
-                            
-                            exchange.create_order(
-                                symbol=symbol,
-                                type='market',
-                                side='sell',
-                                amount=float(trade.amount)
-                            )
-                            logger.info(f"EMERGENCY: Venta de Pánico ejecutada: {trade.amount} {symbol}")
-                            
-                            # Actualizar BD (usamos la logica de cierre pero forzada)
-                            trade.exit_price = Decimal(str(exit_price))
-                            trade.exit_time = timezone.now()
-                            trade.status = 'CLOSED_EMERGENCY'
-                            trade.save()
-                            # Ya bot._close_trade descuenta el saldo, pero hagámoslo simple:
-                            revenue = trade.amount * trade.exit_price
-                            bot.current_balance += revenue
-                            bot.save()
-                        elif trade.status == 'WAITING':
-                            # Si solo esperaba (compra limit) y la cancelamos arriba, la pasamos a CANCELED_EMERGENCY
-                            trade.status = 'CLOSED_EMERGENCY'
-                            trade.save()
-                            # Devolver el dinero asignado a limit wait
-                            # El costo de la compra era el amout * price que dejamos retenido?
-                            # En el Grid normal el balance se descuenta al momento del limit post.
-                            # Para simplificar, le sumamos el trade value
-                            if trade.entry_price and trade.amount:
-                                bot.current_balance += trade.entry_price * trade.amount
-                                bot.save()
+                        trade.status = 'CLOSED_EMERGENCY'
+                        trade.exit_time = timezone.now()
+                        trade.close_reason = f"EMERGENCY_{reason}"
+                        trade.save()
 
-                except Exception as e:
-                    logger.error(f"EMERGENCY ERROR interactuando con Binance para bot {bot.id}: {e}")
-            else:
-                # Simulación (Paper trading)
-                for trade in open_trades:
-                    trade.status = 'CLOSED_EMERGENCY'
-                    trade.exit_time = timezone.now()
-                    trade.save()
+            # 4. FASE 2: pausar scalping bots y liquidar sus posiciones live abiertas
+            try:
+                from .models import ScalpingBot, ScalpingTrade
+                from .trading_safety import force_close_scalping_trade
 
-        send_telegram_message(f"🚨 <b>¡KILL-SWITCH ACTIVADO!</b>\nRazón: {reason}\nTodos los bots han sido detenidos y liquidados.")
-        logger.warning("Emergency Stop completado. Sistema bloqueado.")
-        return True
+                for sb in ScalpingBot.objects.filter(status='RUNNING'):
+                    sb.status = 'PAUSED'
+                    sb.last_error = f"Detenido por Emergency Stop Global. Razón: {reason}"
+                    sb.save(update_fields=['status', 'last_error'])
+
+                    for t in ScalpingTrade.objects.filter(bot=sb, status='OPEN'):
+                        if sb.is_live:
+                            force_close_scalping_trade(t, reason='CLOSED_EMERGENCY')
+                        else:
+                            t.status = 'CLOSED_EMERGENCY'
+                            t.exit_time = timezone.now()
+                            t.close_reason = f"EMERGENCY_{reason}"
+                            t.save(update_fields=['status', 'exit_time', 'close_reason'])
+                logger.info("EMERGENCY: Scalping bots pausados y posiciones liquidadas.")
+            except Exception as e:
+                logger.error(f"EMERGENCY ERROR liquidando scalping: {e}")
+
+            send_telegram_message(f"🚨 <b>¡KILL-SWITCH ACTIVADO!</b>\nRazón: {reason}\nTodos los bots han sido detenidos y liquidados.")
+            logger.warning("Emergency Stop completado. Sistema bloqueado.")
+            return True
+        finally:
+            if lock_acquired:
+                cache.delete(LOCK_KEY)

@@ -392,22 +392,42 @@ def scalping_trigger_scan(request):
 @login_required
 @require_POST
 def scalping_close_trade(request, trade_id):
-    """Cierra manualmente un ScalpingTrade abierto."""
+    """Cierra manualmente un ScalpingTrade abierto (o CLOSE_FAILED)."""
     trade = get_object_or_404(ScalpingTrade, id=trade_id)
-    if trade.status != 'OPEN':
+    if trade.status not in ('OPEN', 'CLOSE_FAILED'):
         return JsonResponse({'success': False, 'error': 'El trade no está abierto.'}, status=400)
 
     try:
         price = None
         if trade.bot.is_live:
             from dashboard.pair_scanner import _get_exchange
+            from dashboard.trading_safety import new_client_order_id
             exchange = _get_exchange()
             if exchange:
                 symbol    = trade.bot.pair.symbol
                 side_close= 'sell' if trade.side == 'BUY' else 'buy'
-                order     = exchange.create_market_order(symbol, side_close, float(trade.quantity))
-                price     = float(order.get('price') or order.get('average') or 0)
-                trade.exit_order_id = str(order.get('id', ''))
+                cid = trade.exit_client_order_id or new_client_order_id('cdash_sbx', trade.bot.id)
+                try:
+                    order = exchange.create_market_order(
+                        symbol, side_close, float(trade.quantity),
+                        params={'newClientOrderId': cid},
+                    )
+                    price = float(order.get('price') or order.get('average') or 0)
+                    trade.exit_order_id = str(order.get('id', ''))
+                    trade.exit_client_order_id = cid
+                except Exception as e:
+                    # FASE 2: NO cerrar local si la venta real falla
+                    logger.error(f'[ScalpViews] Venta real falló para trade {trade_id}: {e}')
+                    trade.exit_client_order_id = cid
+                    trade.status = 'CLOSE_FAILED'
+                    trade.close_reason = 'CLOSED_MANUAL'
+                    trade.save(update_fields=['exit_client_order_id', 'status', 'close_reason'])
+                    trade.bot.last_error = f"CLOSE_FAILED trade {trade.id}: {e}"[:250]
+                    trade.bot.save(update_fields=['last_error'])
+                    return JsonResponse(
+                        {'success': False, 'error': 'Venta real falló; el trade quedó en CLOSE_FAILED (reintento automático).'},
+                        status=502
+                    )
 
         if not price:
             # Precio simulado: usar el actual
@@ -430,14 +450,16 @@ def scalping_close_trade(request, trade_id):
         trade.status     = 'CLOSED_MANUAL'
         trade.pnl_usdt   = round(pnl_usdt, 4)
         trade.pnl_pct    = round(pnl_pct, 4)
+        trade.close_reason = 'CLOSED_MANUAL'
         trade.save()
 
-        # Actualizar bot stats
+        # FASE 2: stats del bot con F() — no pisar escrituras de otros workers
+        from django.db.models import F
         bot = trade.bot
-        bot.total_pnl_usdt += pnl_usdt
-        if pnl_usdt > 0:
-            bot.winning_trades += 1
-        bot.save(update_fields=['total_pnl_usdt', 'winning_trades'])
+        ScalpingBot.objects.filter(id=bot.id).update(
+            total_pnl_usdt=F('total_pnl_usdt') + round(pnl_usdt, 4),
+            winning_trades=F('winning_trades') + (1 if pnl_usdt > 0 else 0),
+        )
 
         return JsonResponse({'success': True, 'pnl_usdt': float(trade.pnl_usdt), 'exit_price': price})
 
