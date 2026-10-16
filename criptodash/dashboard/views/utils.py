@@ -153,7 +153,7 @@ def crear_grafico_con_señales(df, señales, pair='ETH/USDT'):
         ts = s.timestamp if hasattr(s, 'timestamp') else s['timestamp']
         price = s.price if hasattr(s, 'price') else s['price']
         strength = s.signal_strength if hasattr(s, 'signal_strength') else s.get('signal_strength', 1)
-        typ = s.signal_type if hasattr(s, 'signal_type') else s['signal_type']
+        typ = str(s.signal_type if hasattr(s, 'signal_type') else s['signal_type']).lower()
  
         # Desplazamiento proporcional a la fuerza para evitar solapado
         offset = float(strength) * 0.002  # 0.2% por unidad de fuerza
@@ -282,10 +282,10 @@ def calcular_estadisticas(df, señales):
     return {
         'total_señales': len(señales_list),
         'compras': len([s for s in señales_list if (
-            s.signal_type == 'buy' if hasattr(s, 'signal_type') else s.get('signal_type') == 'buy'
+            str(s.signal_type).lower() == 'buy' if hasattr(s, 'signal_type') else s.get('signal_type') == 'buy'
         )]),
         'ventas': len([s for s in señales_list if (
-            s.signal_type == 'sell' if hasattr(s, 'signal_type') else s.get('signal_type') == 'sell'
+            str(s.signal_type).lower() == 'sell' if hasattr(s, 'signal_type') else s.get('signal_type') == 'sell'
         )]),
         'fuerza_promedio': sum(
             s.signal_strength if hasattr(s, 'signal_strength') else s.get('signal_strength', 0) 

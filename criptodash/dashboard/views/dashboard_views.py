@@ -197,8 +197,11 @@ def dashboard_mejorado(request):
             
             # Cruzar con las señales para marcarlas en el gráfico
             if señales.exists():
+                # Normalizar AMBOS lados a naive UTC: los timestamps pueden venir
+                # tz-aware (BD) o naive (API Binance) y el merge falla si no coinciden.
+                ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['timestamp'], utc=True).dt.tz_localize(None)
                 sig_df = pd.DataFrame(list(señales.values('timestamp', 'signal_type', 'price', 'strength')))
-                sig_df['timestamp'] = pd.to_datetime(sig_df['timestamp'])
+                sig_df['timestamp'] = pd.to_datetime(sig_df['timestamp'], utc=True).dt.tz_localize(None)
                 final_df = pd.merge(ohlcv_df, sig_df, on='timestamp', how='left')
             else:
                 final_df = ohlcv_df

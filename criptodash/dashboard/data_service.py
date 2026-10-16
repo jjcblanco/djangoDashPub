@@ -157,8 +157,8 @@ def calcular_estadisticas_desde_señales(señales):
 
     # Calcular estadísticas básicas
     total_señales = len(señales_list)
-    compras = len([s for s in señales_list if s.signal_type == 'buy'])
-    ventas = len([s for s in señales_list if s.signal_type == 'sell'])
+    compras = len([s for s in señales_list if (s.signal_type or '').upper() == 'BUY'])
+    ventas = len([s for s in señales_list if (s.signal_type or '').upper() == 'SELL'])
 
     # Fuerza promedio
     fuerza_promedio = sum(s.strength for s in señales_list) / total_señales if total_señales > 0 else 0
