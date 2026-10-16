@@ -185,29 +185,40 @@ def signals(df):
             if score >= 4:
                 signal = 'buy'
 
-        # --- Lógica de VENTA ---
-        # A. Gatillo: Supertrend bajista Y filtro EMA 200 (Tendencia principal)
-        elif not df['in_uptrend'].iloc[current] and current_price < ema_200:
-            score += 2
-            
-            # B. Confirmación de Volumen
-            if current_vol > vol_ma * 1.2:
-                score += 1
-                
-            # C. RSI favorable (no sobrevendido, con momentum bajista)
-            if 30 < rsi < 55:
-                score += 1
-                
-            # D. OBV bajando
-            if df['obv'].iloc[current] < df['obv'].iloc[previous]:
-                score += 0.5
-                
-            # E. Ichimoku (Precio bajo la nube)
-            if 'senkou_a' in df.columns and current_price < min(df['senkou_a'].iloc[current], df['senkou_b'].iloc[current]):
-                score += 1
-            
-            if score >= 4:
-                signal = 'sell'
+        # --- Lógica de VENTA (independiente de la de COMPRA) ---
+        # Solo se evalúa si no hubo señal de compra en esta vela.
+        if signal == 'none':
+            sell_score = 0
+
+            # A. Gatillo 1: Supertrend bajista con precio bajo EMA200 (tendencia bajista)
+            if not df['in_uptrend'].iloc[current] and current_price < ema_200:
+                sell_score += 2
+            # A2. Gatillo 2: Sobrecompra extrema en tendencia alcista (toma de ganancias)
+            elif df['in_uptrend'].iloc[current] and rsi > 75:
+                sell_score += 3
+
+            if sell_score > 0:
+                # B. Confirmación de Volumen
+                if current_vol > vol_ma * 1.2:
+                    sell_score += 1
+
+                # C. RSI: sobrecompra suma; sobreventa extrema suma algo menos
+                if rsi > 75:
+                    sell_score += 1
+                elif rsi < 30:
+                    sell_score += 0.5
+
+                # D. OBV bajando
+                if df['obv'].iloc[current] < df['obv'].iloc[previous]:
+                    sell_score += 0.5
+
+                # E. Ichimoku (Precio bajo la nube)
+                if 'senkou_a' in df.columns and current_price < min(df['senkou_a'].iloc[current], df['senkou_b'].iloc[current]):
+                    sell_score += 1
+
+                if sell_score >= 4:
+                    signal = 'sell'
+                    score = sell_score
 
         # 4. Asignar Señal y Niveles de Riesgo
         if signal != 'none':
