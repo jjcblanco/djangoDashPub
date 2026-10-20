@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 # mis libs
 from django.conf import settings
-from . import estilos
 from .indicadores import *
 
 #fin mis libs
@@ -29,7 +28,6 @@ warnings.filterwarnings('ignore')
 import numpy as np
 from datetime import datetime
 import time
-from .plot import plotear
 from .models import Pair
 
 # FASE 2b: el cliente real vive en dashboard/exchange/client.py.

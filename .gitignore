@@ -11,10 +11,14 @@ ENV/
 
 # Django
 *.log
+logs/
 db.sqlite3
 db.sqlite3-journal
 staticfiles/
 media/
+celerybeat-schedule*
+nohup.out
+view_error*
 
 # Environment variables (CRITICAL)
 .env
@@ -36,3 +40,15 @@ config.json
 Thumbs.db
 
 *.zip
+*.backup
+*.sql
+*.resolved
+
+# Basura de runtime / análisis
+data_migration.json
+get-pip.py
+stats/
+landing/
+index.php.bak
+tmp/
+mod180526
