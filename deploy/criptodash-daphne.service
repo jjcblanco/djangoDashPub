@@ -1,0 +1,17 @@
+[Unit]
+Description=Daphne ASGI server for CriptoDash
+After=network.target mysql.service redis.service
+
+[Service]
+User=web5
+Group=client2
+WorkingDirectory=/var/www/clients/client2/web5/web/criptodash/
+Environment="DJANGO_SETTINGS_MODULE=criptodash.settings"
+EnvironmentFile=/var/www/clients/client2/web5/web/criptodash/.env
+ExecStart=/var/www/clients/client2/web5/web/venv/bin/daphne -b 127.0.0.1 -p 8001 criptodash.asgi:application
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

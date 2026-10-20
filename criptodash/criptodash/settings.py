@@ -174,10 +174,11 @@ DATABASES = {
 }
 
 # Redis-based cache (shared across workers, fixes rate-limiting and whale score caching)
+# FASE 3: caché en DB 1, separada del broker/results de Celery (DB 0) y de Channels (DB 2).
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': config('CELERY_BROKER_URL', default='redis://localhost:6379/0'),
+        'LOCATION': config('CACHE_URL', default='redis://localhost:6379/1'),
     }
 }
 
@@ -267,11 +268,12 @@ SOCIALACCOUNT_PROVIDERS = {
 # En desarrollo (DEBUG=True) se pueden activar vía .env si hace falta.
 
 # WebSocket channel layer (Redis for multi-worker production)
+# FASE 3: DB 2, separado del broker (0) y del caché (1).
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            'hosts': [config('CELERY_BROKER_URL', default='redis://localhost:6379/0')],
+            'hosts': [config('CHANNEL_LAYER_URL', default='redis://localhost:6379/2')],
         },
     },
 }
