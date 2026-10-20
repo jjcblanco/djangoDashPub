@@ -29,24 +29,17 @@ VOLUME_MIN_USDT    = 500_000  # Volumen 24h mínimo en USDT
 
 
 def _get_exchange():
-    """Obtiene instancia de Binance via CCXT."""
+    """
+    Obtiene instancia de Binance via CCXT.
+    FASE 2b: shim — delega al cliente unificado dashboard/exchange/client.py.
+    """
     try:
-        import ccxt
-        from decouple import config
-        api_key = config('BINANCE_APIKEY', default='')
-        secret  = config('BINANCE_SECRET', default='')
-        
-        if not api_key or not secret:
+        from django.conf import settings
+        if not getattr(settings, 'BINANCE_APIKEY', None) or not getattr(settings, 'BINANCE_SECRET', None):
             logger.error("[PairScanner] BINANCE_APIKEY o BINANCE_SECRET no están configurados en .env")
             return None
-
-        exchange = ccxt.binance({
-            'apiKey':  api_key,
-            'secret':  secret,
-            'enableRateLimit': True,
-            'options': {'defaultType': 'spot'},
-        })
-        return exchange
+        from .exchange.client import get_binance
+        return get_binance()
     except Exception as e:
         logger.error(f'[PairScanner] Error crítico iniciando CCXT: {e}')
         return None

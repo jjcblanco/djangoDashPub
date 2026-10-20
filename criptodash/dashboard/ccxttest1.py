@@ -32,14 +32,12 @@ import time
 from .plot import plotear
 from .models import Pair
 
-binance = ccxt.binance({
-    'options': {
-        'recvWindow': 60000,  # Aumentar ventana de recepción a 60 segundos
-        'adjustForTimeDifference': True,  # Ajustar automáticamente por diferencia de tiempo
-    },
-    'apiKey': getattr(settings, 'BINANCE_APIKEY', None),
-    'secret': getattr(settings, 'BINANCE_SECRET', None),
-})
+# FASE 2b: el cliente real vive en dashboard/exchange/client.py.
+# Este módulo queda como shim de compatibilidad para los ~15 consumidores
+# que importan binance/exchange/historical_fetch_ohlcv de acá.
+from .exchange.client import get_binance, fetch_ohlcv_paginated
+
+binance = get_binance()
 exchange = binance
 _binance_initialized = False
 
@@ -272,52 +270,9 @@ def table_insert(df):
    cnx.close()
 
 def historical_fetch_ohlcv(pair, date_from=None, timeframe='1h', since=None, limit=None):
-    _ensure_binance_initialized()
-    # Support both date_from (positional/keyword) and since (keyword)
+    """Shim Fase 2b: delega al cliente unificado dashboard/exchange/client.py."""
     actual_since = since if since is not None else date_from
-
-    
-    if actual_since is None:
-        # Por defecto los últimos 1000 bars
-        return binance.fetch_ohlcv(pair, timeframe, limit=1000)
-    
-    # Manejar datetime objects
-    if hasattr(actual_since, 'strftime'):
-        from_ts = int(actual_since.timestamp() * 1000)
-    else:
-        # Asumir string para parse8601
-        try:
-            parsed = binance.parse8601(str(actual_since))
-            from_ts = int(parsed) if parsed is not None else None
-        except Exception:
-            # Si ya es un timestamp
-            from_ts = int(float(actual_since))
-
-    ohlcv_list = []
-    print(f"DEBUG: calling fetch_ohlcv with from_ts={from_ts} type={type(from_ts)}")
-    ohlcv = binance.fetch_ohlcv(pair, timeframe, since=from_ts, limit=1000)
-    if not ohlcv:
-        return []
-        
-    ohlcv_list.extend(ohlcv)
-    
-    # Si pedimos un límite específico y ya lo tenemos, paramos
-    if limit and len(ohlcv_list) >= limit:
-        return ohlcv_list[:limit]
-        
-    while True:
-        from_ts = ohlcv_list[-1][0] + 1 # +1 para no repetir la última vela
-        print(f"DEBUG: calling fetch_ohlcv in loop with from_ts={from_ts} type={type(from_ts)}")
-        new_ohlcv = binance.fetch_ohlcv(pair, timeframe, since=from_ts, limit=1000)
-        if not new_ohlcv:
-            break
-        ohlcv_list.extend(new_ohlcv)
-        if len(new_ohlcv) != 1000:
-            break
-        if limit and len(ohlcv_list) >= limit:
-            return ohlcv_list[:limit]
-            
-    return ohlcv_list
+    return fetch_ohlcv_paginated(pair, timeframe=timeframe, since=actual_since, limit=limit)
 
 
 def run_bot(pair,date_from,timeframe):

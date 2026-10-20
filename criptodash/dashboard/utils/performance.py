@@ -27,27 +27,19 @@ def snapshot_daily_metrics():
         binance_total = Decimal("0")
         api_key = None
         try:
-            import ccxt
             # --- BLINDAJE DE AUTENTICACIÓN ---
             api_key = getattr(settings, 'BINANCE_APIKEY', None)
             api_secret = getattr(settings, 'BINANCE_SECRET', None)
-            
+
             if not api_key:
                 err_msg = "API Key no encontrada en settings. Revisa el archivo .env en el VPS."
                 logger.error(err_msg)
                 return None, err_msg
-            
-            # Instancia local para evitar problemas con el objeto global
-            local_exchange = ccxt.binance({
-                'apiKey': api_key,
-                'secret': api_secret,
-                'enableRateLimit': True,
-                'options': {
-                    'recvWindow': 60000,
-                    'adjustForTimeDifference': True,
-                }
-            })
-            
+
+            # FASE 2b: cliente unificado dashboard/exchange/client.py
+            from ..exchange.client import get_binance
+            local_exchange = get_binance()
+
             bal = local_exchange.fetch_balance()
             binance_total = Decimal(str(bal['total'].get('USDT', 0)))
         except Exception as e:

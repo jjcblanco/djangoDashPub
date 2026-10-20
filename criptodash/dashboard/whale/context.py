@@ -6,25 +6,19 @@ de los indicadores técnicos del activo en ese momento.
 Esto genera el dataset para aprender de las condiciones en que operan.
 """
 
-import ccxt
+import ccxt  # solo para clases de excepción (BadSymbol, NetworkError)
 import pandas as pd
 import numpy as np
 import time
 from django.conf import settings
 
-# Instancia global para reutilizar conexiones
-_BINANCE_EXCHANGE = None
-
 def _get_binance():
-    """Obtiene una instancia de ccxt.binance sin API key (solo datos públicos)."""
-    global _BINANCE_EXCHANGE
-    if _BINANCE_EXCHANGE is None:
-        _BINANCE_EXCHANGE = ccxt.binance({
-            'options': {'adjustForTimeDifference': True},
-            'enableRateLimit': True,
-            'timeout': 10000, # 10 segundos
-        })
-    return _BINANCE_EXCHANGE
+    """
+    Obtiene una instancia de ccxt.binance sin API key (solo datos públicos).
+    FASE 2b: delega al cliente unificado dashboard/exchange/client.py.
+    """
+    from ..exchange.client import get_public_binance
+    return get_public_binance()
 
 # Cache simple en memoria para evitar llamadas redundantes en el mismo ciclo de sync
 # {symbol: (timestamp, data)}

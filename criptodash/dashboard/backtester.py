@@ -38,220 +38,278 @@ class SignalBasedStrategy(TradingStrategy):
 
 class DayTradingStrategy(TradingStrategy):
     """
-    Estrategia de Day Trading / Scalping basada en EMA Ribbon y RSI.
-    Diseñada para temporalidades bajas (5m, 15m).
-    Lógica:
-    - Compra: EMA 9 > EMA 21, y ambas sobre EMA 50 y EMA 200. RSI > 55.
-    - Venta: EMA 9 < EMA 21, y ambas bajo EMA 50 y EMA 200. RSI < 45.
+    Estrategia de Day Trading (FASE 2b: clase fusionada).
+
+    Fusiona la antigua DayTradingStrategy (EMA Ribbon) con la
+    OptimizedDayTradingStrategy (crossover EMA + RSI dinámico + régimen de
+    mercado + volumen + cooldown). La lógica vigente es la OPTIMIZADA;
+    los parámetros legacy se normalizan automáticamente en __init__.
     """
     def __init__(self, parameters=None):
-        super().__init__("Day Trading (EMA Ribbon Scalper)", parameters)
-        # Parámetros por defecto si no vienen especificados
+        super().__init__("Day Trading (Optimized)", parameters)
+        # Parámetros por defecto (lógica optimizada)
         default_params = {
             'ema_fast': 9,
-            'ema_med': 21,
-            'ema_slow': 50,
-            'ema_trend': 200,
+            'ema_slow': 21,
+            'ema_trend': 200,  # For trend filter only
             'rsi_period': 14,
-            'rsi_buy': 55,
-            'rsi_sell': 45,
-            'atr_sl': 1.5,          # Corregido: SL más ajustado para mejor RR
-            'atr_tp': 3.0,          # Corregido: TP más amplio -> RR mínimo 1:2
-            'use_candles': True,
-            'min_strength': 4, # Requerimiento base para modo Balanceado
-            'min_adx': 20,     # Mínimo de tendencia para operar
-            'strategy_mode': 'balanced', # opciones: conservative, balanced, aggressive
-            'use_bollinger_filter': True,
-            'cooldown_bars': 3,     # Velas de espera mínima entre trades
-            'risk_per_trade_pct': 2.0  # % del balance a arriesgar por trade
+            'rsi_upper_dynamic': True,  # Use dynamic thresholds
+            'rsi_lower_dynamic': True,
+            'rsi_upper_static': 60,     # Fallback static values
+            'rsi_lower_static': 40,
+            'atr_period': 14,
+            'atr_sl_multiplier': 1.5,   # Stop loss
+            'atr_tp_multiplier': 3.0,   # Take profit (2:1 RR)
+            'use_volume_filter': True,
+            'volume_ma_period': 20,
+            'min_adx': 20,              # Minimum trend strength
+            'risk_per_trade_pct': 1.0,  # Conservative risk per trade
+            'max_positions': 3,         # Maximum concurrent positions
+            'cooldown_bars': 5,         # Bars between trades
+            'market_regime_filter': True, # Filter by market regime
         }
+
+        # Normalizar params legacy (EMA Ribbon) si vienen
+        normalized = self._normalize_parameters(parameters or {})
+
         # Mezclar con los pasados y asegurar tipos numéricos
-        self.parameters = {**default_params, **(parameters or {})}
-        
+        self.parameters = {**default_params, **normalized}
+
         # Casting explícito para evitar TypeError (str vs int)
-        # Convertimos TODO lo que debería ser numérico
-        if self.parameters:
-            for key in list(self.parameters.keys()):
-                val = self.parameters[key]
-                if isinstance(val, str):
-                    try:
-                        if '.' in val: self.parameters[key] = float(val)
-                        else: self.parameters[key] = int(val)
-                    except (ValueError, TypeError):
-                        pass
+        for key in list(self.parameters.keys()):
+            val = self.parameters[key]
+            if isinstance(val, str):
+                try:
+                    if '.' in val:
+                        self.parameters[key] = float(val)
+                    else:
+                        self.parameters[key] = int(val)
+                except (ValueError, TypeError):
+                    pass
 
-    def generate_signals(self, df):
-        # 1. Calcular indicadores base
-        # Asegurar que los periodos son int
-        ema_f = int(self.parameters.get('ema_fast', 9))
-        ema_m = int(self.parameters.get('ema_med', 21))
-        ema_s = int(self.parameters.get('ema_slow', 50))
-        ema_t = int(self.parameters.get('ema_trend', 200))
+    @staticmethod
+    def _normalize_parameters(params):
+        """
+        Traduce parámetros legacy (EMA Ribbon) a los de la estrategia
+        optimizada. Migrado desde BotManager._migrate_to_optimized_params.
+        """
+        migrated = dict(params)
 
-        df['ema9'] = df['close'].ewm(span=ema_f, adjust=False).mean()
-        df['ema21'] = df['close'].ewm(span=ema_m, adjust=False).mean()
-        df['ema50'] = df['close'].ewm(span=ema_s, adjust=False).mean()
-        df['ema200'] = df['close'].ewm(span=ema_t, adjust=False).mean()
-        df = macd(df) # MACD default (12, 26, 9)
-        df['rsi'] = calculate_rsi(df, int(self.parameters.get('rsi_period', 14)))
-        df['atr'] = atr(df, 14)
-        
+        mapping = {
+            'ema_med': 'ema_slow',       # old ema_med (21) becomes ema_slow
+            'rsi_buy': 'rsi_upper_static',
+            'rsi_sell': 'rsi_lower_static',
+            'atr_sl': 'atr_sl_multiplier',
+            'atr_tp': 'atr_tp_multiplier',
+        }
+        for old_key, new_key in mapping.items():
+            if old_key in migrated and new_key not in migrated:
+                migrated[new_key] = migrated[old_key]
+
+        # Remove old keys that are not needed
+        keys_to_remove = ['ema_slow', 'ema_med', 'rsi_buy', 'rsi_sell', 'atr_sl', 'atr_tp',
+                          'use_candles', 'min_strength', 'strategy_mode',
+                          'use_bollinger_filter', 'allow_late_entry', 'use_optimized_strategy']
+        for key in keys_to_remove:
+            migrated.pop(key, None)
+
+        return migrated
+
+    def calculate_dynamic_rsi_thresholds(self, df, lookback=100):
+        """Calculate dynamic RSI thresholds based on recent market conditions."""
+        if len(df) < lookback:
+            lookback = len(df)
+
+        recent_rsi = df['rsi'].tail(lookback)
+
+        # Use percentiles for thresholds
+        upper_threshold = recent_rsi.quantile(0.7)  # 70th percentile
+        lower_threshold = recent_rsi.quantile(0.3)  # 30th percentile
+
+        # Ensure thresholds are reasonable
+        upper_threshold = max(60, min(75, upper_threshold))
+        lower_threshold = max(25, min(40, lower_threshold))
+
+        return upper_threshold, lower_threshold
+
+    def detect_market_regime(self, df):
+        """Detect if market is trending or ranging."""
         if 'adx' not in df.columns:
             df['adx'] = adx(df, 14)
-        if 'obv' not in df.columns:
-            df['obv'] = obv(df)
-        if 'senkou_a' not in df.columns:
-            df = ichimoku_cloud(df)
-            
-        df = detect_candlestick_patterns(df)
-        
-        # 2. Inicializar columnas de señales
-        df['strength'] = 0.0
+
+        # Calculate EMA trend if not exists
+        if 'ema_trend' not in df.columns:
+            ema_t = int(self.parameters['ema_trend'])
+            df['ema_trend'] = df['close'].ewm(span=ema_t, adjust=False).mean()
+
+        # Simple regime detection: high ADX = trending, low ADX = ranging
+        df['regime'] = 'ranging'
+        df.loc[df['adx'] > 25, 'regime'] = 'trending'
+
+        # Additional check: price distance from EMA trend
+        df['distance_pct'] = (df['close'] - df['ema_trend']) / df['ema_trend'] * 100
+        df.loc[abs(df['distance_pct']) > 5, 'regime'] = 'trending'
+
+        return df
+
+    def generate_signals(self, df):
+        """Generate optimized trading signals."""
+        # Ensure numeric columns (convert Decimal to float)
+        numeric_cols = ['open', 'high', 'low', 'close', 'volume']
+        for col in numeric_cols:
+            if col in df.columns and df[col].dtype == 'object':
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
+        # 1. Calculate indicators
+        ema_f = int(self.parameters['ema_fast'])
+        ema_s = int(self.parameters['ema_slow'])
+        ema_t = int(self.parameters['ema_trend'])
+
+        df['ema_fast'] = df['close'].ewm(span=ema_f, adjust=False).mean()
+        df['ema_slow'] = df['close'].ewm(span=ema_s, adjust=False).mean()
+        df['ema_trend'] = df['close'].ewm(span=ema_t, adjust=False).mean()
+
+        df['rsi'] = calculate_rsi(df, int(self.parameters['rsi_period']))
+        df['atr'] = atr(df, int(self.parameters['atr_period']))
+
+        # 2. Market regime detection
+        if self.parameters['market_regime_filter']:
+            df = self.detect_market_regime(df)
+
+        # 3. Dynamic RSI thresholds
+        if self.parameters['rsi_upper_dynamic'] or self.parameters['rsi_lower_dynamic']:
+            rsi_upper, rsi_lower = self.calculate_dynamic_rsi_thresholds(df)
+        else:
+            rsi_upper = self.parameters['rsi_upper_static']
+            rsi_lower = self.parameters['rsi_lower_static']
+
+        # 4. Volume filter
+        if self.parameters['use_volume_filter'] and 'volume' in df.columns:
+            vol_ma = df['volume'].rolling(window=self.parameters['volume_ma_period']).mean()
+            df['volume_ratio'] = df['volume'] / vol_ma
+        else:
+            df['volume_ratio'] = 1.0
+
+        # 5. Signal generation
         df['signal'] = 'HOLD'
         df['stop_loss'] = np.nan
         df['take_profit'] = np.nan
-        
-        # 3. Calcular Fortaleza (Independiente de la señal de entrada)
-        # EMA Alignment (2 pts)
-        df.loc[(df['close'] > df['ema50']) & (df['close'] > df['ema200']), 'strength'] += 2
-        df.loc[(df['close'] < df['ema50']) & (df['close'] < df['ema200']), 'strength'] += 2
-        
-        # RSI Momentum (1 pt)
-        df.loc[(df['rsi'] > 55) & (df['rsi'] < 75), 'strength'] += 1
-        df.loc[(df['rsi'] < 45) & (df['rsi'] > 25), 'strength'] += 1
-        
-        # MACD Confirmation (1 pt)
-        df.loc[df['macd'] > df['signal_macd'], 'strength'] += 1
-        
-        # ADX Trend Strength (1 pt)
-        df.loc[df['adx'] > 25, 'strength'] += 1
-        
-        # Volumen / OBV (1 pt)
-        if 'volume' in df.columns:
-            vol_ma = df['volume'].rolling(window=20).mean()
-            df.loc[df['volume'] > vol_ma * 1.2, 'strength'] += 0.5
-        df.loc[df['obv'] > df['obv'].shift(1), 'strength'] += 0.5
-        
-        # Ichimoku confirmation (1 pt)
-        df.loc[df['close'] > df[['senkou_a', 'senkou_b']].max(axis=1), 'strength'] += 2
-        df.loc[df['close'] < df[['senkou_a', 'senkou_b']].min(axis=1), 'strength'] += 2
+        df['signal_strength'] = 0.0
 
-        # Divergencias RSI (2 pts - Señal muy fuerte de reversión/continuación)
-        # Solo calculamos para las últimas filas para ahorrar tiempo o usamos una ventana
-        for i in range(len(df)-1, max(30, len(df)-20), -1):
-            if detect_bullish_divergence(df, i):
-                df.at[df.index[i], 'strength'] += 2
-                break # Solo sumamos a la más reciente
-            if detect_bearish_divergence(df, i):
-                df.at[df.index[i], 'strength'] += 2
-                break
-        
-        # 4. Generar condiciones base de Compra (Crossover EMA + Trend + Momentum)
-        allow_late = self.parameters.get('allow_late_entry', False)
-        if isinstance(allow_late, str): allow_late = allow_late.lower() == 'true'
-        
-        mode = self.parameters.get('strategy_mode', 'balanced').lower()
-        
-        ema_crossover = (df['ema9'] > df['ema21']) & (df['ema9'].shift(1) <= df['ema21'].shift(1))
-        ema_aligned = (df['ema9'] > df['ema21'])
-        
-        # Filtro de tendencia mandatorio (EMA 200)
-        trend_up = (df['close'] > df['ema200'])
-        trend_down = (df['close'] < df['ema200'])
-        
-        # Si permitimos entrada tardía, basta con que estén alineadas. Si no, necesitamos el cruce.
-        entry_condition_buy = ema_aligned if allow_late else ema_crossover
-        
-        # FILTRO DE VOLATILIDAD (Bollinger Squeeze)
-        # Queremos comprar cuando NO estamos en un squeeze profundo (queremos expansión)
-        # O cuando el precio rompe una zona de squeeze
-        vol_filter_buy = True
-        use_boll = self.parameters.get('use_bollinger_filter', True)
-        if isinstance(use_boll, str): use_boll = use_boll.lower() == 'true'
-        
-        if use_boll:
-            df = bollinger_bands(df, window=20, num_std=2, generate_signals=False)
-            # Evitar comprar si estamos comprimidos (bajo volumen/volatilidad)
-            # Comprar solo si hay expansión o no hay squeeze activo
-            vol_filter_buy = ~df['bb_squeezing'] | (df['close'] > df['bb_upper'])
+        # EMA crossover conditions
+        ema_crossover_bullish = (df['ema_fast'] > df['ema_slow']) & (df['ema_fast'].shift(1) <= df['ema_slow'].shift(1))
+        ema_crossover_bearish = (df['ema_fast'] < df['ema_slow']) & (df['ema_fast'].shift(1) >= df['ema_slow'].shift(1))
 
-        buy_cond = (
-            entry_condition_buy & 
-            (df['close'] > df['ema50']) &
-            trend_up & # FILTRO MANDATORIO EMA 200
-            (df['rsi'] > float(self.parameters.get('rsi_buy', 55))) &
-            vol_filter_buy
+        # Trend filter
+        trend_up = df['close'] > df['ema_trend']
+        trend_down = df['close'] < df['ema_trend']
+
+        # Volume confirmation
+        volume_ok = df['volume_ratio'] > 0.8  # Allow slightly below average
+
+        # Regime filter
+        if self.parameters['market_regime_filter']:
+            regime_ok = df['regime'] == 'trending'
+        else:
+            regime_ok = True
+
+        # Buy conditions
+        buy_conditions = (
+            ema_crossover_bullish &
+            trend_up &
+            (df['rsi'] > rsi_lower) & (df['rsi'] < 70) &  # RSI not overbought
+            volume_ok &
+            regime_ok
         )
-        
-        # Si no es entrada tardía, exigimos MACD positivo para mayor seguridad en el cruce inicial
-        if not allow_late:
-            buy_cond = buy_cond & (df['macd'] > df['signal_macd'])
-        
-        # 5. Generar condiciones base de Venta
-        entry_condition_sell = (df['ema9'] < df['ema21']) & (df['ema9'].shift(1) >= df['ema21'].shift(1))
-        
-        vol_filter_sell = True
-        if use_boll:
-            vol_filter_sell = ~df['bb_squeezing'] | (df['close'] < df['bb_lower'])
 
-        sell_cond = (
-            entry_condition_sell & 
-            (df['close'] < df['ema50']) &
-            trend_down & # FILTRO MANDATORIO EMA 200
-            (df['rsi'] < float(self.parameters.get('rsi_sell', 45))) &
-            vol_filter_sell
+        # Sell conditions (for short positions or exit signals)
+        sell_conditions = (
+            ema_crossover_bearish &
+            trend_down &
+            (df['rsi'] < rsi_upper) & (df['rsi'] > 30) &  # RSI not oversold
+            volume_ok &
+            regime_ok
         )
-        
-        # 6. Aplicar filtros según Modo de Estrategia
-        if mode == 'conservative':
-            min_strength = 6.0
-            min_adx = 25.0
-        elif mode == 'aggressive':
-            min_strength = 2.0
-            min_adx = 15.0
-        elif mode == 'custom':
-            # Respetar absolutamente los parámetros del usuario
-            min_strength = float(self.parameters.get('min_strength', 3.0))
-            min_adx = float(self.parameters.get('min_adx', 20.0))
-        else: # balanced
-            min_strength = 4.0
-            min_adx = 20.0
 
-        buy_cond = buy_cond & (df['adx'] >= min_adx) & (df['strength'] >= min_strength)
-        sell_cond = sell_cond & (df['adx'] >= min_adx) & (df['strength'] >= min_strength)
+        # Apply ADX filter for trend strength
+        if 'adx' in df.columns:
+            buy_conditions = buy_conditions & (df['adx'] >= self.parameters['min_adx'])
+            sell_conditions = sell_conditions & (df['adx'] >= self.parameters['min_adx'])
 
-        # 7. Aplicar filtro de Velas (si está activado)
-        use_candles = self.parameters.get('use_candles', False)
-        if isinstance(use_candles, str): use_candles = use_candles.lower() == 'true'
-        
-        if use_candles:
-            # Si permitimos entrada tardía, no forzamos patrón de velas para la COMPRA 
-            # (porque los patrones suelen estar al inicio de la tendencia)
-            if allow_late:
-                bullish_pattern = True
-            else:
-                bullish_pattern = (df['is_bullish_engulfing'] | df['is_hammer'] | df['is_bullish_engulfing'].shift(1) | df['is_hammer'].shift(1))
-            
-            buy_cond = buy_cond & bullish_pattern
-            
-            bearish_pattern = (df['is_bearish_engulfing'] | df['is_shooting_star'] | df['is_bearish_engulfing'].shift(1) | df['is_shooting_star'].shift(1))
-            sell_cond = sell_cond & bearish_pattern
-        
-        # Asignar señales
-        df.loc[buy_cond, 'signal'] = 'BUY'
-        df.loc[sell_cond, 'signal'] = 'SELL'
-        
-        # 8. Calcular SL/TP dinámicos
-        for idx in df.index[buy_cond]:
-            sl, tp = calculate_sl_tp(df.loc[:idx], 'buy', atr_multiplier_sl=self.parameters['atr_sl'], atr_multiplier_tp=self.parameters['atr_tp'])
-            df.at[idx, 'stop_loss'] = sl.iloc[-1]
-            df.at[idx, 'take_profit'] = tp.iloc[-1]
-            
-        for idx in df.index[sell_cond]:
-            sl, tp = calculate_sl_tp(df.loc[:idx], 'sell', atr_multiplier_sl=self.parameters['atr_sl'], atr_multiplier_tp=self.parameters['atr_tp'])
-            df.at[idx, 'stop_loss'] = sl.iloc[-1]
-            df.at[idx, 'take_profit'] = tp.iloc[-1]
-            
+        # Assign signals
+        df.loc[buy_conditions, 'signal'] = 'BUY'
+        df.loc[sell_conditions, 'signal'] = 'SELL'
+
+        # 6. Calculate stop loss and take profit
+        for idx in df.index[buy_conditions]:
+            current_price = df.loc[idx, 'close']
+            atr_value = df.loc[idx, 'atr']
+
+            # ATR-based stop loss and take profit
+            stop_loss = current_price - (atr_value * self.parameters['atr_sl_multiplier'])
+            take_profit = current_price + (atr_value * self.parameters['atr_tp_multiplier'])
+
+            df.at[idx, 'stop_loss'] = stop_loss
+            df.at[idx, 'take_profit'] = take_profit
+
+            # Calculate signal strength (0-1 scale)
+            strength = 0.5  # Base strength
+
+            # Increase strength with RSI position
+            rsi_value = df.loc[idx, 'rsi']
+            if rsi_value > 50:
+                strength += 0.2
+            if df.loc[idx, 'volume_ratio'] > 1.2:
+                strength += 0.2
+            if 'adx' in df.columns and df.loc[idx, 'adx'] > 30:
+                strength += 0.1
+
+            df.at[idx, 'signal_strength'] = min(1.0, strength)
+
+        for idx in df.index[sell_conditions]:
+            current_price = df.loc[idx, 'close']
+            atr_value = df.loc[idx, 'atr']
+
+            stop_loss = current_price + (atr_value * self.parameters['atr_sl_multiplier'])
+            take_profit = current_price - (atr_value * self.parameters['atr_tp_multiplier'])
+
+            df.at[idx, 'stop_loss'] = stop_loss
+            df.at[idx, 'take_profit'] = take_profit
+
+            # Signal strength for sell
+            strength = 0.5
+            rsi_value = df.loc[idx, 'rsi']
+            if rsi_value < 50:
+                strength += 0.2
+            if df.loc[idx, 'volume_ratio'] > 1.2:
+                strength += 0.2
+            if 'adx' in df.columns and df.loc[idx, 'adx'] > 30:
+                strength += 0.1
+
+            df.at[idx, 'signal_strength'] = min(1.0, strength)
+
+        # 7. Apply cooldown period
+        if self.parameters['cooldown_bars'] > 0:
+            df = self.apply_cooldown_period(df)
+
+        return df
+
+    def apply_cooldown_period(self, df):
+        """Ensure minimum bars between signals."""
+        cooldown = self.parameters['cooldown_bars']
+        signal_indices = df.index[df['signal'].isin(['BUY', 'SELL'])]
+
+        for i in range(len(signal_indices)):
+            if i > 0:
+                idx = signal_indices[i]
+                prev_idx = signal_indices[i-1]
+                bars_between = df.index.get_loc(idx) - df.index.get_loc(prev_idx)
+
+                if bars_between < cooldown:
+                    df.at[idx, 'signal'] = 'HOLD'
+                    df.at[idx, 'stop_loss'] = np.nan
+                    df.at[idx, 'take_profit'] = np.nan
+
         return df
 
 
