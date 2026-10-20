@@ -1,0 +1,22 @@
+[Unit]
+Description=CriptoDash Trading Bots
+After=network.target criptodash.service
+
+[Service]
+User=web5
+Group=www-data
+WorkingDirectory=/var/www/javierblanco.com.ar/web/criptodash
+EnvironmentFile=/var/www/javierblanco.com.ar/web/criptodash/.env
+# ⚠️ NO poner API keys reales acá: este archivo está en el repo público.
+# Las credenciales viven en el .env del VPS (ignorado por git) y se cargan
+# vía EnvironmentFile. Si el entorno del VPS las necesita explícitas,
+# usar variables de entorno a nivel de sistema o el .env.
+# Environment="BINANCE_API_KEY=REEMPLAZAR"
+# Environment="BINANCE_SECRET_KEY=REEMPLAZAR"
+
+ExecStart=/var/www/javierblanco.com.ar/web/venv/bin/python manage.py run_bots
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

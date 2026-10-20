@@ -1,0 +1,17 @@
+[Unit]
+Description=Celery Beat para Criptodash
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=www-data
+WorkingDirectory=/var/www/javierblanco.com.ar/web/criptodash
+
+ExecStart=/var/www/clients/client2/web5/web/venv/bin/celery -A criptodash beat -l info
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

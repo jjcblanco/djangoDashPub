@@ -1,0 +1,16 @@
+[Unit]
+Description=Celery Worker para Criptodash
+After=network.target
+[Service]
+Type=simple
+User=root
+# Cambiá el grupo y usuario acorde a tu VPS, típicamente es "ubuntu" o "root"
+Group=www-data
+WorkingDirectory=/var/www/javierblanco.com.ar/web/criptodash
+# Si usás un entorno virtual (venv), la ruta a celery debe apuntar adentro del venv:
+# /ruta/al/venv/bin/celery
+ExecStart=/var/www/clients/client2/web5/web/venv/bin/celery -A criptodash worker -l info --concurrency=2 --pool=prefork
+Restart=always
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
