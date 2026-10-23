@@ -9,7 +9,7 @@ Organización:
 - context.py: contexto de mercado (indicadores vía Binance/ccxt)
 - learner.py: WhalePatternLearner (aprendizaje de patrones de trades exitosos)
 """
-from .trackers import SolanaWhaleTracker, EVMWhaleTracker, HyperliquidWhaleTracker
+from .trackers import SolanaWhaleTracker, EVMWhaleTracker, BscRpcWhaleTracker, HyperliquidWhaleTracker
 from .pipeline import PatternEngine
 from .scoring import WhaleScoringEngine, WhalePerformanceTracker
 from .analysis import WhaleAnalysisEngine
@@ -17,7 +17,7 @@ from .context import fetch_market_context, fetch_market_context_at
 from .learner import WhalePatternLearner
 
 __all__ = [
-    'SolanaWhaleTracker', 'EVMWhaleTracker', 'HyperliquidWhaleTracker',
+    'SolanaWhaleTracker', 'EVMWhaleTracker', 'BscRpcWhaleTracker', 'HyperliquidWhaleTracker',
     'PatternEngine', 'WhaleScoringEngine', 'WhalePerformanceTracker',
     'WhaleAnalysisEngine', 'fetch_market_context', 'fetch_market_context_at',
     'WhalePatternLearner',

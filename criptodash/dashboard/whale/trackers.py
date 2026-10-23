@@ -183,6 +183,229 @@ class EVMWhaleTracker:
             logger.error(f"[EVM Tracker] Error sincronizando wallet {wallet_obj.address[:10]}: {e}")
             return 0
  
+class BscRpcWhaleTracker:
+    """Rastreador de BNB Chain vía RPC público (eth_getLogs de eventos Transfer ERC-20).
+
+    No requiere API key de BscScan. Si se configura BSC_RPC_URL en el .env
+    (p. ej. un endpoint gratuito de Ankr/NodeReal, recomendado) se usa ese;
+    si no, los dataseed públicos de Binance con ventanas adaptativas (su
+    límite de resultados por query es bajo, así que la ventana se achica
+    automáticamente ante 'limit exceeded').
+    """
+    TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+
+    RPC_ENDPOINTS = [
+        'https://bsc-dataseed.binance.org',
+        'https://bsc-dataseed1.defibit.io',
+        'https://bsc-dataseed2.binance.org',
+        'https://bsc-dataseed3.binance.org',
+    ]
+
+    # Símbolos conocidos de BSC para no gastar eth_calls
+    KNOWN_TOKENS = {
+        '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c': 'WBNB',
+        '0x55d398326f99059ff775485246999027b3197955': 'USDT',
+        '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d': 'USDC',
+        '0xe9e7cea3dedca5984780bafc599bd69add087d56': 'BUSD',
+        '0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82': 'CAKE',
+    }
+
+    def __init__(self, rpc_url=None):
+        from decouple import config
+        self.rpc_url = rpc_url or config('BSC_RPC_URL', default='')
+        self._endpoint_idx = 0
+        self._symbol_cache = {}
+        self._decimals_cache = {}
+
+    @property
+    def endpoint(self):
+        if self.rpc_url:
+            return self.rpc_url
+        return self.RPC_ENDPOINTS[self._endpoint_idx % len(self.RPC_ENDPOINTS)]
+
+    def _call(self, method, params):
+        """Llama al RPC con rotación de endpoints. Retorna (result, err)."""
+        payload = {'jsonrpc': '2.0', 'method': method, 'params': params, 'id': 1}
+        attempts = len(self.RPC_ENDPOINTS) if not self.rpc_url else 1
+        last_err = None
+        for _ in range(attempts):
+            try:
+                r = requests.post(self.endpoint, json=payload, timeout=12)
+                data = r.json()
+                if 'error' in data:
+                    code = data['error'].get('code')
+                    if code == -32005:
+                        return None, 'limit_exceeded'
+                    last_err = data['error'].get('message', 'rpc error')
+                else:
+                    return data.get('result'), None
+            except Exception as e:
+                last_err = str(e)
+            self._endpoint_idx += 1  # rotar endpoint
+        return None, last_err
+
+    def _get_latest_block(self):
+        res, _ = self._call('eth_blockNumber', [])
+        return int(res, 16) if res else None
+
+    @staticmethod
+    def _pad_address(address):
+        return '0x' + address.lower().replace('0x', '').zfill(64)
+
+    @staticmethod
+    def _decode_abi_string(hex_str):
+        """Decodifica el retorno ABI de symbol() (string dinámica)."""
+        if not hex_str or hex_str == '0x':
+            return None
+        data = hex_str[2:] if hex_str.startswith('0x') else hex_str
+        if len(data) < 64:
+            return None
+        offset = int(data[:64], 16) * 2  # offset en bytes → chars hex
+        if offset >= len(data):
+            return None
+        length = int(data[offset:offset + 64], 16)
+        raw = data[offset + 64:offset + 64 + length * 2]
+        try:
+            return bytes.fromhex(raw).decode('utf-8', 'replace')
+        except ValueError:
+            return None
+
+    def _token_meta(self, contract):
+        """Devuelve (symbol, decimals) con caché; eth_call symbol()/decimals()."""
+        contract_l = contract.lower()
+        if contract_l in self.KNOWN_TOKENS:
+            return self.KNOWN_TOKENS[contract_l], 18
+        if contract_l in self._symbol_cache:
+            return self._symbol_cache[contract_l], self._decimals_cache.get(contract_l, 18)
+
+        symbol = None
+        decimals = 18
+        # symbol() = 0x95d89b41, decimals() = 0x313ce567
+        sym_res, _ = self._call('eth_call', [{'to': contract_l, 'data': '0x95d89b41'}, 'latest'])
+        if sym_res:
+            symbol = self._decode_abi_string(sym_res)
+        dec_res, _ = self._call('eth_call', [{'to': contract_l, 'data': '0x313ce567'}, 'latest'])
+        if dec_res:
+            try:
+                decimals = int(dec_res, 16)
+            except (TypeError, ValueError):
+                decimals = 18
+
+        symbol = (symbol or '')[:40].strip() or None
+        self._symbol_cache[contract_l] = symbol
+        self._decimals_cache[contract_l] = decimals
+        return symbol, decimals
+
+    def _fetch_transfers(self, address, from_block, to_block, direction):
+        """direction 'in' = transferencias hacia la wallet (compras); 'out' = desde (ventas)."""
+        topics = [self.TRANSFER_TOPIC]
+        if direction == 'out':
+            topics += [self._pad_address(address), None]
+        else:
+            topics += [None, self._pad_address(address)]
+        return self._call('eth_getLogs', [{
+            'fromBlock': hex(from_block),
+            'toBlock': hex(to_block),
+            'topics': topics,
+        }])
+
+    def sync_wallet(self, wallet_obj, max_new=10, **kwargs):
+        """Sincroniza transfers ERC-20 de la wallet en BSC vía RPC."""
+        deep_sync = kwargs.get('deep_sync', False)
+        latest = self._get_latest_block()
+        if not latest:
+            logger.error(f"[BSC RPC] No se pudo obtener el último bloque para {wallet_obj.address[:10]}")
+            return 0
+
+        new_txs = 0
+        to_block = latest
+        max_windows = 12 if deep_sync else 6
+        window_blocks = 600  # ~30 min de BSC (3s/block)
+
+        # Cache de timestamps de bloques dentro de este sync
+        block_ts = {}
+
+        def get_block_timestamp(block_number):
+            if block_number not in block_ts:
+                res, _ = self._call('eth_getBlockByNumber', [hex(block_number), False])
+                ts = res.get('timestamp') if res else None
+                block_ts[block_number] = int(ts, 16) if isinstance(ts, str) and ts.startswith('0x') else ts
+            return block_ts.get(block_number)
+
+        for _window in range(max_windows):
+            if new_txs >= max_new or to_block <= 0:
+                break
+
+            win = window_blocks
+            processed = False
+            while not processed:
+                from_block = max(0, to_block - win)
+                logs_in, err_in = self._fetch_transfers(wallet_obj.address, from_block, to_block, 'in')
+                logs_out, err_out = self._fetch_transfers(wallet_obj.address, from_block, to_block, 'out')
+
+                if err_in == 'limit_exceeded' or err_out == 'limit_exceeded':
+                    if win <= 50:
+                        logger.warning(f"[BSC RPC] Ventana mínima aún excede límite para {wallet_obj.address[:10]}; salto esta ventana.")
+                        processed = True
+                    else:
+                        win = max(50, win // 2)  # achicar ventana y reintentar
+                    continue
+                processed = True
+
+                # Procesar en orden: primero ventas (para cerrar trades antes de abrir nuevos)
+                for log, direction in [(l, 'out') for l in (logs_out or [])] + [(l, 'in') for l in (logs_in or [])]:
+                    if new_txs >= max_new:
+                        break
+                    tx_hash = log.get('transactionHash', '')
+                    if not tx_hash:
+                        continue
+                    unique_hash = f"bsc_{tx_hash}_{log.get('logIndex', '0')}"
+                    if WhaleTransaction.objects.filter(tx_hash=unique_hash).exists():
+                        continue
+
+                    contract = log.get('address', '')
+                    raw_amount = int(log.get('data', '0x0'), 16) if isinstance(log.get('data'), str) else 0
+                    symbol, decimals = self._token_meta(contract)
+                    amount = raw_amount / (10 ** decimals) if decimals else float(raw_amount)
+
+                    block_number = int(log.get('blockNumber', '0x0'), 16)
+                    block_ts_val = get_block_timestamp(block_number)
+                    if block_ts_val:
+                        timestamp = timezone.make_aware(datetime.fromtimestamp(block_ts_val))
+                    else:
+                        timestamp = timezone.now()
+
+                    raw_with_context = dict(log)
+                    raw_with_context['contractAddress'] = contract
+                    raw_with_context['tokenSymbol'] = symbol or contract[:10] + '...'
+
+                    if symbol:
+                        try:
+                            from dashboard.whale.context import fetch_market_context
+                            mkt_ctx = fetch_market_context(symbol)
+                            if mkt_ctx:
+                                raw_with_context['market_context'] = mkt_ctx
+                        except Exception:
+                            pass
+
+                    is_buy = direction == 'in'
+                    WhaleTransaction.objects.create(
+                        wallet=wallet_obj,
+                        tx_hash=unique_hash,
+                        timestamp=timestamp,
+                        tx_type='BUY' if is_buy else 'SELL',
+                        from_asset=None if is_buy else (symbol or contract[:10] + '...'),
+                        to_asset=(symbol or contract[:10] + '...') if is_buy else None,
+                        amount_in=amount,
+                        raw_data=raw_with_context,
+                    )
+                    new_txs += 1
+
+            to_block = from_block - 1
+
+        return new_txs
+
+
 class HyperliquidWhaleTracker:
     """Rastreador para la red Hyperliquid L1 usando su API de Info."""
     API_URL = "https://api.hyperliquid.xyz/info"

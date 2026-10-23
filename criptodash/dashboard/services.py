@@ -5,7 +5,7 @@ import time
 # Re-exportaciones del paquete dashboard.whale
 # (retrocompatibilidad con imports tipo `from dashboard.services import PatternEngine`)
 # ──────────────────────────────────────────────────────────────
-from .whale.trackers import SolanaWhaleTracker, EVMWhaleTracker, HyperliquidWhaleTracker
+from .whale.trackers import SolanaWhaleTracker, EVMWhaleTracker, BscRpcWhaleTracker, HyperliquidWhaleTracker
 from .whale.pipeline import PatternEngine, get_whale_score, get_top_scored_whales, update_all_whale_scores
 
 # ============================================================

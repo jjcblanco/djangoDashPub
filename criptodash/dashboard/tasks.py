@@ -15,7 +15,7 @@ def sync_wallet_task(wallet_id, deep_sync=False):
     (beat + systemd + triggers manuales podían encolar la misma wallet).
     """
     from dashboard.models import WhaleWallet
-    from dashboard.services import SolanaWhaleTracker, EVMWhaleTracker, HyperliquidWhaleTracker, PatternEngine
+    from dashboard.services import SolanaWhaleTracker, EVMWhaleTracker, BscRpcWhaleTracker, HyperliquidWhaleTracker, PatternEngine
 
     # Lock distribuido por wallet: si otra tarea ya está sincronizando, salir.
     lock_key = f"whale_sync_lock:{wallet_id}"
@@ -43,9 +43,14 @@ def sync_wallet_task(wallet_id, deep_sync=False):
                 # Si es deep_sync, traemos más historial para analizar
                 signatures_limit = 200 if deep_sync else 50
                 new_txs = tracker.sync_wallet(wallet, max_new=limit, signatures_limit=signatures_limit)
-            elif wallet.blockchain in ['ethereum', 'base', 'bsc']:
+            elif wallet.blockchain in ['ethereum', 'base']:
                 tracker = EVMWhaleTracker(wallet.blockchain)
                 new_txs = tracker.sync_wallet(wallet, max_new=limit)
+            elif wallet.blockchain == 'bsc':
+                # BSC usa RPC público (eth_getLogs): BscScan/Etherscan no cubren
+                # la cadena en sus planes gratuitos.
+                tracker = BscRpcWhaleTracker()
+                new_txs = tracker.sync_wallet(wallet, max_new=limit, deep_sync=deep_sync)
             elif wallet.blockchain == 'hyperliquid':
                 tracker = HyperliquidWhaleTracker()
                 new_txs = tracker.sync_wallet(wallet, max_new=limit)
