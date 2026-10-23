@@ -58,10 +58,13 @@ class SolanaWhaleTracker:
 
 class EVMWhaleTracker:
     """Rastreador para redes EVM (Ethereum, Base, etc) usando Etherscan V2 API unificada.
-    
+
     Etherscan V2 usa un endpoint único para todas las cadenas,
     diferenciándolas por el parámetro chainid.
     Plan gratuito: 5 calls/sec.
+
+    BSC: el plan gratuito de Etherscan V2 NO cubre chainid 56, así que
+    BSC usa el endpoint clásico de BscScan (mismos parámetros, sin chainid).
     """
     API_URL = 'https://api.etherscan.io/v2/api'
     CHAIN_IDS = {
@@ -69,10 +72,15 @@ class EVMWhaleTracker:
         'base': 8453,
         'bsc': 56,
     }
+    # Endpoints clásicos por cadena (cuando V2 no los cubre en plan gratuito)
+    CHAIN_API_URLS = {
+        'bsc': 'https://api.bscscan.com/api',
+    }
 
     def __init__(self, blockchain):
         self.blockchain = blockchain
         self.chain_id = self.CHAIN_IDS.get(blockchain, 1)
+        self.api_url = self.CHAIN_API_URLS.get(blockchain, self.API_URL)
         # Cargar key de .env usando python-decouple
         from decouple import config
         self.api_key = config(f"{blockchain.upper()}_API_KEY", default="")
@@ -83,9 +91,8 @@ class EVMWhaleTracker:
             logger.warning(f"[EVM Tracker] No API key for {blockchain}. API calls will fail.")
 
     def sync_wallet(self, wallet_obj, max_new=10, **kwargs):
-        """Sincroniza transferencias de tokens ERC20 usando Etherscan V2."""
+        """Sincroniza transferencias de tokens ERC20 usando Etherscan V2 (o BscScan clásico)."""
         params = {
-            'chainid': self.chain_id,
             'module': 'account',
             'action': 'tokentx',
             'address': wallet_obj.address,
@@ -96,18 +103,21 @@ class EVMWhaleTracker:
             'sort': 'desc',
             'apikey': self.api_key
         }
-        
+        # La API V2 unificada requiere chainid; los endpoints clásicos no lo usan
+        if self.api_url == self.API_URL:
+            params['chainid'] = self.chain_id
+
         headers = {
             'User-Agent': 'WhaleTracker/1.0',
             'Accept': 'application/json'
         }
-        
+
         try:
-            resp = requests.get(self.API_URL, params=params, headers=headers, timeout=12)
+            resp = requests.get(self.api_url, params=params, headers=headers, timeout=12)
             if resp.status_code != 200:
                 logger.error(f"[EVM Tracker] HTTP {resp.status_code} for {wallet_obj.address[:10]} ({self.blockchain})")
                 return 0
-            
+
             data = resp.json()
             if data.get('status') != '1':
                 error_msg = data.get('message', 'Unknown V2 API error')
@@ -115,13 +125,13 @@ class EVMWhaleTracker:
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.error(f"[EVM Tracker V2] API error for {wallet_obj.address[:10]}: {error_msg} - Result: {result_msg}")
-                
+
                 # Special handling for common V2 errors
                 if 'rate limit' in error_msg.lower():
                     logger.warning(f"[EVM Tracker V2] Rate limit hit for {self.blockchain}")
                 elif 'invalid api key' in error_msg.lower():
                     logger.error(f"[EVM Tracker V2] Invalid API key for {self.blockchain}")
-                
+
                 return 0
             
             transfers = data.get('result', [])
