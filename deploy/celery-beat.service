@@ -4,9 +4,10 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
-Group=www-data
-WorkingDirectory=/var/www/javierblanco.com.ar/web/criptodash
+# Mismo usuario que daphne (web5) para no pelear permisos de logs/celerybeat
+User=web5
+Group=client2
+WorkingDirectory=/var/www/clients/client2/web5/web/criptodash
 
 ExecStart=/var/www/clients/client2/web5/web/venv/bin/celery -A criptodash beat -l info
 
