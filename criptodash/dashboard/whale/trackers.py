@@ -67,6 +67,7 @@ class EVMWhaleTracker:
     CHAIN_IDS = {
         'ethereum': 1,
         'base': 8453,
+        'bsc': 56,
     }
 
     def __init__(self, blockchain):

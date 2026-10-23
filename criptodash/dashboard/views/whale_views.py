@@ -131,7 +131,7 @@ def follow_whale(request):
         # Normalizar dirección
         if address:
             address = address.strip()
-            if blockchain in ['ethereum', 'base']:
+            if blockchain in ['ethereum', 'base', 'bsc']:
                 address = address.lower()
         
         if not address:
@@ -175,7 +175,7 @@ def bulk_import_whales(request):
             
         addresses = [addr.strip() for addr in addresses_text.splitlines() if addr.strip()]
         # Normalizar direcciones
-        if blockchain in ['ethereum', 'base']:
+        if blockchain in ['ethereum', 'base', 'bsc']:
             addresses = [addr.lower() for addr in addresses]
         
         created_count = 0
@@ -597,7 +597,7 @@ def hunt_targets_add(request):
             return JsonResponse({'status': 'error', 'message': 'El contrato parece demasiado corto.'}, status=400)
 
         # Normalizar EVM
-        if blockchain in ['ethereum', 'base']:
+        if blockchain in ['ethereum', 'base', 'bsc']:
             contract = contract.lower()
 
         obj, created = WhaleHuntTarget.objects.get_or_create(

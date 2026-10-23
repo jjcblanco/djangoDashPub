@@ -126,6 +126,10 @@ class PatternEngine:
             '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48': 'USDC',
             '0x4200000000000000000000000000000000000006': 'WETH',
             '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913': 'USDC',
+            # BNB Chain (BSC)
+            '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c': 'WBNB',
+            '0x55d398326f99059fF775485246999027B3197955': 'USDT',
+            '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d': 'USDC',
         }
 
         for tx in txs:
@@ -266,7 +270,7 @@ class PatternEngine:
                 pairs = dex_resp.json().get('pairs', [])
                 if pairs:
                      # Filtrar por blockchain correcta
-                     network_map = {'ethereum': 'eth', 'base': 'base', 'solana': 'solana'}
+                     network_map = {'ethereum': 'eth', 'base': 'base', 'bsc': 'bsc', 'solana': 'solana'}
                      target_net = network_map.get(blockchain, 'eth')
                      
                      for p in pairs:

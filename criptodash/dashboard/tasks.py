@@ -43,7 +43,7 @@ def sync_wallet_task(wallet_id, deep_sync=False):
                 # Si es deep_sync, traemos más historial para analizar
                 signatures_limit = 200 if deep_sync else 50
                 new_txs = tracker.sync_wallet(wallet, max_new=limit, signatures_limit=signatures_limit)
-            elif wallet.blockchain in ['ethereum', 'base']:
+            elif wallet.blockchain in ['ethereum', 'base', 'bsc']:
                 tracker = EVMWhaleTracker(wallet.blockchain)
                 new_txs = tracker.sync_wallet(wallet, max_new=limit)
             elif wallet.blockchain == 'hyperliquid':
@@ -152,7 +152,7 @@ def sync_all_whales_task():
     for blockchain, wallets in wallets_by_blockchain.items():
         logger.info(f"Procesando {len(wallets)} wallets de {blockchain}")
 
-        if blockchain in ['ethereum', 'base']:
+        if blockchain in ['ethereum', 'base', 'bsc']:
             spacing = 0.25
         elif blockchain == 'solana':
             spacing = 0.05
@@ -272,7 +272,7 @@ def hunt_whales_by_pair_task(filter_high_volume=False, filter_recent_activity=Fa
                 total_filtered_by_tx += 1
                 continue
 
-            if blockchain in ['ethereum', 'base']:
+            if blockchain in ['ethereum', 'base', 'bsc']:
                 wallet_address = wallet_address.lower()
 
             try:

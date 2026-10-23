@@ -254,6 +254,7 @@ class WhaleWallet(models.Model):
         ('solana', 'Solana'),
         ('ethereum', 'Ethereum'),
         ('base', 'Base'),
+        ('bsc', 'BNB Chain'),
         ('hyperliquid', 'Hyperliquid'),
     ]
 
@@ -366,6 +367,7 @@ class WhaleHuntTarget(models.Model):
         ('solana', 'Solana'),
         ('ethereum', 'Ethereum'),
         ('base', 'Base'),
+        ('bsc', 'BNB Chain'),
         ('hyperliquid', 'Hyperliquid'),
     ]
 
