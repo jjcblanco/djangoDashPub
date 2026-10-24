@@ -123,6 +123,52 @@ select.sel-dark:focus{outline:none;border-color:var(--accent-cyan)}
 </div>
 </div>
 
+<!-- FASE ballenas: HUNT TARGETS + SEÑALES DE CONSENSO -->
+<div class="hunt-panel">
+<div class="card-dark" style="margin-bottom:12px">
+<div class="card-hdr" style="display:flex;align-items:center;justify-content:space-between">
+<h6 style="margin:0"><i class="fas fa-crosshairs me-1" style="color:var(--accent-yellow)"></i> Hunt Targets</h6>
+<button class="btn-glass" style="padding:3px 10px;font-size:0.65rem" onclick="document.getElementById('addTargetForm').classList.toggle('d-none')">
+<i class="fas fa-plus me-1"></i>Añadir
+</button>
+</div>
+<div class="card-bdy">
+<div id="addTargetForm" class="d-none mb-2 p-2 rounded" style="background:var(--bg-secondary)">
+<div class="row g-2">
+<div class="col-6 col-md-2"><input type="text" id="htSymbol" class="form-control form-control-sm" placeholder="Símbolo (ej: PEPE)" style="font-size:0.7rem"></div>
+<div class="col-6 col-md-2"><select id="htBlockchain" class="form-select form-select-sm" style="font-size:0.7rem">
+<option value="solana">Solana</option>
+<option value="ethereum">Ethereum</option>
+<option value="base">Base</option>
+<option value="hyperliquid">Hyperliquid</option>
+</select></div>
+<div class="col-12 col-md-4"><input type="text" id="htContract" class="form-control form-control-sm" placeholder="Contract Address" style="font-size:0.7rem"></div>
+<div class="col-6 col-md-2"><input type="number" id="htMinVol" class="form-control form-control-sm" placeholder="Vol mín USD" value="3000" style="font-size:0.7rem"></div>
+<div class="col-6 col-md-2"><button class="btn-warn" style="padding:4px 10px;font-size:0.7rem;width:100%" onclick="addHuntTarget()"><i class="fas fa-save me-1"></i>Guardar</button></div>
+</div>
+<div id="htAddMsg" class="mt-1 small text-center" style="font-size:0.65rem"></div>
+</div>
+<div id="huntTargetsList" style="max-height:180px;overflow-y:auto">
+<div class="text-center py-2 text-muted small"><div class="spinner-border spinner-border-sm"></div> Cargando...</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- FASE ballenas: señales de consenso -->
+<div id="consensusSignalsSection" class="card-dark" style="margin-bottom:16px;border-left:4px solid var(--accent-red);display:none">
+<div class="card-hdr" style="display:flex;align-items:center">
+<span style="font-size:1.1rem">🔥</span>
+<h6 style="margin:0 0 0 8px">Señales de Consenso</h6>
+<span class="badge bg-danger ms-auto" style="font-size:0.6rem">ALTA PRIORIDAD</span>
+</div>
+<div class="card-bdy">
+<div id="consensusSignalsList" class="d-flex flex-wrap gap-2">
+<div class="text-muted small"><div class="spinner-border spinner-border-sm me-2"></div>Cargando señales...</div>
+</div>
+</div>
+</div>
+
 <!-- MAIN LAYOUT: 2 COLUMNS -->
 <div class="main-layout">
 <!-- LEFT SIDEBAR: WHALE LIST -->
@@ -587,6 +633,123 @@ function enrichAll() {
     .catch(e => { alert('Error: ' + e); });
 }
 
+// ── FASE ballenas: Hunt Targets Manager ─────────────────────
+async function loadHuntTargets() {
+    const container = document.getElementById('huntTargetsList');
+    if(!container) return;
+    try {
+        const resp = await fetch('{% url "hunt_targets_list" %}');
+        const data = await resp.json();
+        if(data.status !== 'ok' || !data.targets || data.targets.length === 0) {
+            container.innerHTML = '<div class="text-muted text-center py-2 small">Sin targets. Usa + para agregar contratos a cazar.</div>';
+            return;
+        }
+        const chainColors = {solana:'color:var(--accent-green)', ethereum:'color:var(--accent-cyan)', base:'color:var(--accent-cyan)', hyperliquid:'color:var(--accent-yellow)'};
+        container.innerHTML = data.targets.map(t => `
+            <div id="ht-row-${t.id}" class="d-flex align-items-center justify-content-between py-1 border-bottom" style="font-size:0.65rem;border-color:rgba(48,54,61,0.3) !important">
+                <div class="flex-grow-1" style="min-width:0">
+                    <span class="fw-bold ${t.is_active ? '' : 'text-muted text-decoration-line-through'}">$${t.token_symbol}</span>
+                    <span class="badge bg-light border text-muted ms-1" style="${chainColors[t.blockchain] || ''};font-size:0.55rem">${t.blockchain.toUpperCase()}</span>
+                    <div class="text-muted text-truncate" style="font-size:0.6rem" title="${t.contract_address}">${t.contract_address ? t.contract_address.substring(0,18)+'...' : ''}</div>
+                    <div class="text-muted" style="font-size:0.6rem">Min: $${t.min_volume_usd ? t.min_volume_usd.toLocaleString() : '0'}${t.notes ? ' · '+t.notes : ''}</div>
+                </div>
+                <div class="d-flex gap-1 ms-2">
+                    <button class="btn btn-xs btn-outline-warning py-0 px-1" style="font-size:0.6rem" title="${t.is_active ? 'Pausar' : 'Activar'}" onclick="toggleTarget(${t.id}, this)">
+                        <i class="fas fa-${t.is_active ? 'pause' : 'play'}"></i>
+                    </button>
+                    <button class="btn btn-xs btn-outline-danger py-0 px-1" style="font-size:0.6rem" title="Eliminar" onclick="deleteTarget(${t.id}, '$${t.token_symbol}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } catch(e) {
+        container.innerHTML = '<div class="text-danger text-center py-2 small">Error al cargar targets.</div>';
+    }
+}
+
+window.addHuntTarget = async function() {
+    const msgEl = document.getElementById('htAddMsg');
+    const symbol = document.getElementById('htSymbol').value.trim();
+    const blockchain = document.getElementById('htBlockchain').value;
+    const contract = document.getElementById('htContract').value.trim();
+    const minVol = document.getElementById('htMinVol').value || '3000';
+    if(!symbol || !contract) { msgEl.innerHTML = '<span style="color:var(--accent-red)">Símbolo y contrato son obligatorios.</span>'; return; }
+    msgEl.innerHTML = 'Guardando...';
+    try {
+        const resp = await fetch('{% url "hunt_targets_add" %}', {
+            method:'POST',
+            headers:{'X-CSRFToken':CSRF,'Content-Type':'application/json'},
+            body: JSON.stringify({token_symbol:symbol, blockchain:blockchain, contract_address:contract, min_volume_usd:minVol})
+        });
+        const data = await resp.json();
+        if(data.status === 'ok') {
+            msgEl.innerHTML = '<span style="color:var(--accent-green)">Target agregado.</span>';
+            document.getElementById('htSymbol').value=''; document.getElementById('htContract').value='';
+            loadHuntTargets();
+        } else {
+            msgEl.innerHTML = '<span style="color:var(--accent-red)">'+ (data.message || 'Error') +'</span>';
+        }
+    } catch(e) { msgEl.innerHTML = '<span style="color:var(--accent-red)">Error de red.</span>'; }
+};
+
+window.toggleTarget = async function(id, btn) {
+    try {
+        const resp = await fetch('/whale-insights/targets/'+id+'/toggle/', {method:'POST', headers:{'X-CSRFToken':CSRF}});
+        const data = await resp.json();
+        if(data.status === 'ok') loadHuntTargets();
+    } catch(e) {}
+};
+
+window.deleteTarget = async function(id, symbol) {
+    if(!confirm('¿Eliminar target $'+symbol+'?')) return;
+    try {
+        const resp = await fetch('/whale-insights/targets/'+id+'/delete/', {method:'POST', headers:{'X-CSRFToken':CSRF}});
+        const data = await resp.json();
+        if(data.status === 'ok') loadHuntTargets();
+    } catch(e) {}
+};
+
+// ── FASE ballenas: Consensus Signals ────────────────────────
+async function loadConsensusSignals() {
+    const section = document.getElementById('consensusSignalsSection');
+    const container = document.getElementById('consensusSignalsList');
+    if(!section || !container) return;
+    try {
+        const resp = await fetch('{% url "whale_consensus_ajax" %}');
+        const data = await resp.json();
+        if(data.status !== 'ok' || !data.signals || data.signals.length === 0) {
+            container.innerHTML = '<div class="text-muted text-center py-2 small">No hay señales de consenso activas.</div>';
+            return;
+        }
+        section.style.display = 'block';
+        container.innerHTML = data.signals.map(s => `
+            <div class="d-flex align-items-center justify-content-between py-2 border-bottom" style="font-size:0.65rem;border-color:rgba(48,54,61,0.3) !important;min-width:220px">
+                <div class="flex-grow-1">
+                    <span class="fw-bold">$${s.token_symbol}</span>
+                    <span class="badge bg-light border text-muted ms-1" style="font-size:0.55rem">${s.blockchain || 'solana'}</span>
+                    <div class="text-muted" style="font-size:0.6rem">${s.whale_count} ballenas · conf ${s.confidence ? (s.confidence*100).toFixed(0)+'%' : 'N/D'}</div>
+                </div>
+                <button class="btn btn-xs btn-outline-warning py-0 px-1 ms-2" style="font-size:0.6rem" title="Añadir como Target de caza"
+                        onclick="prefillTarget('${s.token_symbol}', '${s.blockchain || 'solana'}')">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+        `).join('');
+    } catch(e) {
+        console.error('Consensus signals error:', e);
+    }
+}
+
+window.prefillTarget = function(tokenSymbol, blockchain) {
+    document.getElementById('htSymbol').value = tokenSymbol;
+    document.getElementById('htBlockchain').value = blockchain;
+    document.getElementById('htMinVol').value = '5000';
+    const form = document.getElementById('addTargetForm');
+    form.classList.remove('d-none');
+    form.scrollIntoView({behavior:'smooth'});
+};
+
 // Auto-load scores on page load
 document.addEventListener('DOMContentLoaded', function() {
     fetch('/whale-insights/api/scores/')
@@ -606,6 +769,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if(syncEl) syncEl.textContent = w.last_sync || '';
         });
     }).catch(() => {});
+    // FASE ballenas: cargar hunt targets y señales de consenso
+    loadHuntTargets();
+    loadConsensusSignals();
+    setInterval(loadHuntTargets, 60000);
 });
 </script>
 </body>

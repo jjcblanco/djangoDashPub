@@ -325,7 +325,17 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 21600.0,
         'kwargs': {'filter_high_volume': True, 'filter_min_tx_count': 2}
     },
-    
+    # FASE ballenas: señales accionables desde patrones aprendidos (cada 15 min)
+    'whale-pattern-signals-15m': {
+        'task': 'dashboard.tasks.run_whale_pattern_signals_task',
+        'schedule': 900.0,
+    },
+    # FASE ballenas: scoring periódico (cada 6 h)
+    'update-whale-scores-6h': {
+        'task': 'dashboard.tasks.update_whale_scores_task',
+        'schedule': 21600.0,
+    },
+
     # == SCALPING ==
     'scalping-check-positions-30s': {
         'task': 'dashboard.tasks.check_scalping_positions_task',

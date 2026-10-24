@@ -584,11 +584,19 @@ def hunt_targets_add(request):
     """Crea un nuevo WhaleHuntTarget desde el formulario del panel."""
     from ..models import WhaleHuntTarget
     try:
-        symbol    = request.POST.get('token_symbol', '').strip().upper()
-        blockchain = request.POST.get('blockchain', 'ethereum').strip()
-        contract  = request.POST.get('contract_address', '').strip()
-        min_vol   = float(request.POST.get('min_volume_usd', 3000) or 3000)
-        notes     = request.POST.get('notes', '').strip()
+        # Aceptar form-urlencoded (form clásico) o JSON (fetch del panel)
+        data = request.POST
+        if request.content_type == 'application/json':
+            import json as _json
+            try:
+                data = _json.loads(request.body)
+            except Exception:
+                return JsonResponse({'status': 'error', 'message': 'JSON inválido.'}, status=400)
+        symbol    = data.get('token_symbol', '').strip().upper()
+        blockchain = data.get('blockchain', 'ethereum').strip()
+        contract  = data.get('contract_address', '').strip()
+        min_vol   = float(data.get('min_volume_usd', 3000) or 3000)
+        notes     = data.get('notes', '').strip()
 
         if not symbol or not contract:
             return JsonResponse({'status': 'error', 'message': 'Símbolo y contrato son obligatorios.'}, status=400)

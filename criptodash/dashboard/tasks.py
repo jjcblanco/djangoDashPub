@@ -280,6 +280,28 @@ def hunt_whales_by_pair_task(filter_high_volume=False, filter_recent_activity=Fa
             if blockchain in ['ethereum', 'base', 'bsc']:
                 wallet_address = wallet_address.lower()
 
+            # FASE ballenas: filtros reales para wallets YA existentes
+            try:
+                existing = WhaleWallet.objects.filter(
+                    address=wallet_address, blockchain=blockchain
+                ).first()
+                if existing and filter_recent_activity:
+                    last_tx = (existing.transactions.order_by('-timestamp')
+                               .values_list('timestamp', flat=True).first())
+                    if last_tx and (timezone.now() - last_tx).total_seconds() > 86400:
+                        total_filtered_by_tx += 1
+                        continue  # ballena inactiva (>24h sin actividad)
+
+                if existing and filter_profitable:
+                    dna = existing.trading_dna or {}
+                    win_rate = dna.get('win_rate')
+                    if win_rate is not None and win_rate < 40:
+                        total_filtered_by_tx += 1
+                        continue  # ballena con win_rate malo
+                    # Sin win_rate aún: no filtrar (aceptar y esperar historial)
+            except Exception as e:
+                logger.warning(f"[WhaleHunter] Error aplicando filtros a {wallet_address[:10]}: {e}")
+
             try:
                 whale, created = WhaleWallet.objects.get_or_create(
                     address=wallet_address,
@@ -1039,3 +1061,114 @@ def _learn_from_transactions(min_trades=3, min_win_rate=0.55):
     except Exception as e:
         logger.error(f"[PatternLearner] Error en aprendizaje extendido: {e}")
         return 0
+
+
+# ================================================================
+# FASE ballenas: señales accionables desde patrones aprendidos
+# ================================================================
+
+@shared_task
+def run_whale_pattern_signals_task(max_pairs=20, min_confidence=0.6):
+    """
+    Evalúa los patrones aprendidos contra el mercado actual y emite
+    señales accionables (BUY) con alerta Telegram.
+
+    - Toma los target_pairs de las ballenas activas (máx. max_pairs).
+    - Para cada símbolo: fetch_market_context + WhalePatternLearner.generate_signal.
+    - Si signal==BUY y confidence >= min_confidence → ConsensusSignal
+      (o actualización) + Telegram.
+    - Control de spam: 1 alerta por símbolo cada 4 horas.
+    """
+    from dashboard.whale.learner import WhalePatternLearner
+    from dashboard.whale.context import fetch_market_context
+    from dashboard.models import WhaleWallet, ConsensusSignal
+
+    # Pares únicos de ballenas activas (top max_pairs por actividad)
+    pairs = set()
+    for raw in (WhaleWallet.objects.filter(is_active=True)
+                .exclude(target_pairs__isnull=True).exclude(target_pairs='')
+                .values_list('target_pairs', flat=True)[:200]):
+        for token in raw.split(','):
+            t = token.strip().upper()
+            if t and t not in ('USDC', 'USDT', 'DAI'):
+                pairs.add(t)
+        if len(pairs) >= max_pairs:
+            break
+
+    if not pairs:
+        return {'checked': 0, 'signals': 0}
+
+    signals = 0
+    for symbol in sorted(pairs):
+        try:
+            context = fetch_market_context(symbol)
+            if not context:
+                continue
+
+            result = WhalePatternLearner.generate_signal(symbol, context)
+            if result['signal'] != 'BUY' or result['confidence'] < min_confidence:
+                continue
+
+            # Control de spam: no alertar 2 veces en 4h
+            from django.core.cache import cache
+            spam_key = f"pattern_signal_alert:{symbol}"
+            if not cache.add(spam_key, '1', timeout=14400):
+                continue
+
+            matched_names = ', '.join(m['pattern'] for m in result['matched_patterns'][:3])
+
+            # Crear señal de patrones SIN pisar señales de consenso de cohorte reales.
+            # Si ya existe una ACTIVE para el símbolo, la dejamos (ya está alertada).
+            if ConsensusSignal.objects.filter(token_symbol=symbol, status='ACTIVE').exists():
+                continue
+            ConsensusSignal.objects.create(
+                token_symbol=symbol,
+                blockchain='patron',
+                whale_count=len(result['matched_patterns']),
+                confidence=round(result['confidence'], 2),
+                notes=f"Patrones: {matched_names}",
+            )
+
+            send_telegram_message(
+                f"📐 <b>PATRÓN APRENDIDO — SEÑAL BUY</b>\n\n"
+                f"🎯 <b>Token:</b> {symbol}\n"
+                f"📊 <b>Confianza:</b> {round(result['confidence'] * 100)}%\n"
+                f"🧩 <b>Patrones:</b> {matched_names}\n\n"
+                f"<i>El contexto actual coincide con patrones históricos exitosos de ballenas.</i>"
+            )
+            logger.info(f"[WhaleSignals] Señal BUY emitida para {symbol} (conf={result['confidence']:.2f}).")
+            signals += 1
+        except Exception as e:
+            logger.error(f"[WhaleSignals] Error evaluando {symbol}: {e}")
+
+    return {'checked': len(pairs), 'signals': signals}
+
+
+@shared_task
+def update_whale_scores_task():
+    """
+    Recalcula los scores de todas las ballenas y los deja en caché
+    (wallet_score_{id}) para que whale_scores_ajax no dependa de que
+    alguien abra la página.
+    """
+    from dashboard.whale.pipeline import PatternEngine, WhaleScoringEngine
+    from dashboard.models import WhaleWallet
+    try:
+        wallets = WhaleWallet.objects.filter(is_active=True)
+        updated = 0
+        for wallet in wallets:
+            try:
+                pnl = PatternEngine.get_wallet_pnl(wallet)
+            except Exception:
+                pnl = {'roi': 0, 'status': 'neutral', 'pnl_usdt': 0}
+            try:
+                score = WhaleScoringEngine.calculate_score(wallet)
+            except Exception:
+                score = {'score': 0, 'category': {'name': 'Sin datos', 'color': 'gray'}}
+            cache.set(f"wallet_score_{wallet.id}", {'pnl': pnl, 'score': score}, 60 * 30)
+            updated += 1
+        logger.info(f"[WhaleScores] Scoring periódico: {updated} wallets cacheadas.")
+        return {'updated': updated}
+    except Exception as e:
+        logger.error(f"[WhaleScores] Error en scoring periódico: {e}")
+        return {'error': str(e)}

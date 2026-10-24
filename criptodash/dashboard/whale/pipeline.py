@@ -365,9 +365,20 @@ class PatternEngine:
             elif 'px' in tx.raw_data:
                 exit_price = float(tx.raw_data['px'])
             else:
-                from dashboard.services import fetch_current_price
-                price = _fetch_current_price(symbol)
-                exit_price = float(price) if price else trade.entry_price
+                # FASE ballenas: usar el precio HISTÓRICO de la vela previa a la
+                # tx (sin lookahead) en lugar del precio actual al sync.
+                from .context import fetch_market_context_at
+                ts_ms = None
+                if tx.timestamp:
+                    ts_ms = tx.timestamp.timestamp() * 1000
+                if ts_ms:
+                    hist_ctx = fetch_market_context_at(symbol, ts_ms)
+                    if hist_ctx and hist_ctx.get('price'):
+                        exit_price = float(hist_ctx['price'])
+                if exit_price <= 0:
+                    from dashboard.services import fetch_current_price
+                    price = _fetch_current_price(symbol)
+                    exit_price = float(price) if price else trade.entry_price
         except: exit_price = trade.entry_price
         
         trade.exit_price = exit_price
@@ -522,9 +533,20 @@ class PatternEngine:
             elif 'px' in tx.raw_data: # Hyperliquid
                 entry_price = float(tx.raw_data['px'])
             else:
-                # Fallback: Precio actual de mercado
-                price = _fetch_current_price(symbol)
-                entry_price = float(price) if price else 0
+                # FASE ballenas: precio HISTÓRICO (vela previa a la tx, sin
+                # lookahead) en lugar del precio actual al sync.
+                from .context import fetch_market_context_at
+                ts_ms = None
+                if tx.timestamp:
+                    ts_ms = tx.timestamp.timestamp() * 1000
+                if ts_ms:
+                    hist_ctx = fetch_market_context_at(symbol, ts_ms)
+                    if hist_ctx and hist_ctx.get('price'):
+                        entry_price = float(hist_ctx['price'])
+                if entry_price <= 0:
+                    # Último recurso: precio actual de mercado
+                    price = _fetch_current_price(symbol)
+                    entry_price = float(price) if price else 0
         except: pass
         
         if entry_price <= 0: return # No simular si no tenemos precio (evita ruidos)
