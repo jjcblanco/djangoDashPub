@@ -15,10 +15,13 @@ from .scoring import WhaleScoringEngine, WhalePerformanceTracker
 from .analysis import WhaleAnalysisEngine
 from .context import fetch_market_context, fetch_market_context_at
 from .learner import WhalePatternLearner
+from .flows import detect_exchange_flows
+from .constants import STABLES, EXCHANGE_HOT_WALLETS, lookup_exchange_wallet
 
 __all__ = [
     'SolanaWhaleTracker', 'EVMWhaleTracker', 'BscRpcWhaleTracker', 'HyperliquidWhaleTracker',
     'PatternEngine', 'WhaleScoringEngine', 'WhalePerformanceTracker',
     'WhaleAnalysisEngine', 'fetch_market_context', 'fetch_market_context_at',
-    'WhalePatternLearner',
+    'WhalePatternLearner', 'detect_exchange_flows',
+    'STABLES', 'EXCHANGE_HOT_WALLETS', 'lookup_exchange_wallet',
 ]

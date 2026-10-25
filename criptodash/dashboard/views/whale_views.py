@@ -711,6 +711,30 @@ def whale_consensus_ajax(request):
 
 
 @login_required
+def whale_exchange_flows_ajax(request):
+    """
+    Devuelve los últimos flujos CEX detectados (depósitos/retiros de
+    ballenas hacia/desde hot wallets de exchanges centralizados).
+    """
+    from ..models import ExchangeFlow
+
+    flows = ExchangeFlow.objects.select_related('wallet').order_by('-detected_at')[:20]
+    data = [{
+        'id': f.id,
+        'wallet_address': f.wallet.address[:10],
+        'wallet_name': f.wallet.name or f.wallet.address[:10],
+        'exchange': f.exchange,
+        'direction': f.direction,
+        'token_symbol': f.token_symbol,
+        'amount': float(f.amount),
+        'usd_value': float(f.usd_value) if f.usd_value else None,
+        'detected_at': f.detected_at.strftime('%d/%m %H:%M'),
+    } for f in flows]
+
+    return JsonResponse({'status': 'ok', 'flows': data})
+
+
+@login_required
 @ajax_rate_limit(max_calls=10, period_seconds=60)
 def whale_trade_chart_ajax(request, wallet_id):
     """

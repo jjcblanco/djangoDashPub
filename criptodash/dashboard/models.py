@@ -314,6 +314,45 @@ class WhaleTransaction(models.Model):
     def __str__(self):
         return f"{self.tx_type} {self.wallet.name or self.wallet.address[:8]}"
 
+
+class ExchangeFlow(models.Model):
+    """
+    Flujo on-chain detectado entre una ballena trackeada y una hot wallet
+    conocida de un exchange centralizado (CEX).
+    - DEPOSIT: la ballena envía fondos al CEX (posible presión vendedora)
+    - WITHDRAWAL: la ballena retira fondos del CEX (posible compra en DEX)
+    """
+    DIRECTION_CHOICES = [
+        ('DEPOSIT', 'Depósito al CEX'),
+        ('WITHDRAWAL', 'Retiro del CEX'),
+    ]
+
+    wallet = models.ForeignKey(WhaleWallet, on_delete=models.CASCADE, related_name='exchange_flows')
+    tx_hash = models.CharField(max_length=255, help_text="Hash de la tx on-chain")
+    blockchain = models.CharField(max_length=20)
+    exchange = models.CharField(max_length=30)
+    direction = models.CharField(max_length=10, choices=DIRECTION_CHOICES)
+    token_symbol = models.CharField(max_length=20)
+    amount = models.DecimalField(max_digits=30, decimal_places=10)
+    usd_value = models.DecimalField(max_digits=30, decimal_places=2, null=True, blank=True,
+                                    help_text="Valor aproximado en USD (precio actual, no histórico)")
+    detected_at = models.DateTimeField(auto_now_add=True)
+    alert_sent = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['wallet', 'detected_at']),
+            models.Index(fields=['blockchain', 'detected_at']),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=['tx_hash', 'direction', 'token_symbol'],
+                                    name='unique_exchange_flow_per_tx'),
+        ]
+
+    def __str__(self):
+        arrow = '→' if self.direction == 'DEPOSIT' else '←'
+        return f"{self.wallet.address[:8]} {arrow} {self.exchange} ({self.token_symbol})"
+
 class PatternInsight(models.Model):
     wallet = models.ForeignKey(WhaleWallet, on_delete=models.CASCADE, related_name='insights')
     pattern_type = models.CharField(max_length=100) # ACCUMULATION, DISTRIBUTION, DCA, etc.

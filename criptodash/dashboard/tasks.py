@@ -58,6 +58,43 @@ def sync_wallet_task(wallet_id, deep_sync=False):
             # El análisis es costoso, por eso va en Celery
             PatternEngine.analyze_wallet(wallet)
 
+            # --- FASE ballenas: Detección de Flujos CEX ---
+            # Depósitos/retiros de la ballena hacia/desde hot wallets de exchanges.
+            try:
+                from dashboard.models import ExchangeFlow, WhaleTransaction
+                from dashboard.whale.flows import detect_exchange_flows, ALERT_THRESHOLD_USD
+
+                # Re-consultar las txs recién creadas por el tracker (últimas N por timestamp)
+                recent_txs = list(wallet.transactions.order_by('-timestamp')[:20])
+                flows = detect_exchange_flows(wallet, recent_txs)
+                for f in flows:
+                    obj, created = ExchangeFlow.objects.get_or_create(
+                        tx_hash=f['tx'].tx_hash,
+                        direction=f['direction'],
+                        token_symbol=f['token_symbol'],
+                        defaults={
+                            'wallet': wallet,
+                            'blockchain': f['blockchain'],
+                            'exchange': f['exchange'],
+                            'amount': f['amount'],
+                            'usd_value': f['usd_value'],
+                        },
+                    )
+                    if created and f['usd_value'] >= ALERT_THRESHOLD_USD:
+                        emoji = '🏦' if f['direction'] == 'DEPOSIT' else '💸'
+                        send_telegram_message(
+                            f"{emoji} <b>Flujo CEX detectado</b>\n\n"
+                            f"👤 <b>Ballena:</b> {wallet.name or wallet.address[:8]}\n"
+                            f"🔀 <b>Dirección:</b> {'→ depósito a' if f['direction'] == 'DEPOSIT' else '← retiro de'} {f['exchange']}\n"
+                            f"🎯 <b>Token:</b> ${f['token_symbol']}\n"
+                            f"💰 <b>Monto:</b> ${f['usd_value']:,.0f} USD\n\n"
+                            f"<i>{'Posible presión vendedora.' if f['direction'] == 'DEPOSIT' else 'Posible compra en DEX.'}</i>"
+                        )
+                        obj.alert_sent = True
+                        obj.save(update_fields=['alert_sent'])
+            except Exception as e:
+                logger.warning(f"[CEX Flows] Error en detección post-sync para wallet {wallet_id}: {e}")
+
             # --- FASE 2: Detección de Consenso ---
             # Después de analizar, verificar si este token ya lo compraron 3+ ballenas (señal de consenso)
             try:

@@ -52,6 +52,7 @@ urlpatterns = [
     path('whale-insights/suggest-bot/<int:wallet_id>/', views.suggest_bot_from_whale, name='suggest_bot_from_whale'),
     path('whale-insights/discover/', views.discover_contract_whales_ajax, name='discover_contract_whales_ajax'),
     path('whale-insights/api/consensus/', views.whale_consensus_ajax, name='whale_consensus_ajax'),
+    path('whale-insights/api/exchange-flows/', views.whale_exchange_flows_ajax, name='whale_exchange_flows_ajax'),
     path('whale-insights/api/live-metrics/', views.whale_live_metrics, name='whale_live_metrics'),
     path('whale-insights/chart/<int:wallet_id>/', views.whale_trade_chart_ajax, name='whale_trade_chart_ajax'),
     path('whale-insights/hunt/', views.trigger_whale_hunt, name='trigger_whale_hunt'),

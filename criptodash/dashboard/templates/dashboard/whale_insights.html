@@ -169,6 +169,20 @@ select.sel-dark:focus{outline:none;border-color:var(--accent-cyan)}
 </div>
 </div>
 
+<!-- FASE ballenas: flujos CEX (depósitos/retiros hacia/desde exchanges) -->
+<div id="exchangeFlowsSection" class="card-dark" style="margin-bottom:16px;border-left:4px solid var(--accent-yellow);display:none">
+<div class="card-hdr" style="display:flex;align-items:center">
+<span style="font-size:1.1rem">🏦</span>
+<h6 style="margin:0 0 0 8px">Flujos CEX (Ballenas → Exchanges)</h6>
+<span class="badge bg-warning text-dark ms-auto" style="font-size:0.6rem">INTENCIÓN DE MERCADO</span>
+</div>
+<div class="card-bdy">
+<div id="exchangeFlowsList" class="d-flex flex-wrap gap-2">
+<div class="text-muted small"><div class="spinner-border spinner-border-sm me-2"></div>Cargando flujos...</div>
+</div>
+</div>
+</div>
+
 <!-- MAIN LAYOUT: 2 COLUMNS -->
 <div class="main-layout">
 <!-- LEFT SIDEBAR: WHALE LIST -->
@@ -741,6 +755,38 @@ async function loadConsensusSignals() {
     }
 }
 
+// ── FASE ballenas: Exchange Flows (CEX) ───────────────────────
+async function loadExchangeFlows() {
+    const section = document.getElementById('exchangeFlowsSection');
+    const container = document.getElementById('exchangeFlowsList');
+    if(!section || !container) return;
+    try {
+        const resp = await fetch('{% url "whale_exchange_flows_ajax" %}');
+        const data = await resp.json();
+        if(data.status !== 'ok' || !data.flows || data.flows.length === 0) {
+            container.innerHTML = '<div class="text-muted text-center py-2 small">Sin flujos CEX detectados aún.</div>';
+            return;
+        }
+        section.style.display = 'block';
+        container.innerHTML = data.flows.map(f => {
+            const isDep = f.direction === 'DEPOSIT';
+            const color = isDep ? 'var(--accent-red)' : 'var(--accent-green)';
+            const arrow = isDep ? '→' : '←';
+            return `<div class="d-flex align-items-center justify-content-between py-2 border-bottom" style="font-size:0.65rem;border-color:rgba(48,54,61,0.3) !important;min-width:240px">
+                <div class="flex-grow-1">
+                    <span class="fw-bold" title="${f.wallet_address}">${f.wallet_name}</span>
+                    <span style="color:${color};font-weight:700"> ${arrow} ${f.exchange}</span>
+                    <span class="badge bg-light border text-muted ms-1" style="font-size:0.55rem">$${f.token_symbol}</span>
+                    <div class="text-muted" style="font-size:0.6rem">${f.detected_at}</div>
+                </div>
+                <div style="color:${color};font-weight:700">${f.usd_value ? '$' + Number(f.usd_value).toLocaleString() : 'N/D'}</div>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        console.error('Exchange flows error:', e);
+    }
+}
+
 window.prefillTarget = function(tokenSymbol, blockchain) {
     document.getElementById('htSymbol').value = tokenSymbol;
     document.getElementById('htBlockchain').value = blockchain;
@@ -769,9 +815,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if(syncEl) syncEl.textContent = w.last_sync || '';
         });
     }).catch(() => {});
-    // FASE ballenas: cargar hunt targets y señales de consenso
+    // FASE ballenas: cargar hunt targets, señales de consenso y flujos CEX
     loadHuntTargets();
     loadConsensusSignals();
+    loadExchangeFlows();
     setInterval(loadHuntTargets, 60000);
 });
 </script>

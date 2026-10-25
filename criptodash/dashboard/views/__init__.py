@@ -60,6 +60,7 @@ from .whale_views import (
     hunt_targets_toggle,
     hunt_targets_delete,
     whale_consensus_ajax,
+    whale_exchange_flows_ajax,
     whale_live_metrics,
     whale_trade_chart_ajax,
     learn_patterns,

@@ -3,7 +3,7 @@ from .models import (
     Exchange, TradingPair, Pair, OHLCVData, TradeSignal, BacktestResult,
     LiveBot, LiveTrade, CapitalFunding, GlobalSettings, DailyMetric,
     WhaleWallet, WhaleTransaction, PatternInsight, ShadowTrade,
-    WhaleHuntTarget, ConsensusSignal, WhalePattern,
+    WhaleHuntTarget, ConsensusSignal, WhalePattern, ExchangeFlow,
     ScalpingBot, ScalpingTrade, ScalpAlert, PairScanResult,
 )
 
@@ -140,6 +140,14 @@ class ScalpingTradeAdmin(admin.ModelAdmin):
 class ScalpAlertAdmin(admin.ModelAdmin):
     list_display = ('pair', 'timeframe', 'strategy', 'signal_type', 'price_at_alert')
     list_filter = ('strategy', 'signal_type', 'timeframe')
+
+
+@admin.register(ExchangeFlow)
+class ExchangeFlowAdmin(admin.ModelAdmin):
+    list_display = ('wallet', 'direction', 'exchange', 'token_symbol', 'usd_value', 'detected_at')
+    list_filter = ('direction', 'exchange', 'blockchain')
+    search_fields = ('wallet__address', 'tx_hash', 'token_symbol')
+    ordering = ('-detected_at',)
 
 
 @admin.register(PairScanResult)
