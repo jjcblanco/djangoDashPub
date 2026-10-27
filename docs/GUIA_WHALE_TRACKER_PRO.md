@@ -157,6 +157,49 @@ Mejor patrón detectado y desglose de **win rate por rango de RSI al comprar**
   Telegram con el resumen.
 - No se permiten duplicados de (dirección + red).
 
+#### ¿De dónde sacar direcciones de ballenas?
+
+Si no tienes direcciones a mano, estas son las fuentes más efectivas (todas gratis
+o con plan gratuito suficiente). **DexScreener y GeckoTerminal son las mismas fuentes
+que usa el cazador interno del sistema**, así que lo que veas ahí es exactamente lo
+que el Hunt automático encontraría.
+
+| Fuente | Redes | Qué buscar |
+|---|---|---|
+| **DexScreener** (`dexscreener.com`) → busca el token → pestaña **Top Traders** | Todas | Ranking de compradores/vendedores recientes con dirección y volumen. Copia las direcciones de los que más compraron. |
+| **GeckoTerminal** (`geckoterminal.com`) → pool del token → **Top traders** | Todas | Compradores recientes del pool con monto. Misma data que usa la caza interna (vía API). |
+| **Solscan** (`solscan.io`) → token → pestaña **Holders** / **Top Traders** | Solana | Holders más grandes y traders más activos del token. |
+| **Etherscan** (`etherscan.io`) → token → **Holders** | Ethereum | Top 500 holders del token (gratis). Filtrá los que tengan transacciones recientes. |
+| **BscScan** (`bscscan.com`) → token → **Holders** | BNB Chain | Top holders con actividad reciente. |
+| **BaseScan** (`basescan.org`) → token → **Holders** | Base | Top holders con actividad reciente. |
+| **GMGN** (`gmgn.ai`) → token → sección **Smart Money** | Solana, EVM | Wallets etiquetadas como smart money que operaron el token. |
+| **Hyperliquid Explorer** (`app.hyperliquid.xyz/explorer`) → leaderboard | Hyperliquid | Direcciones de los traders más rentables de la plataforma. |
+| **Arkham** (`arkhamintelligence.com`) | Multi-cadena | Búsqueda de entidades y wallets etiquetadas (ballenas, fondos, CEX). |
+| **Cuentas de X/Twitter** (@lookonchain, @whale_alert, @EmberCN) | Todas | Publican direcciones concretas de ballenas con la tx que acaban de hacer. Copiá la dirección y pegala. |
+
+**Antes de pegar, validá rápido:**
+
+- **Formato correcto por red**: EVM (Ethereum/Base/BSC/Hyperliquid) empieza con `0x` y
+  tiene 42 caracteres; Solana es base58 de 32–44 caracteres sin `0x`. El sistema
+  normaliza minúsculas en EVM automáticamente.
+- **Que sea una wallet, no un contrato**: si en el explorador dice "Contract", no sirve.
+  Buscá cuentas con transacciones (EOA).
+- **Actividad reciente**: abrí la dirección en el explorador y confirmá que operó en
+  los últimos días. Una wallet sin txs recientes no aporta señales.
+- **Historial de trades, no solo un airdrop**: priorizá wallets con varias compras/ventas;
+  son las que generan patrones y win rate útiles.
+
+**Flujo rápido de descubrimiento manual:**
+
+1. Elegí un token que te interese.
+2. Abrí DexScreener o GeckoTerminal → **Top Traders** del token.
+3. Verificá 2–3 candidatas en el explorador (actividad reciente, no contrato).
+4. Copiá las direcciones y pegalas en **📥 Importar** (una por línea).
+5. Marcá "Auto-sincronizar después de importar" para que el análisis arranque solo.
+
+> 💡 La vía sin fricción es el **Hunt automático** (paso 6): el sistema escanea los
+> contratos de Hunt Targets y agrega a los mayores compradores sin que copies nada.
+
 ### Paso 2 — Sincronizar
 - Pulsa **🔄 Sync** (o espera al ciclo automático de 15 min).
 - La primera sync trae las transacciones recientes y el análisis

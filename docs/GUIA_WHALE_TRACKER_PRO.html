@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Guía Whale Tracker Pro</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm 18mm 14mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
+    color: #1e293b; background: #f4f6fb; font-size: 10.5pt; line-height: 1.55;
+  }
+
+  /* ── COVER ─────────────────────────────────────────── */
+  .cover {
+    background: linear-gradient(150deg, #0d1117 0%, #1a1e2e 55%, #101828 100%);
+    color: #e6edf3; border-radius: 14px; padding: 42px 38px;
+    page-break-after: always; break-after: page;
+  }
+  .cover .logo-row { display: flex; align-items: center; gap: 12px; }
+  .cover .logo {
+    width: 54px; height: 54px; border-radius: 14px; font-size: 28px;
+    background: linear-gradient(135deg, #58a6ff, #bc8cff);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cover .brand { font-weight: 800; font-size: 15pt; letter-spacing: .4px; color: #58a6ff; }
+  .cover .brand small { display: block; color: #8b949e; font-weight: 500; font-size: 8.5pt; letter-spacing: 1.5px; }
+  .cover h1 { font-size: 30pt; font-weight: 800; margin: 34px 0 10px; line-height: 1.15; }
+  .cover h1 .accent { background: linear-gradient(90deg, #58a6ff, #bc8cff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .cover .subtitle { color: #8b949e; font-size: 11.5pt; max-width: 130mm; }
+  .cover .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 26px; }
+  .cover .chip {
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14);
+    color: #c9d1d9; border-radius: 999px; padding: 5px 12px; font-size: 8.5pt; font-weight: 600;
+  }
+  .cover .meta { margin-top: 46px; display: flex; gap: 26px; color: #8b949e; font-size: 9pt; }
+  .cover .meta b { color: #e6edf3; }
+
+  /* ── CONTENT ───────────────────────────────────────── */
+  .content { padding: 0 4px; }
+
+  h2 {
+    font-size: 15.5pt; font-weight: 800; color: #0f172a;
+    margin: 26px 0 12px; padding-bottom: 7px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex; align-items: center; gap: 10px;
+    page-break-after: avoid; break-after: avoid;
+  }
+  h2 .num {
+    width: 26px; height: 26px; border-radius: 8px; flex: 0 0 26px;
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
+    color: #fff; font-size: 11pt; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+  }
+  h3 {
+    font-size: 12pt; font-weight: 700; color: #1d4ed8;
+    margin: 16px 0 8px; page-break-after: avoid; break-after: avoid;
+  }
+  p { margin: 7px 0; }
+  ul, ol { margin: 6px 0 6px 20px; }
+  li { margin: 3.5px 0; }
+  strong { color: #0f172a; }
+  code {
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 8.8pt;
+    background: #eef2ff; color: #4338ca; border: 1px solid #dfe4f2;
+    border-radius: 5px; padding: 1px 5px;
+  }
+  a { color: #2563eb; text-decoration: none; }
+
+  .card {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+    padding: 14px 16px; margin: 12px 0;
+    page-break-inside: avoid; break-inside: avoid;
+  }
+  .card h4 { font-size: 10.5pt; font-weight: 700; color: #0f172a; margin-bottom: 8px; }
+
+  table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    font-size: 9.3pt; margin: 8px 0;
+    page-break-inside: avoid; break-inside: avoid;
+  }
+  thead th {
+    background: #1e293b; color: #f1f5f9; text-align: left;
+    padding: 7px 10px; font-weight: 600; font-size: 8.8pt;
+  }
+  thead th:first-child { border-radius: 8px 0 0 0; }
+  thead th:last-child { border-radius: 0 8px 0 0; }
+  tbody td {
+    padding: 6.5px 10px; border-bottom: 1px solid #eef1f6;
+    vertical-align: top;
+  }
+  tbody tr:nth-child(even) { background: #f8fafc; }
+  tbody tr:last-child td:first-child { border-radius: 0 0 0 8px; }
+  tbody tr:last-child td:last-child { border-radius: 0 0 8px 0; }
+  td:first-child { font-weight: 600; color: #0f172a; }
+
+  .badge {
+    display: inline-block; border-radius: 999px; padding: 2px 9px;
+    font-size: 8.3pt; font-weight: 700; border: 1px solid transparent;
+  }
+  .b-blue   { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
+  .b-green  { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+  .b-red    { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+  .b-yellow { background: #fef9c3; color: #a16207; border-color: #fde68a; }
+  .b-purple { background: #ede9fe; color: #6d28d9; border-color: #ddd6fe; }
+  .b-gray   { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+  .b-cyan   { background: #cffafe; color: #0e7490; border-color: #a5f3fc; }
+
+  .steps { counter-reset: paso; list-style: none; margin: 10px 0; }
+  .steps li { counter-increment: paso; position: relative; padding: 0 0 12px 44px; }
+  .steps li::before {
+    content: counter(paso);
+    position: absolute; left: 0; top: -2px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
+    color: #fff; font-weight: 800; font-size: 11pt;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .steps li:not(:last-child)::after {
+    content: ""; position: absolute; left: 14px; top: 30px; bottom: 2px;
+    width: 2px; background: #e2e8f0;
+  }
+  .steps b { font-size: 10.5pt; }
+  .steps .step-body { color: #334155; }
+
+  .callout {
+    border-radius: 10px; padding: 11px 14px; margin: 12px 0;
+    font-size: 9.4pt; page-break-inside: avoid; break-inside: avoid;
+  }
+  .callout-tip     { background: #eff6ff; border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; }
+  .callout-warn    { background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #d97706; }
+  .callout-danger  { background: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid #dc2626; }
+  .callout b { display: block; margin-bottom: 3px; }
+
+  .filepath {
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 8.6pt;
+    background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px;
+    padding: 2px 7px; color: #334155;
+  }
+
+  .footer-note {
+    margin-top: 28px; padding-top: 10px; border-top: 1px solid #e2e8f0;
+    color: #94a3b8; font-size: 8.5pt; text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ COVER ══════════════ -->
+<div class="cover">
+  <div class="logo-row">
+    <div class="logo">🐋</div>
+    <div class="brand">CRIPTODASH<small>MÓDULO DE INTELIGENCIA ON-CHAIN</small></div>
+  </div>
+  <h1>Guía completa de<br><span class="accent">Whale Tracker Pro</span></h1>
+  <p class="subtitle">
+    Cómo seguir ballenas, leer su comportamiento, cazar smart money y validar
+    estrategias con shadow trading — paso a paso, con todos los paneles,
+    atajos y automatizaciones del sistema.
+  </p>
+  <div class="chips">
+    <span class="chip">Solana</span><span class="chip">Ethereum</span>
+    <span class="chip">Base</span><span class="chip">BNB Chain</span>
+    <span class="chip">Hyperliquid</span>
+    <span class="chip">Hunt &amp; Consensus</span><span class="chip">Shadow Trading</span>
+  </div>
+  <div class="meta">
+    <span>📍 Ruta: <b>/whale-insights/</b></span>
+    <span>🔐 Acceso: <b>con sesión iniciada</b></span>
+    <span>📅 Octubre 2026</span>
+  </div>
+</div>
+
+<div class="content">
+
+<!-- ══════════════ 1 ══════════════ -->
+<h2><span class="num">1</span> Qué es</h2>
+<p>
+  <strong>Whale Tracker Pro</strong> monitorea billeteras de gran capital
+  («ballenas») en 5 blockchains, analiza su comportamiento y genera señales accionables:
+</p>
+<ul>
+  <li><strong>Seguimiento</strong> de wallets en Solana, Ethereum, Base, BNB Chain (BSC) y Hyperliquid.</li>
+  <li><strong>Análisis de comportamiento</strong>: clasifica cada ballena (acumulador, trader, distribuidor…).</li>
+  <li><strong>Win rate por moneda</strong>: en qué tokens gana cada ballena.</li>
+  <li><strong>Patrones aprendidos</strong>: RSI de compra preferido, mejor indicador, horarios de actividad.</li>
+  <li><strong>Caza automática (Hunt)</strong>: descubre nuevas ballenas desde contratos de tokens.</li>
+  <li><strong>Señales de consenso</strong>: 3+ ballenas comprando el mismo token en poco tiempo.</li>
+  <li><strong>Flujos CEX</strong>: depósitos/retiros de ballenas hacia exchanges (intención de mercado).</li>
+  <li><strong>Shadow Trading</strong>: simulación de copy-trade para validar sin arriesgar capital.</li>
+  <li><strong>Gráfico con trades superpuestos</strong> sobre el precio, con EMA / RSI / MACD.</li>
+</ul>
+
+<!-- ══════════════ 2 ══════════════ -->
+<h2><span class="num">2</span> Conceptos clave</h2>
+<table>
+  <thead><tr><th style="width:27%">Concepto</th><th>Descripción</th></tr></thead>
+  <tbody>
+    <tr><td>Ballena (WhaleWallet)</td><td>Wallet que el sistema sigue. Tiene dirección, red, categoría, filtro y pares objetivo.</td></tr>
+    <tr><td>Categoría</td><td><span class="badge b-cyan">DCA</span> acumulación · <span class="badge b-yellow">SNIPER</span> · <span class="badge b-purple">SMART MONEY</span> · <span class="badge b-red">INSIDER</span> · <span class="badge b-gray">OBSERVATION</span>. Etiqueta que eliges al seguir.</td></tr>
+    <tr><td>Filtro</td><td><code>OPEN</code> = registra todo · <code>STRICT</code> = solo tokens estables (whitelist).</td></tr>
+    <tr><td>target_pairs</td><td>Tokens en los que opera la ballena (ej. <code>SOL,WIF,PEPE</code>). Se descubren solos al sincronizar y alimentan el filtro de par.</td></tr>
+    <tr><td>Sync</td><td>Descarga de transacciones recientes de la wallet (100 txs normal, 500 en sync profunda).</td></tr>
+    <tr><td>Enriquecer historial</td><td>Recalcula el contexto de mercado (RSI, MACD, BB, SMA, volumen) en el instante exacto de cada transacción pasada. <strong>Requisito previo</strong> para aprender patrones.</td></tr>
+    <tr><td>Shadow Trade</td><td>Operación simulada: se abre al precio real de mercado y se cierra manualmente; el PnL % alimenta las métricas.</td></tr>
+    <tr><td>Hunt Target</td><td>Contrato de token a escanear para descubrir ballenas compradoras.</td></tr>
+    <tr><td>Señal de consenso</td><td>3+ ballenas seguidas compraron el mismo token en un período corto.</td></tr>
+    <tr><td>Flujo CEX</td><td>Movimiento entre una ballena y una hot wallet de exchange: <span class="badge b-red">DEPOSIT</span> → presión vendedora · <span class="badge b-green">WITHDRAWAL</span> → posible compra en DEX.</td></tr>
+  </tbody>
+</table>
+
+<!-- ══════════════ 3 ══════════════ -->
+<h2><span class="num">3</span> Recorrido por la interfaz</h2>
+
+<h3>3.1 · Barra superior</h3>
+<table>
+  <thead><tr><th style="width:26%">Botón</th><th>Qué hace</th></tr></thead>
+  <tbody>
+    <tr><td>🌐 Filtro de par</td><td>Desplegable con todos los tokens de todas las wallets. Filtra la lista de ballenas y los shadow trades abiertos. Se quita con la ✕.</td></tr>
+    <tr><td>🎯 Cazar</td><td>Lanza la caza de ballenas sobre todos los Hunt Targets activos (en background). Recarga la página al terminar.</td></tr>
+    <tr><td>🔄 Sync</td><td>Encola la sincronización masiva de todas las wallets activas (background). También ocurre <strong>automáticamente cada 15 min</strong>.</td></tr>
+    <tr><td>➕ Seguir</td><td>Modal para seguir una wallet individual.</td></tr>
+    <tr><td>📥 Importar</td><td>Modal de importación masiva (una dirección por línea).</td></tr>
+    <tr><td>🤖 Bots · ⚡ Scalping</td><td>Accesos rápidos a los otros módulos.</td></tr>
+  </tbody>
+</table>
+
+<h3>3.2 · Panel de métricas</h3>
+<ul>
+  <li><strong>Ballenas seguidas</strong> — total de la lista (máximo 50 visibles).</li>
+  <li><strong>Win rate promedio</strong> — media del win rate de las wallets con datos cacheados.</li>
+  <li><strong>PnL simulado</strong> — suma del PnL de los shadow trades cerrados (nocional × pnl%).</li>
+  <li><strong>Señales activas</strong> — señales de consenso en estado <code>ACTIVE</code>.</li>
+</ul>
+
+<h3>3.3 · Panel «Hunt Targets» (caza de ballenas)</h3>
+<div class="card">
+<ul>
+  <li>Lista los contratos que se escanean en busca de compradores grandes.</li>
+  <li><strong>➕ Añadir</strong>: símbolo, blockchain, dirección de contrato y <strong>volumen mínimo en USD</strong> (solo se agregan wallets cuyo volumen de compra supere ese mínimo).</li>
+  <li><strong>⏸ / ▶</strong> pausa o activa un target sin borrarlo · <strong>🗑</strong> lo elimina.</li>
+  <li>Si la tabla está vacía, la primera caza siembra targets por defecto: <code>WIF, BONK, JUP</code> (Solana), <code>PEPE, SHIB</code> (Ethereum), <code>TOSHI</code> (Base).</li>
+  <li>La caza crea las ballenas nuevas (nombre <code>Hunter: SYMBOL #abc123</code>, categoría Observación), les asigna el token como <code>target_pairs</code> y dispara su sync inmediata. Envía alerta por Telegram por cada hallazgo.</li>
+  <li>También corre <strong>automáticamente cada 6 h</strong> (solo alto volumen y ≥ 2 txs).</li>
+</ul>
+</div>
+
+<h3>3.4 · Señales de Consenso 🔥</h3>
+<p>
+  Aparece solo si hay señales activas. Cada tarjeta muestra token, nº de ballenas y
+  confianza, con botón <strong>＋</strong> que precarga ese token en el formulario de Hunt Targets.
+</p>
+
+<h3>3.5 · Flujos CEX 🏦</h3>
+<p>
+  Depósitos/retiros recientes entre ballenas seguidas y exchanges conocidos.
+  <span class="badge b-red">→ depósito</span> = posible venta ·
+  <span class="badge b-green">← retiro</span> = posible compra en DEX.
+  Los flujos que superan el umbral de USD disparan alerta por Telegram.
+</p>
+
+<h3>3.6 · Sidebar izquierdo — lista de wallets</h3>
+<p>Cada fila muestra: nombre, red, nº de txs, nº de simulaciones, última sync, etiquetas de tokens (<code>$SOL</code>, clicables para filtrar), badge de comportamiento, win rate y <strong>score</strong>:</p>
+<ul>
+  <li><strong>Score</strong> (puntos): <span class="badge b-green">≥70</span> fondo verde · <span class="badge b-yellow">≥40</span> amarillo. Lo calcula el motor de scoring y se refresca cada 6 h (y por demanda vía AJAX).</li>
+  <li><strong>Caja de búsqueda</strong>: filtra por nombre, dirección o token.</li>
+  <li><strong>🧠 Aprender patrones</strong> — aprendizaje ampliado en background (transacciones enriquecidas + shadow trades cerrados; mínimo 3 muestras y 55 % win rate).</li>
+  <li><strong>🗄 Enriquecer historial</strong> — enriquece el contexto de mercado de <strong>todas</strong> las wallets (background, puede tardar minutos).</li>
+</ul>
+
+<h3>3.7 · Panel de detalle (clic en una wallet)</h3>
+
+<h4 style="font-size:10.5pt;margin:12px 0 6px;color:#0f172a">Cabecera</h4>
+<ul>
+  <li>Nombre, red y dirección (clic para <strong>copiar</strong>).</li>
+  <li><strong>Sync</strong> — sincronización profunda de esta wallet (200 firmas en Solana / 500 txs).</li>
+  <li><strong>Gráfico</strong>, <strong>CSV</strong> (exportar historial) y <strong>🗑</strong> (dejar de seguir, borrado físico).</li>
+</ul>
+
+<h4 style="font-size:10.5pt;margin:12px 0 6px;color:#0f172a">Comportamiento &amp; DNA</h4>
+<table>
+  <thead><tr><th style="width:22%">Modo</th><th style="width:9%">Icono</th><th>Significado</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge b-cyan">Acumulador DCA</span></td><td>🏦</td><td>Mayormente compras progresivas, pocas ventas.</td></tr>
+    <tr><td><span class="badge b-yellow">Trader Activo</span></td><td>⚡</td><td>Alta rotación compra/venta equilibrada.</td></tr>
+    <tr><td><span class="badge b-purple">Swing Trader</span></td><td>🌊</td><td>Rotación media con holds más largos.</td></tr>
+    <tr><td><span class="badge b-red">Distribución</span></td><td>📤</td><td>Más ventas que compras (fase de salida).</td></tr>
+    <tr><td><span class="badge b-gray">En Observación</span></td><td>👁️</td><td>Datos insuficientes todavía.</td></tr>
+  </tbody>
+</table>
+<p>
+  Además muestra: ratio compra/venta, nº de txs, hold promedio,
+  <strong>RSI promedio al comprar</strong> (verde &lt;40 = compra en miedo; rojo &gt;60 = compra en
+  euforia), horas activas e indicadores que más usa (chips).
+</p>
+
+<h4 style="font-size:10.5pt;margin:12px 0 6px;color:#0f172a">Win Rate por Moneda</h4>
+<p>
+  Tabla por token: nº de trades, win rate, PnL medio % y última operación.
+  Colores: <span class="badge b-green">WR ≥ 60</span> verde ·
+  <span class="badge b-yellow">40–60</span> amarillo · <span class="badge b-red">&lt; 40</span> rojo.
+</p>
+
+<h4 style="font-size:10.5pt;margin:12px 0 6px;color:#0f172a">Copy Trade (Shadow Trading)</h4>
+<ul>
+  <li><strong>🔬 Simulado (Shadow)</strong>: abre un ShadowTrade al <strong>precio real de mercado</strong> del primer par de la ballena (amount = 1 token). Aparece debajo con botón <strong>Cerrar</strong>, que cierra al precio actual y registra el PnL %.</li>
+  <li><strong>⚡ Real (Binance)</strong>: pide confirmación extra; hoy también abre la simulación — la ejecución de órdenes reales se gestiona desde el módulo de Bots.</li>
+</ul>
+
+<h4 style="font-size:10.5pt;margin:12px 0 6px;color:#0f172a">Patrones &amp; Indicadores</h4>
+<p>
+  Mejor patrón detectado y desglose de <strong>win rate por rango de RSI al comprar</strong>
+  (ej. «RSI 30–40: 72 % WR en 14 trades»), basado en N operaciones con contexto de mercado.
+</p>
+
+<h4 style="font-size:10.5pt;margin:12px 0 6px;color:#0f172a">Últimas Operaciones</h4>
+<p>
+  Últimas 15 transacciones con tipo (BUY/SWAP/…), activos, fecha y enlace al explorador
+  (Solscan, Etherscan, Basescan o Hyperliquid según la red).
+</p>
+
+<h4 style="font-size:10.5pt;margin:12px 0 6px;color:#0f172a">Gráfico (botón Gráfico)</h4>
+<ul>
+  <li>Precio del token: velas 1h de <strong>Binance</strong> si existe; si no, fallback a DexScreener + GeckoTerminal en diario.</li>
+  <li>Indicadores: <strong>EMA 9/21/50/200, RSI(14) y MACD</strong>.</li>
+  <li><strong>Trades de la ballena superpuestos</strong> (compras y ventas como marcadores).</li>
+  <li>Selector de token para cambiar entre los tokens que la wallet ha operado. Se cachea 10 min por wallet+token.</li>
+</ul>
+
+<!-- ══════════════ 4 ══════════════ -->
+<h2><span class="num">4</span> Flujo de trabajo recomendado</h2>
+<ol class="steps">
+  <li><b>1 · Seguir ballenas</b>
+    <div class="step-body">
+      <strong>Manual</strong>: ➕ Seguir → dirección, nombre, red, categoría, filtro y token objetivo.<br>
+      <strong>Masivo</strong>: 📥 Importar → pega varias direcciones (una por línea), elige red y categoría,
+      y marca <strong>«Auto-sincronizar después de importar»</strong>. Recibirás aviso por Telegram con el resumen.
+      No se permiten duplicados de (dirección + red).
+    </div>
+    <h4 style="font-size:10.5pt;margin:12px 0 6px;color:#0f172a">¿De dónde sacar direcciones de ballenas?</h4>
+    <p class="step-body">
+      Si no tienes direcciones a mano, estas son las fuentes más efectivas (todas gratis o con plan
+      gratuito suficiente). <strong>DexScreener y GeckoTerminal son las mismas fuentes que usa el
+      cazador interno del sistema</strong>: lo que veas ahí es lo que el Hunt automático encontraría.
+    </p>
+    <table>
+      <thead><tr><th style="width:24%">Fuente</th><th style="width:17%">Redes</th><th>Qué buscar</th></tr></thead>
+      <tbody>
+        <tr><td>DexScreener (<code>dexscreener.com</code>) → token → <strong>Top Traders</strong></td><td>Todas</td><td>Ranking de compradores/vendedores recientes con dirección y volumen. Copia a los que más compraron.</td></tr>
+        <tr><td>GeckoTerminal (<code>geckoterminal.com</code>) → pool → <strong>Top traders</strong></td><td>Todas</td><td>Compradores recientes del pool con monto. Misma data que usa la caza interna (vía API).</td></tr>
+        <tr><td>Solscan (<code>solscan.io</code>) → token → <strong>Holders / Top Traders</strong></td><td>Solana</td><td>Holders más grandes y traders más activos del token.</td></tr>
+        <tr><td>Etherscan (<code>etherscan.io</code>) → token → <strong>Holders</strong></td><td>Ethereum</td><td>Top 500 holders del token (gratis). Filtrá los que tengan txs recientes.</td></tr>
+        <tr><td>BscScan (<code>bscscan.com</code>) → token → <strong>Holders</strong></td><td>BNB Chain</td><td>Top holders con actividad reciente.</td></tr>
+        <tr><td>BaseScan (<code>basescan.org</code>) → token → <strong>Holders</strong></td><td>Base</td><td>Top holders con actividad reciente.</td></tr>
+        <tr><td>GMGN (<code>gmgn.ai</code>) → token → <strong>Smart Money</strong></td><td>Solana, EVM</td><td>Wallets etiquetadas como smart money que operaron el token.</td></tr>
+        <tr><td>Hyperliquid Explorer (<code>app.hyperliquid.xyz/explorer</code>) → leaderboard</td><td>Hyperliquid</td><td>Direcciones de los traders más rentables de la plataforma.</td></tr>
+        <tr><td>Arkham (<code>arkhamintelligence.com</code>)</td><td>Multi-cadena</td><td>Búsqueda de entidades y wallets etiquetadas (ballenas, fondos, CEX).</td></tr>
+        <tr><td>X/Twitter: <code>@lookonchain</code>, <code>@whale_alert</code>, <code>@EmberCN</code></td><td>Todas</td><td>Publican direcciones concretas de ballenas con la tx que acaban de hacer. Copiá la dirección y pegala.</td></tr>
+      </tbody>
+    </table>
+    <p class="step-body"><strong>Antes de pegar, validá rápido:</strong></p>
+    <ul class="step-body">
+      <li><strong>Formato correcto por red</strong>: EVM (Ethereum/Base/BSC/Hyperliquid) empieza con <code>0x</code> y tiene 42 caracteres; Solana es base58 de 32–44 caracteres sin <code>0x</code>. El sistema normaliza minúsculas en EVM automáticamente.</li>
+      <li><strong>Que sea una wallet, no un contrato</strong>: si en el explorador dice «Contract», no sirve. Buscá cuentas con transacciones (EOA).</li>
+      <li><strong>Actividad reciente</strong>: abrí la dirección en el explorador y confirmá que operó en los últimos días.</li>
+      <li><strong>Historial de trades, no solo un airdrop</strong>: priorizá wallets con varias compras/ventas; son las que generan patrones y win rate útiles.</li>
+    </ul>
+    <div class="callout callout-tip">
+      <b>💡 Flujo rápido de descubrimiento manual</b>
+      1. Elegí un token → 2. Abrí DexScreener o GeckoTerminal en <strong>Top Traders</strong> →
+      3. Verificá 2–3 candidatas en el explorador → 4. Copiá y pegalas en <strong>📥 Importar</strong>
+      (una por línea) → 5. Marcá «Auto-sincronizar después de importar».
+    </div>
+    <div class="callout callout-tip">
+      <b>💡 Vía sin fricción</b>
+      El <strong>Hunt automático</strong> (paso 6) escanea los contratos de Hunt Targets y agrega a los
+      mayores compradores sin que copies nada.
+    </div>
+  </li>
+  <li><b>2 · Sincronizar</b>
+    <div class="step-body">
+      Pulsa <strong>🔄 Sync</strong> (o espera al ciclo automático de 15 min). La primera sync trae las
+      transacciones recientes y el análisis rellena <code>target_pairs</code>, <code>top_tokens</code> y
+      <code>trading_dna</code>. Si una wallet necesita más historia: clic en ella → <strong>Sync</strong> (sync profunda).
+    </div>
+  </li>
+  <li><b>3 · Enriquecer historial</b>
+    <div class="step-body">
+      Pulsa <strong>🗄 Enriquecer historial</strong> en la cabecera del sidebar. Esto reconstruye
+      RSI / MACD / SMA / BB / volumen <strong>en el momento de cada trade pasado</strong> y es imprescindible
+      para que el aprendizaje de patrones tenga material.
+    </div>
+  </li>
+  <li><b>4 · Aprender patrones</b>
+    <div class="step-body">
+      Pulsa <strong>🧠</strong> en el sidebar. Si el dataset es insuficiente (&lt;3 muestras), el sistema te lo
+      dice y sugiere enriquecer primero. Con datos suficientes, aprende en background y actualiza los
+      patrones en unos minutos.
+    </div>
+  </li>
+  <li><b>5 · Analizar</b>
+    <div class="step-body">
+      Revisa el <strong>score</strong> y los badges de la sidebar: prioriza ballenas ≥70 pts con WR alto y modo
+      Acumulador o Swing. Abre cada ballena: mira <strong>Comportamiento &amp; DNA</strong> y
+      <strong>Win Rate por Moneda</strong>. Vigila <strong>Señales de Consenso</strong> (3+ ballenas sobre el mismo
+      token = candidato a bot) y <strong>Flujos CEX</strong> (depósito grande = cuidado; retiro = posible compra).
+    </div>
+  </li>
+  <li><b>6 · Cazar ballenas nuevas</b>
+    <div class="step-body">
+      Añade contratos en <strong>Hunt Targets</strong> (o deja los sembrados por defecto). Pulsa <strong>🎯 Cazar</strong>
+      y espera el resultado; las nuevas ballenas aparecen con sync ya disparada. La caza automática
+      cada 6 h mantiene el flujo sin intervención.
+    </div>
+  </li>
+  <li><b>7 · Validar con Shadow Trading y exportar</b>
+    <div class="step-body">
+      Con una ballena seleccionada, abre una simulación en <strong>Copy Trade</strong> sobre su par y ciérrala
+      cuando lo decidas: el PnL % queda registrado y alimenta win rate y patrones. Usa <strong>CSV</strong> para
+      llevarte el historial completo (incluye indicadores de contexto por trade) y <strong>Gráfico</strong> para
+      revisar entradas/salidas contra el precio.
+    </div>
+  </li>
+</ol>
+
+<!-- ══════════════ 5 ══════════════ -->
+<h2><span class="num">5</span> Automatización (Celery Beat)</h2>
+<table>
+  <thead><tr><th style="width:58%">Tarea</th><th>Frecuencia</th></tr></thead>
+  <tbody>
+    <tr><td>Sincronización de todas las ballenas</td><td><span class="badge b-blue">Cada 15 min</span></td></tr>
+    <tr><td>Caza automática de ballenas (alto volumen, ≥ 2 txs)</td><td><span class="badge b-purple">Cada 6 h</span></td></tr>
+    <tr><td>Señales desde patrones aprendidos</td><td><span class="badge b-blue">Cada 15 min</span></td></tr>
+    <tr><td>Re-cálculo de scores de ballenas</td><td><span class="badge b-purple">Cada 6 h</span></td></tr>
+  </tbody>
+</table>
+<div class="callout callout-warn">
+  <b>⚠️ Requisito</b>
+  Redis + Celery worker + Celery Beat deben estar corriendo (en el VPS son servicios systemd).
+  Si no corren, las acciones «en background» (Sync, Cazar, Enriquecer, Aprender) devuelven error
+  al encolar y las métricas quedan en «Cargando…».
+</div>
+<div class="callout callout-tip">
+  <b>💪 Robustez ya incorporada</b>
+  · <strong>Lock por wallet</strong>: si una wallet ya está sincronizándose, se omite la tarea duplicada
+  (evita solapes entre beat, cron y triggers manuales).<br>
+  · <strong>Auto-recuperación</strong>: wallets colgadas en <code>SYNCING</code> &gt;30 min se liberan;
+  wallets en <code>ERROR</code> se reintentan pasados 60 min.
+</div>
+
+<!-- ══════════════ 6 ══════════════ -->
+<h2><span class="num">6</span> Notas y límites a tener en cuenta</h2>
+<ul>
+  <li>La lista muestra las <strong>primeras 50 wallets</strong>; usa el buscador o el filtro de par para acotar.</li>
+  <li><strong>BSC</strong> usa un RPC público (<code>eth_getLogs</code>) sin API key — más lento y limitado que las demás redes; no requiere BscScan.</li>
+  <li>Direcciones EVM (Ethereum/Base/BSC) se guardan en minúsculas; Solana tal cual.</li>
+  <li>Las métricas de score/PnL vienen de caché (15 min); si ves «Calculando…», espera al AJAX de scores o al ciclo de 6 h.</li>
+  <li>«Dejar de seguir» (🗑) es <strong>borrado físico</strong> de la wallet y su historial.</li>
+  <li>El endpoint <span class="filepath">/whale-insights/suggest-bot/&lt;wallet_id&gt;/</span> (API) devuelve parámetros sugeridos para crear un bot GRID/DayTrading a partir del historial de una ballena.</li>
+</ul>
+
+<!-- ══════════════ 7 ══════════════ -->
+<h2><span class="num">7</span> Solución de problemas</h2>
+<table>
+  <thead><tr><th style="width:40%">Síntoma</th><th>Causa probable / solución</th></tr></thead>
+  <tbody>
+    <tr><td>«Error al encolar tarea… ¿Está corriendo Redis/Celery?»</td><td>Redis o los workers de Celery están caídos. Levantar servicios y reintentar.</td></tr>
+    <tr><td>Métricas en «Cargando…» / «Calculando…» permanente</td><td>Celery sin correr o caché sin poblar; verificar worker + beat.</td></tr>
+    <tr><td>«Dataset insuficiente para aprender»</td><td>Ejecutar primero <strong>🗄 Enriquecer historial</strong> y esperar a que termine.</td></tr>
+    <tr><td>Wallet atascada en <code>SYNCING</code> o <code>ERROR</code></td><td>Se auto-recupera (30/60 min) en el próximo ciclo de sync.</td></tr>
+    <tr><td>«No hay contratos activos en Hunt Targets» al cazar</td><td>Añadir al menos un target en el panel (o esperar la siembra automática).</td></tr>
+    <tr><td>Gráfico sin datos</td><td>El token no está en Binance y DexScreener/GeckoTerminal no devolvió OHLCV; probar con otro token del selector.</td></tr>
+    <tr><td>Página devuelve «Error interno»</td><td>Revisar logs del servidor (excepción logueada en las vistas de whales).</td></tr>
+  </tbody>
+</table>
+
+<!-- ══════════════ 8 ══════════════ -->
+<h2><span class="num">8</span> Referencias de código (para desarrollo)</h2>
+<table>
+  <thead><tr><th style="width:34%">Pieza</th><th>Archivo</th></tr></thead>
+  <tbody>
+    <tr><td>Vista principal y endpoints AJAX</td><td><span class="filepath">dashboard/views/whale_views.py</span></td></tr>
+    <tr><td>Shadow trading (simular/cerrar/precios)</td><td><span class="filepath">dashboard/views/shadow_views.py</span></td></tr>
+    <tr><td>Plantilla del panel</td><td><span class="filepath">dashboard/templates/dashboard/whale_insights.html</span></td></tr>
+    <tr><td>Modelos (Wallet, Tx, Shadow, HuntTarget, Consensus, ExchangeFlow, Pattern)</td><td><span class="filepath">dashboard/models.py</span></td></tr>
+    <tr><td>Tareas Celery (sync, hunt, enriquecimiento, aprendizaje)</td><td><span class="filepath">dashboard/tasks.py</span></td></tr>
+    <tr><td>Trackers por red</td><td><span class="filepath">dashboard/whale/trackers.py</span></td></tr>
+    <tr><td>Clasificación de comportamiento</td><td><span class="filepath">dashboard/whale/analysis.py</span></td></tr>
+    <tr><td>Scoring</td><td><span class="filepath">dashboard/whale/scoring.py</span></td></tr>
+    <tr><td>Detección de flujos CEX</td><td><span class="filepath">dashboard/whale/flows.py</span></td></tr>
+    <tr><td>Schedule de Celery Beat</td><td><span class="filepath">criptodash/settings.py</span> → <code>CELERY_BEAT_SCHEDULE</code></td></tr>
+  </tbody>
+</table>
+
+<div class="footer-note">
+  🐋 Whale Tracker Pro · CriptoDash · Generado desde docs/GUIA_WHALE_TRACKER_PRO.md
+</div>
+
+</div>
+</body>
+</html>
