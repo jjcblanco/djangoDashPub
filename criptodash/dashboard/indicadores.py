@@ -863,71 +863,20 @@ def detect_support_resistance(df, window=5, tolerance=0.015, max_levels=6):
     return {'supports': supports, 'resistances': resistances}
 
 
-# --- Ondas de Elliott (Detección Automática Simplificada) ---
+# --- Ondas de Elliott (Detección Automática) ---
 
 def detect_elliott_waves(df, order=5):
     """
-    Detecta una secuencia de ondas de Elliott simplificada.
-
-    Usa máximos/mínimos alternativos locales para identificar los 5 puntos
-    de la onda impulsiva (W1-W5) o las 3 correctivas (A-B-C).
+    Detecta ondas de Elliott (impulso 1-2-3-4-5 o corrección A-B-C) delegando
+    en el motor completo de dashboard.elliott (zigzag + reglas clásicas +
+    relaciones de Fibonacci). Sin dependencia de scipy.
 
     Parámetros:
     - df: DataFrame con columnas timestamp, high, low, close.
     - order: Sensibilidad de detección de pivotes (default=5).
 
     Retorna:
-    - Lista de dicts: [{'timestamp': ts, 'price': p, 'label': 'W1'}, ...]
+    - Lista de dicts: [{'timestamp': ts, 'price': p, 'label': 'W1', 'type': 'high'}, ...]
     """
-    try:
-        from scipy.signal import argrelextrema
-    except ImportError:
-        return []
-
-    closes = df['close'].values
-    timestamps = df['timestamp'].values
-
-    # Detectar máximos y mínimos locales significativos
-    local_max_idx = argrelextrema(closes, np.greater_equal, order=order)[0]
-    local_min_idx = argrelextrema(closes, np.less_equal, order=order)[0]
-
-    # Combinar y ordenar por índice
-    extremes = []
-    for idx in local_max_idx:
-        extremes.append({'idx': idx, 'price': float(closes[idx]), 'type': 'high', 'ts': timestamps[idx]})
-    for idx in local_min_idx:
-        extremes.append({'idx': idx, 'price': float(closes[idx]), 'type': 'low', 'ts': timestamps[idx]})
-
-    extremes.sort(key=lambda x: x['idx'])
-
-    # Eliminar duplicados consecutivos del mismo tipo (mantener el más extremo)
-    filtered = []
-    for e in extremes:
-        if filtered and filtered[-1]['type'] == e['type']:
-            # Mantener el más extremo
-            if e['type'] == 'high' and e['price'] > filtered[-1]['price']:
-                filtered[-1] = e
-            elif e['type'] == 'low' and e['price'] < filtered[-1]['price']:
-                filtered[-1] = e
-        else:
-            filtered.append(e)
-
-    # Tomar los últimos N puntos para las ondas
-    wave_points = filtered[-8:]  # suficiente para 5 ondas impulsivas + 3 correctivas
-
-    # Labels: W1-W5 para las primeras 5, A-B-C para las siguientes 3
-    labels_impulsive = ['W1', 'W2', 'W3', 'W4', 'W5']
-    labels_corrective = ['A', 'B', 'C']
-    all_labels = labels_impulsive + labels_corrective
-
-    result = []
-    for i, pt in enumerate(wave_points):
-        label = all_labels[i] if i < len(all_labels) else f'P{i+1}'
-        result.append({
-            'timestamp': pt['ts'],
-            'price': pt['price'],
-            'label': label,
-            'type': pt['type']
-        })
-
-    return result
+    from .elliott import detect_waves
+    return detect_waves(df, order=order)

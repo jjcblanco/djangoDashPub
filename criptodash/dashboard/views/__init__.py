@@ -95,6 +95,9 @@ from .scalping_views import (
 # Importar vistas de datos
 from .data_views import import_data
 
+# Importar analizador de ondas de Elliott
+from .elliott_views import elliott_analysis
+
 # Importar API views
 from .api_views import (
     LiveBotViewSet,
@@ -123,6 +126,9 @@ __all__ = [
     
     # Data views
     'import_data',
+
+    # Elliott views
+    'elliott_analysis',
     
     # API views
     # API views

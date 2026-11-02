@@ -25,6 +25,7 @@ urlpatterns = [
     path('backtest/', views.backtest_view, name='backtest'),
     path('range-scanner/', views.range_scanner, name='range_scanner'),
     path('trend-scanner/', views.trend_scanner, name='trend_scanner'),
+    path('elliott/', views.elliott_analysis, name='elliott_analysis'),
     
     # Bot Management URLs
     path('bots/', views.bot_dashboard, name='bot_dashboard'),

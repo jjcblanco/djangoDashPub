@@ -1,0 +1,232 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ page_title }} - CriptoDash</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+<style>
+:root{--bg-primary:#0d1117;--bg-secondary:#161b22;--bg-card:#1c2333;--bg-card-hover:#242d3d;--border-color:#30363d;--text-primary:#e6edf3;--text-secondary:#8b949e;--accent-cyan:#58a6ff;--accent-green:#3fb950;--accent-red:#f85149;--accent-yellow:#d29922;--accent-purple:#bc8cff}
+*{box-sizing:border-box}
+body{background:var(--bg-primary);color:var(--text-primary);font-family:'Inter',sans-serif;margin:0;min-height:100vh}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg-secondary)}::-webkit-scrollbar-thumb{background:var(--border-color);border-radius:3px}
+.top-bar{background:linear-gradient(90deg,#0d1117 0%,#1a1e2e 50%,#0d1117 100%);border-bottom:1px solid var(--border-color);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.top-bar .brand{font-weight:700;font-size:1.1rem;color:var(--accent-cyan);display:flex;align-items:center;gap:8px}
+.top-bar .brand i{font-size:1.3rem}
+.top-bar .actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.btn-glass{background:rgba(255,255,255,0.05);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 12px;border-radius:8px;font-size:0.75rem;font-weight:500;cursor:pointer;transition:all 0.2s;text-decoration:none}
+.btn-glass:hover{background:rgba(255,255,255,0.1);border-color:var(--accent-cyan);color:var(--accent-cyan)}
+.btn-glass.active{background:rgba(88,166,255,0.15);border-color:var(--accent-cyan);color:var(--accent-cyan)}
+select.sel-dark{background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-primary);border-radius:6px;padding:5px 8px;font-size:0.75rem}
+select.sel-dark:focus{outline:none;border-color:var(--accent-cyan)}
+.summary-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;padding:12px 20px;border-bottom:1px solid var(--border-color)}
+.metric-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px;transition:border-color 0.2s}
+.metric-card:hover{border-color:var(--accent-cyan)}
+.metric-card .icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem}
+.metric-card .data h4{margin:0;font-size:1.05rem;font-weight:700;line-height:1.2}
+.metric-card .data small{color:var(--text-secondary);font-size:0.65rem;font-weight:500}
+.progress-thin{height:6px;border-radius:3px;background:var(--border-color);margin-top:6px}
+.progress-thin .bar{height:100%;border-radius:3px;transition:width 0.4s}
+.main-layout{display:grid;grid-template-columns:1fr 380px;gap:14px;padding:14px 20px}
+@media(max-width:1100px){.main-layout{grid-template-columns:1fr}}
+.card-dark{background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;overflow:hidden;margin-bottom:12px}
+.card-dark .card-hdr{padding:10px 14px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between}
+.card-dark .card-hdr h6{margin:0;font-size:0.78rem;font-weight:600}
+.card-dark .card-bdy{padding:12px 14px}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(48,54,61,0.3);font-size:0.75rem}
+.stat-row:last-child{border-bottom:none}
+.stat-row .label{color:var(--text-secondary)}
+.stat-row .value{font-weight:600}
+.wave-table{width:100%;border-collapse:collapse;font-size:0.72rem}
+.wave-table th{color:var(--text-secondary);font-weight:500;padding:6px 8px;text-align:left;border-bottom:1px solid var(--border-color)}
+.wave-table td{padding:6px 8px;border-bottom:1px solid rgba(48,54,61,0.3)}
+.wave-table tr:hover{background:rgba(88,166,255,0.05)}
+.rule-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(48,54,61,0.3);font-size:0.72rem}
+.rule-item:last-child{border-bottom:none}
+.rule-item i{width:16px;text-align:center}
+.pnl-pos{color:var(--accent-green)}.pnl-neg{color:var(--accent-red)}
+.badge{border:1px solid transparent}
+.badge-bull{background:rgba(63,185,80,0.15);color:var(--accent-green);border-color:rgba(63,185,80,0.35)}
+.badge-bear{background:rgba(248,81,73,0.15);color:var(--accent-red);border-color:rgba(248,81,73,0.35)}
+.badge-neutral{background:rgba(139,148,158,0.15);color:var(--text-secondary);border-color:rgba(139,148,158,0.35)}
+.badge-imp{background:rgba(255,241,118,0.12);color:#fff176;border-color:rgba(255,241,118,0.35)}
+.badge-corr{background:rgba(244,143,177,0.12);color:#f48fb1;border-color:rgba(244,143,177,0.35)}
+.alert-dark{background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-primary)}
+.form-control,.form-select{background:var(--bg-secondary) !important;border-color:var(--border-color) !important;color:var(--text-primary) !important}
+.form-control:focus,.form-select:focus{border-color:var(--accent-cyan) !important;box-shadow:0 0 0 2px rgba(88,166,255,0.15) !important}
+</style>
+</head>
+<body>
+<!-- TOP BAR -->
+<div class="top-bar">
+<div class="brand"><i class="fas fa-water"></i> Elliott Wave Analyzer</div>
+<div class="actions">
+<form method="GET" action="{% url 'elliott_analysis' %}" style="margin:0;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+<input type="hidden" name="timeframe" value="{{ timeframe }}">
+<select name="pair" class="sel-dark" onchange="this.form.submit()" style="min-width:130px">
+{% for p in pairs %}
+<option value="{{ p }}" {% if p == pair %}selected{% endif %}>{{ p }}</option>
+{% endfor %}
+</select>
+<div class="d-flex" style="gap:4px">
+{% for tf in timeframes %}
+<button type="submit" name="timeframe" value="{{ tf }}" class="btn-glass {% if tf == timeframe %}active{% endif %}">{{ tf }}</button>
+{% endfor %}
+</div>
+</form>
+<a href="{% url 'dashboard_nuevo' %}" class="btn-glass"><i class="fas fa-chart-line"></i> Dashboard</a>
+<a href="{% url 'whale_insights' %}" class="btn-glass"><i class="fas fa-fish"></i> Ballenas</a>
+</div>
+</div>
+
+{% if error_message %}
+<div style="padding:16px 20px">
+<div class="alert alert-dark" role="alert">
+<i class="fas fa-exclamation-triangle me-2" style="color:var(--accent-yellow)"></i>{{ error_message }}
+</div>
+</div>
+{% else %}
+<!-- SUMMARY BAR -->
+<div class="summary-bar">
+<div class="metric-card">
+<div class="icon" style="background:rgba(88,166,255,0.15);color:var(--accent-cyan)"><i class="fas fa-compass"></i></div>
+<div class="data"><h4>{% if analysis.bias == 'bullish' %}📈{% elif analysis.bias == 'bearish' %}📉{% else %}➖{% endif %} {{ analysis.bias_label|default:'Neutral' }}</h4><small>SESGO</small></div>
+</div>
+<div class="metric-card">
+<div class="icon" style="background:rgba(188,140,255,0.15);color:var(--accent-purple)"><i class="fas fa-gauge-high"></i></div>
+<div class="data" style="width:100%">
+<h4>{{ analysis.confidence|floatformat:0 }}<span style="font-size:0.7rem;color:var(--text-secondary)">/100</span></h4>
+<small>CONFIANZA</small>
+<div class="progress-thin"><div class="bar" style="width:{{ analysis.confidence }}%;background:linear-gradient(90deg,var(--accent-cyan),var(--accent-purple))"></div></div>
+</div>
+</div>
+<div class="metric-card">
+<div class="icon" style="background:rgba(210,153,34,0.15);color:var(--accent-yellow)"><i class="fas fa-layer-group"></i></div>
+<div class="data">
+<h4 style="font-size:0.85rem">
+{% if analysis.structure == 'impulse' %}<span class="badge badge-imp">IMPULSO 1-2-3-4-5</span>
+{% elif analysis.structure == 'correction' %}<span class="badge badge-corr">CORRECCIÓN A-B-C</span>
+{% else %}<span class="badge badge-neutral">SIN PATRÓN CLARO</span>{% endif %}
+</h4><small>ESTRUCTURA</small></div>
+</div>
+<div class="metric-card">
+<div class="icon" style="background:rgba(63,185,80,0.15);color:var(--accent-green)"><i class="fas fa-wave-square"></i></div>
+<div class="data"><h4 style="font-size:0.8rem">{{ analysis.phase|default:'—' }}</h4><small>FASE ACTUAL</small></div>
+</div>
+<div class="metric-card">
+<div class="icon" style="background:rgba(248,81,73,0.15);color:var(--accent-red)"><i class="fas fa-ban"></i></div>
+<div class="data">
+<h4 style="font-size:0.9rem">${{ analysis.invalidation.price|floatformat:'-6g' }}</h4>
+<small>INVALIDACIÓN · {{ analysis.invalidation.label|default:'' }}</small>
+</div>
+</div>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="main-layout">
+<!-- CHART -->
+<div>
+<div class="card-dark">
+<div class="card-hdr">
+<h6><i class="fas fa-chart-area me-1" style="color:var(--accent-green)"></i> {{ pair }} · {{ timeframe }}</h6>
+<span style="font-size:0.65rem;color:var(--text-secondary)"><i class="fas fa-water me-1"></i>Zigzag + ondas etiquetadas + objetivos</span>
+</div>
+<div class="card-bdy" style="padding:6px">
+{{ chart_html|safe }}
+</div>
+</div>
+</div>
+
+<!-- RIGHT SIDEBAR -->
+<div>
+<!-- ONDAS -->
+<div class="card-dark">
+<div class="card-hdr"><h6><i class="fas fa-list-ol me-1" style="color:var(--accent-cyan)"></i> Ondas detectadas</h6></div>
+<div class="card-bdy">
+{% if analysis.waves %}
+<table class="wave-table">
+<thead><tr><th>Onda</th><th>Precio</th><th>Fecha</th><th>Mov</th></tr></thead>
+<tbody>
+{% for w in analysis.waves %}
+<tr>
+<td><strong style="color:#fff176">{{ w.label }}</strong></td>
+<td>${{ w.price|floatformat:'-6g' }}</td>
+<td style="color:var(--text-secondary)">{{ w.timestamp_str }}</td>
+<td class="{% if w.move_pct >= 0 %}pnl-pos{% else %}pnl-neg{% endif %}">{% if w.move_pct %}{{ w.move_pct|floatformat:2 }}%{% else %}—{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% else %}
+<div style="font-size:0.75rem;color:var(--text-secondary)">Sin ondas etiquetadas (solo zigzag).</div>
+{% endif %}
+</div>
+</div>
+
+<!-- REGLAS -->
+<div class="card-dark">
+<div class="card-hdr"><h6><i class="fas fa-scale-balanced me-1" style="color:var(--accent-yellow)"></i> Reglas de Elliott</h6></div>
+<div class="card-bdy">
+{% if analysis.structure == 'impulse' %}
+<div class="rule-item"><i class="fas {% if analysis.rules.w2_retrace_ok %}fa-check text-success{% else %}fa-xmark text-danger{% endif %}"></i> Onda 2 no retrocede más del 100% de la onda 1</div>
+<div class="rule-item"><i class="fas {% if analysis.rules.w3_not_shortest %}fa-check text-success{% else %}fa-xmark text-danger{% endif %}"></i> Onda 3 no es la más corta (vs ondas 1 y 5)</div>
+<div class="rule-item"><i class="fas {% if analysis.rules.w4_no_overlap %}fa-check text-success{% else %}fa-xmark text-danger{% endif %}"></i> Onda 4 no solapa el territorio de la onda 1</div>
+{% elif analysis.structure == 'correction' %}
+<div class="rule-item"><i class="fas {% if analysis.rules.b_less_than_a %}fa-check text-success{% else %}fa-xmark text-danger{% endif %}"></i> Onda B no supera el 100% de la onda A</div>
+{% else %}
+<div style="font-size:0.72rem;color:var(--text-secondary)">Sin reglas evaluadas: no hay estructura clara.</div>
+{% endif %}
+</div>
+</div>
+
+<!-- FIBONACCI -->
+<div class="card-dark">
+<div class="card-hdr"><h6><i class="fas fa-golden-ratio me-1" style="color:var(--accent-purple)"></i> Relaciones Fibonacci</h6></div>
+<div class="card-bdy">
+{% if analysis.fibs %}
+{% if analysis.structure == 'impulse' %}
+<div class="stat-row"><span class="label">Retroceso W2 / W1</span><span class="value">{{ analysis.fibs.w2_retrace }}</span></div>
+<div class="stat-row"><span class="label">Extensión W3 / W1</span><span class="value">{{ analysis.fibs.w3_ext }}</span></div>
+<div class="stat-row"><span class="label">Retroceso W4 / W3</span><span class="value">{{ analysis.fibs.w4_retrace }}</span></div>
+<div class="stat-row"><span class="label">Extensión W5 / W1</span><span class="value">{{ analysis.fibs.w5_ext }}</span></div>
+{% elif analysis.structure == 'correction' %}
+<div class="stat-row"><span class="label">Onda B / Onda A</span><span class="value">{{ analysis.fibs.b_over_a }}</span></div>
+<div class="stat-row"><span class="label">Onda C / Onda A</span><span class="value">{{ analysis.fibs.c_over_a }}</span></div>
+{% endif %}
+<div style="margin-top:8px;font-size:0.62rem;color:var(--text-secondary)">Niveles ideales: W2 → 0.382/0.5/0.618 · W3 → 1.618/2/2.618 · W4 → 0.236/0.382 · W5 → 0.618/1/1.618 · B → 0.382/0.5/0.786 · C → 0.618/1/1.618</div>
+{% else %}
+<div style="font-size:0.72rem;color:var(--text-secondary)">Sin relaciones calculadas.</div>
+{% endif %}
+</div>
+</div>
+
+<!-- PROYECCIONES -->
+<div class="card-dark">
+<div class="card-hdr"><h6><i class="fas fa-bullseye me-1" style="color:var(--accent-green)"></i> Proyecciones / Objetivos</h6></div>
+<div class="card-bdy">
+{% if analysis.projections %}
+{% for t in analysis.projections %}
+<div class="stat-row"><span class="label">{{ t.label }}</span><span class="value pnl-pos">${{ t.price|floatformat:'-6g' }}</span></div>
+{% endfor %}
+{% else %}
+<div style="font-size:0.72rem;color:var(--text-secondary)">Sin proyecciones disponibles.</div>
+{% endif %}
+</div>
+</div>
+
+<!-- RESUMEN -->
+<div class="card-dark">
+<div class="card-hdr"><h6><i class="fas fa-comment-dots me-1" style="color:var(--accent-cyan)"></i> Interpretación</h6></div>
+<div class="card-bdy" style="font-size:0.75rem;line-height:1.6">{{ analysis.summary_es }}</div>
+</div>
+</div>
+</div>
+{% endif %}
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
